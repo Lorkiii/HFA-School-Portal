@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>HFA Teaching Application</title>
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+        <link rel="stylesheet" href="tcform.css">
+        
+    </head>
+
+    <body>
+        <header class="header">
+            <div class="header-container">
+                <a href="#" class="logo">
+                    <img src="../assets/transparent_logo.png" alt="HFA Logo">
+                    <h3 class="schoolname">Holy Family Academy of Sta Maria Bulacan Inc.</h3>
+                </a>
+            </div>
+        </header>
+
+        <main class="main-content">
+            <div class="form-container">
+                <a href="../main.html" class="back-btn">
+                    <i class="fas fa-arrow-left"></i> Back to Programs
+                </a>
+
+                <div class="form-card">
+                    <div class="form-header">
+                        <h1 class="form-title">Teacher Application</h1>
+                        <p class="form-subtitle">Upload your resume to auto-fill sections or complete manually</p>
+                    </div>
+
+                    <!-- Resume Upload Section -->
+                    <fieldset class="form-section highlight-section">
+                        <legend><i class="fas fa-file-upload"></i> Resume Upload</legend>
+                        <div class="resume-upload-container">
+                            <div class="file-upload-box" id="drop-zone">
+                                <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                                <p>Drag & drop your resume here</p>
+                                <p class="small-text">(PDF format, max 5MB)</p>
+                                <span class="or-divider">or</span>
+                                <button type="button" class="browse-btn" id="browse-btn">Browse Files</button>
+                                <input type="file" id="resume-upload" accept=".pdf,.docx" class="hidden-upload"
+                                    placeholder="Upload Resume">
+                            </div>
+                            <div class="upload-status">
+                                <p id="file-name">No file selected</p>
+                                <div class="progress-container">
+                                    <div class="progress-bar" id="progress-bar" style="display: none;">
+                                        <div class="progress-fill" id="progress-fill"></div>
+                                    </div>
+                                    <p class="progress-text" id="progress-text">0% uploaded</p>
+                                </div>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Personal Information Section -->
+                    <fieldset class="form-section">
+                        <legend><i class="fas fa-user"></i> Personal Information</legend>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Last Name <span class="required">*</span></label>
+                                <input type="text" id="last-name" placeholder="Last Name" required>
+                            </div>
+                            <div class="form-group">
+                                <label>First Name <span class="required">*</span></label>
+                                <input type="text" id="first-name" placeholder="First Name" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Middle Name</label>
+                                <input type="text" id="middle-name" placeholder="Middle Name">
+                            </div>
+                            <div class="form-group">
+                                <label>Name Extension</label>
+                                <select id="name-extension" aria-label="Name Extension">
+                                    <option value="">None</option>
+                                    <option>Jr.</option>
+                                    <option>Sr.</option>
+                                    <option>II</option>
+                                    <option>III</option>
+                                    <option>IV</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Contact Number <span class="required">*</span></label>
+                                <input type="tel" id="contact-number" placeholder="09123456789" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Email Address <span class="required">*</span></label>
+                                <input type="email" id="email" placeholder="your@email.com" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Birth Date <span class="required">*</span></label>
+                                <input type="date" id="birthdate" placeholder="YYYY-MM-DD" required>
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Complete Address <span class="required">*</span></label>
+                                <input type="text" id="address" placeholder="Street, Barangay, City, Province" required>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Professional Information Section -->
+                    <fieldset class="form-section">
+                        <legend><i class="fas fa-briefcase"></i> Professional Information</legend>
+                        <!-- Education -->
+                        <div class="sub-section">
+                            <h3>Education Background</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Highest Degree <span class="required">*</span></label>
+                                    <select aria-label="Highest Degree" id="highest-degree" required>
+                                        <option value="">Select Degree</option>
+                                        <option>Bachelor's Degree</option>
+                                        <option>Master's Degree</option>
+                                        <option>Doctorate</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Major/Specialization <span class="required">*</span></label>
+                                    <select aria-label="Major/Specialization" id="major" required>
+                                        <option value="">Select Major</option>
+                                        <option>Education</option>
+                                        <option>Mathematics</option>
+                                        <option>Science</option>
+                                        <option>English</option>
+                                        <option>History</option>
+                                        <option>Other</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Year Graduated <span class="required">*</span></label>
+                                    <input type="number" id="grad-year" min="1900" max="2099" placeholder="YYYY"
+                                        required>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label>Institution <span class="required">*</span></label>
+                                    <input type="text" id="institution" placeholder="University Name" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Work Experience -->
+                        <div class="sub-section">
+                            <h3>Teaching Experience</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Years of Experience <span class="required">*</span></label>
+                                    <input type="number" id="experience-years" min="0" placeholder="Years" required>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label>Previous Schools (separate with commas)</label>
+                                    <input type="text" id="previous-schools" placeholder="School 1, School 2">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Certifications -->
+                        <div class="sub-section">
+                            <h3>Certifications</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label>Teaching License Number</label>
+                                    <input type="text" id="license-number" placeholder="If applicable">
+                                </div>
+                                <div class="form-group">
+                                    <label>License Expiry Date</label>
+                                    <input type="date" id="license-expiry" placeholder="YYYY-MM-DD">
+                                </div>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Position Preferences -->
+                    <fieldset class="form-section">
+                        <legend><i class="fas fa-chalkboard-teacher"></i> Position Preferences</legend>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label>Preferred Level <span class="required">*</span></label>
+                                <select aria-label="Preferred Level" id="preferred-level" required>
+                                    <option value="">Select Level</option>
+                                    <option>Junior High School</option>
+                                    <option>Senior High School</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Subjects Qualified to Teach <span class="required">*</span></label>
+                                <input type="text" id="qualified-subjects" placeholder="e.g. Math, Science" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Employment Type <span class="required">*</span></label>
+                                <select aria-label="Employment Type" id="employment-type" required>
+                                    <option value="">Select Type</option>
+                                    <option>Full-time</option>
+                                    <option>Part-time</option>
+                                </select>
+                            </div>
+                        </div>
+                    </fieldset>
+
+                    <!-- Documents Upload -->
+                    <fieldset class="form-section">
+                        <legend><i class="fas fa-file-alt"></i> Document Uploads</legend>
+                        <div class="form-grid">
+                            <div class="form-group full-width">
+                                <label>Teaching Certificate/License (PDF/Image) </label>
+                                <div class="file-input-container">
+                                    <label for="license-upload" class="file-input-label">
+                                        <i class="fas fa-file-alt"></i>
+                                        <span class="file-input-text">Choose file or drag & drop here</span>
+                                    </label>
+                                    <input type="file" id="license-upload" class="file-input" accept=".pdf,.jpg,.png"
+                                        required>
+                                </div>
+                            </div>
+                            <div class="form-group full-width">
+                                <label>Transcript of Records (PDF) </label>
+                                <div class="file-input-container">
+                                    <label for="transcript-upload" class="file-input-label">
+                                        <i class="fas fa-file-pdf"></i>
+                                        <span class="file-input-text">Choose file or drag & drop here</span>
+                                    </label>
+                                    <input type="file" id="transcript-upload" class="file-input" accept=".pdf" required>
+                                </div>
+                            </div>
+                             <div class="form-group full-width">
+                                <label>Curriculum Vitae (CV) / Resume (PDF/Image) </label>
+                                <div class="file-input-container">
+                                    <label for="cv-upload" class="file-input-label">
+                                        <i class="fas fa-file-alt"></i>
+                                        <span class="file-input-text">Choose file or drag & drop here</span>
+                                    </label>
+                                    <input type="file" id="cv-upload" class="file-input" accept=".pdf,.jpg,.png"
+                                        required>
+                                </div>
+                            </div>
+                        </div>
+                    </fieldset>
+
+
+                    <!-- Form Actions -->
+                    <div class="form-actions">
+                        <input type="hidden" id="resume-url" name="resume-url">
+                        <button type="submit" id="submit-btn" class="submit-btn">
+                            Submit Application <i class="fas fa-paper-plane"></i>
+                        </button>
+                        <p class="form-notice">By submitting this form, you agree to our <a href="#">Terms of
+                                Service</a> and <a href="#">Privacy Policy</a>.</p>
+                    </div>
+                </div>
+            </div>
+             <div class="success-message-card" id="success-message">
+                <h2>Your application has been submitted successfully!</h2><br>
+                <p>Thank you for applying to Holy Family Academy of Sta Maria Bulacan Inc. We will review your application and get back to you soon.</p>
+                <p class="generated-email"> Generated Email: <span id="generated-email"></span></p>
+                <span> Please check your email for account details.</span><br>
+                <button class="okay-btn">Okay</button>
+             </div>
+        </main>
+        <script type="module" src="tcform.js"></script>
+    </body>
+
+</html>

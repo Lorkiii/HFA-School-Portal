@@ -1,0 +1,59 @@
+
+/* Main Content */
+.main-content {
+  padding: 90px 25px 25px;
+  transition: margin-left 0.3s ease;
+  margin-left: 0;
+  background: #f5f7fa;
+  min-height: 100vh;
+}
+
+.main-content.with-sidebar {
+  margin-left: 280px;
+}
+
+#dashboard {
+  display: block;
+}
+section:not(:target) {
+  display: none;
+  }
+  
+  section:target {
+    display: block;
+  }
+/* Dashboard Header */
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 25px;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.dashboard-header h1 {
+  font-size: 1.8rem;
+  color: #2c3e50;
+  font-weight: 700;
+}
+
+.datetime-widget {
+  background: white;
+  padding: 8px 15px;
+  border-radius: 5px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  text-align: center;
+}
+
+.current-date {
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.current-time {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #2c3e50;
+}

@@ -1,0 +1,248 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+  /* for navigation design */
+  header{
+      width: 100%;
+      background: linear-gradient(to right, #347605, #5ba803);
+      position: fixed;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      z-index: 1000;
+  }
+  *{
+    font-family: 'Poppins', sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+
+  }
+ 
+  .logo img{
+      width: 110px;
+      padding: 5px 20px;
+  }
+  .logo{
+    display: flex;
+    align-items: center;
+  }
+  ul{
+    list-style: none;
+  }
+  .navbar .schoolname{
+    font-size: larger;
+  }
+
+  /* hiding menu-close and open button in the web view */
+  .navbar :where(#menu-close-button, #menu-open-button){
+    display: none;
+    }
+  header .navbar {
+      color: white;
+      align-items: center;
+      justify-content: space-between;
+      display: flex;
+      padding: 10px 20px;
+  }
+
+  .navbar  ul li a{
+      color: white;
+      padding: 10px 10px;
+      font-size: 18px;
+      text-decoration: none;
+  }
+  .navbar .nav_link {
+    display: flex;
+    align-items: center;
+
+  }
+  .navbar ul li a:hover {
+    background: #e7e7e7;
+    color: #1f6e15;
+    border-radius: 5px;
+    transition: ease 0.3s;
+  }
+  #loginbtn {
+    background-color: #5dc11a;
+    border-radius: 10px;
+    padding: 8px 20px;
+    margin-left: 10px;
+    transition: all 0.3s ease;
+
+  }
+  #loginbtn:hover {
+    background-color:#e7e7e7;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  }
+
+  /* responsive layout */
+  @media  screen and (max-width: 800px) {
+  .navbar .nav_link {
+    position: fixed;
+    right: -250px;
+    top: 0;
+    width: 250px;
+    height: 100vh;
+    background: #1f6e15;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 80px 30px;
+    transition:right 0.5s ease;
+  }
+
+  #loginbtn {
+    margin: 15px 0 0 0;
+    width: 100%;
+    text-align: center;
+  }
+
+  body.show-menu .navbar .nav_link{
+    right: 0;
+    }
+  .navbar .nav_link li a {
+    display: block;
+    margin-top: 10px;
+    font-size:1.3rem;
+  }
+
+  /* design for menu close and open button */
+  .navbar :where(#menu-close-button, #menu-open-button ){
+    display: flex;
+    font-size: 1.2rem;
+    background:none;
+    border-style: none;
+    cursor: pointer;
+    color: #e7e7e7;
+  }
+  #menu-open-button{
+    margin-left: 10px;
+  }
+  /* desgin for close button */
+  .navbar #menu-close-button{
+  position: absolute;
+  background-color:#1f6e15;
+  top: 40px;
+  right: 30px;
+  }
+  }
+
+
+
+  /* footer design */
+  footer {
+    background-color: #1f6e15;
+    color: white;
+    padding: 40px 20px;
+    font-family: 'Montserrat', sans-serif;
+  }
+  /* design for footer container  */
+  .footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 30px;
+  }
+  /* for footer logo */
+  .footer-logo {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .footer-logo img {
+    width: 120px;
+    margin-bottom: 15px;
+  }
+  /* footer logo text */
+  .footer-logo p {
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  /* text */
+  .footer-links h3, 
+  .footer-contact h3 {
+    font-size: 18px;
+    margin-bottom: 20px;
+    position: relative;
+    padding-bottom: 10px;
+  }
+
+  .footer-links h3:after,
+  .footer-contact h3:after{
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 50px;
+    height: 2px;
+    background-color: #4dc416c3;
+  }
+
+  .footer-links ul {
+    list-style: none;
+  } 
+
+  .footer-links li {
+    margin-bottom: 10px;
+  }
+
+  .footer-links a {
+    color: white;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+
+  .footer-links a:hover {
+    color: #4dc416c3;
+    padding-left: 5px;
+  }
+
+  .footer-contact p {
+    margin-bottom: 15px;
+    display: flex;
+    align-items: flex-start;
+  }
+
+  .footer-contact i {
+    margin-right: 10px;
+    color: #4dc416c3;
+  }
+
+  .copyright {
+    text-align: center;
+    padding-top: 30px;
+    margin-top: 30px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 14px;
+  }
+  /* responsive footer */
+  @media (max-width: 768px) {
+    .footer-container {
+        grid-template-columns: 1fr;
+    }
+    
+    .footer-logo {
+        align-items: center;
+        text-align: center;
+    }
+    
+    .footer-links,
+    .footer-contact
+    {
+        text-align: center;
+    }
+    
+    .footer-links h3:after,
+    .footer-contact h3 {
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    
+    .social-icons {
+        justify-content: center;
+    }
+  }
+
+
+
+

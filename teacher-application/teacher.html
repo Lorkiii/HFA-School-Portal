@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>HFA: Teacher Application</title>
+        <link rel="stylesheet" href="teacher.css">
+        <link rel="stylesheet" href="teacher-content.css">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+     <!-- <script src="../check-auth.js"></script> -->
+    </head>
+
+    <body>
+        <!-- Top Navigation Bar -->
+        <header>
+            <nav class="navbar">
+                <button id="open-sidebar" title="open-sidebar"><i class="fas fa-bars"></i></button>
+                <a href="#" class="logo">
+                    <img src="../assets/transparent_logo.png" alt="school_logo">
+                </a>
+                <h3 class="schoolname">Holy Family Academy of Sta Maria Bulacan Inc.</h3>
+                <div class="nav-icons">
+                    <a href="#notifications" title="Notifications" class="nav-icon">
+                        <i class="fas fa-bell"></i>
+                    </a>
+                    <a href="#messages" title="Messages" class="nav-icon">
+                        <i class="fas fa-envelope"></i>
+                    </a>
+                </div>
+            </nav>
+        </header>
+
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <button id="close-sidebar" title="Close Menu"><i class="fas fa-times"></i></button>
+
+            <div class="user-info">
+                <div class="avatar">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+                <h3 class="Teacher-name">Teacher Name</h3>
+                <p class="teacher-id">ID: TEACH-12345</p>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul class="sidebar-links">
+                    <li>
+                        <a href="#dashboard">
+                            <i class="fa-solid fa-house"></i>
+                            <span>Dashboard</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="#application-status">
+                            <i class="fas fa-file-alt"></i>
+                            <span>Application Status</span>
+                        </a>
+                    </li>
+                    
+                </ul>
+
+                <nav class="secondary-sidebar">
+                    <ul class="sidebar-links">
+                        <li>
+                            <a href="#announcement-and-news">
+                                <i class="fas fa-newspaper"></i>
+                                <span>News</span>
+                            </a>
+                        </li>
+                      
+                    </ul>
+                </nav>
+
+                <nav class="profile-links">
+                    <ul class="sidebar-links">
+                        <li>
+                            <a href="#profile-settings">
+                                <i class="fas fa-user"></i>
+                                <span>Profile Settings</span>
+                            </a>
+                        </li>
+                        <li class="logout-link">
+                            <a href="#" id="logout-btn">
+                                <i class="fas fa-sign-out-alt"></i>
+                                <span>Sign Out</span>
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <section id="dashboard">
+            <!-- Application Status Section -->
+            <div class="main-content">
+                
+                <div class="section-container">
+                    <div class="dashboard-header">
+                    <h1>Applicant's Dashboard</h1>
+                    <div class="header-actions">
+                        <div class="datetime-widget">
+                            <div class="current-date">September 5, 2023</div>
+                            <div class="current-time">10:15 AM</div>
+                        </div>
+                    </div>
+                </div>
+
+                    <div class="status-timeline">
+                        <div class="timeline-item completed">
+                            <div class="timeline-marker"></div>
+                            <div class="timeline-content">
+                                <h3>Application Submitted</h3>
+                                <p>January 15, 2024</p>
+                                <p>Your application documents have been received.</p>
+                            </div>
+                        </div>
+
+                        <div class="timeline-item completed">
+                            <div class="timeline-marker"></div>
+                            <div class="timeline-content">
+                                <h3>Initial Screening</h3>
+                                <p>January 22, 2024</p>
+                                <p>Your qualifications have been reviewed.</p>
+                            </div>
+                        </div>
+
+                        <div class="timeline-item current">
+                            <div class="timeline-marker"></div>
+                            <div class="timeline-content">
+                                <h3>Interview Scheduled</h3>
+                                <p>February 5, 2024</p>
+                                <p>Your interview is scheduled for February 10, 2024 at 10:00 AM.</p>
+                            </div>
+                        </div>
+
+                        <div class="timeline-item pending">
+                            <div class="timeline-marker"></div>
+                            <div class="timeline-content">
+                                <h3>Demo Teaching</h3>
+                                <p>Pending</p>
+                                <p>Will be scheduled after successful interview.</p>
+                            </div>
+                        </div>
+
+                        <div class="timeline-item pending">
+                            <div class="timeline-marker"></div>
+                            <div class="timeline-content">
+                                <h3>Final Decision</h3>
+                                <p>Pending</p>
+                                <p>Administration will review all evaluation results.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Other sections would go here -->
+        </section>
+
+        <script type="module" src="teacher.js"></script>
+    </body>
+
+</html>
