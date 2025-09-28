@@ -1,21 +1,16 @@
+// adminportal/check-auth.js
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { auth } from "../firebase-config.js";
+
 function redirectToLogin() {
-  try {
-    localStorage.removeItem("token");
-  } catch (e) {}
   location.replace("/login/login.html");
 }
-function checkAuth() {
-  const token = localStorage.getItem("token");
-  if (!token) return redirectToLogin();
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    if (payload && payload.exp && Date.now() > payload.exp * 1000)
-      return redirectToLogin();
-  } catch (e) {
-    return redirectToLogin();
-  }
-}
-checkAuth();
-window.addEventListener("pageshow", (event) => checkAuth());
 
-// /check-auth.js
+onAuthStateChanged(auth, (user) => {
+  if (!user) {
+    redirectToLogin();
+  } else {
+    // user present; pages should call auth.currentUser.getIdToken() when needed
+    console.log('[check-auth] signed-in:', user.uid);
+  }
+});

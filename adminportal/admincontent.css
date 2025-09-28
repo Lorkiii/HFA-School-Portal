@@ -2656,7 +2656,6 @@ button.post.posting::after {
 .table-responsive {
   width:100%;
   overflow:auto;
-  -webkit-overflow-scrolling: touch;
 }
 .table-action-btn:focus {
   outline: 3px solid rgba(2,132,199,0.12);

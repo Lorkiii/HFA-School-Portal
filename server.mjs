@@ -414,59 +414,56 @@ app.post("/auth/resend-otp", async (req, res) => {
 // and reject revoked server JWTs
 async function requireAdmin(req, res, next) {
   try {
-    // accept token from Authorization: Bearer <token> or cookie __session
+    // Read token only from Authorization header (Bearer ...)
     let token = null;
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.split('Bearer ')[1];
-    else if (req.cookies && req.cookies.__session) token = req.cookies.__session;
 
-    if (!token) return res.status(401).json({ error: 'No token provided' });
+    if (!token) return res.status(401).json({ error: 'No token provided', message: 'Missing authentication token. Please sign in.' });
 
     let uid = null;
-    // Try Firebase ID token verification first (existing behavior)
+    // Try Firebase ID token verification first
     try {
       const decoded = await admin.auth().verifyIdToken(token);
       uid = decoded.uid;
     } catch (firebaseErr) {
-      // If not a Firebase token, try verifying our server JWT
+      // If not a Firebase ID token, try verifying our server-signed JWT
       try {
-        // reject revoked tokens early
         if (revokedTokens.has(token)) {
-          return res.status(401).json({ error: "Token revoked" });
+          return res.status(401).json({ error: "Token revoked", message: "Your session has been revoked. Please sign in again." });
         }
         const decoded2 = jwt.verify(token, JWT_SECRET);
         uid = decoded2.uid;
       } catch (jwtErr) {
         console.error('requireAdmin token verification failed', firebaseErr && firebaseErr.message, jwtErr && jwtErr.message);
-        return res.status(401).json({ error: 'Unauthorized' });
+        return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or expired token. Please sign in.' });
       }
     }
 
-    if (!uid) return res.status(401).json({ error: 'Invalid token' });
+    if (!uid) return res.status(401).json({ error: 'Invalid token', message: 'Invalid authentication token.' });
 
     const userDoc = await db.collection('users').doc(uid).get();
     const role = userDoc.exists ? userDoc.data().role : null;
-    if (role !== 'admin') return res.status(403).json({ error: 'Forbidden: admin only' });
+    if (role !== 'admin') return res.status(403).json({ error: 'Forbidden: admin only', message: 'You must be an admin to access this resource.' });
 
     // attach admin info
     req.adminUser = { uid, email: userDoc.exists ? userDoc.data().email : null };
     next();
   } catch (err) {
     console.error('requireAdmin error', err);
-    return res.status(401).json({ error: 'Unauthorized' });
+    return res.status(401).json({ error: 'Unauthorized', message: 'Authentication failed.' });
   }
 }
 
-// ---- NEW: requireAuth middleware (for applicants / teacher-protected endpoints) ----
+// requireAuth middleware (for applicants / teacher-protected endpoints) ----
 // Accepts Firebase ID tokens OR server JWTs (signed with JWT_SECRET).
-// Rejects revoked server JWTs. Attaches req.user = { uid, role, email }.
+
 async function requireAuth(req, res, next) {
   try {
     // get token from Authorization: Bearer <token> or cookie __session
-    let token = null;
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.split('Bearer ')[1];
-    else if (req.cookies && req.cookies.__session) token = req.cookies.__session;
+   let token = null;
+const authHeader = req.headers.authorization;
+if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.split('Bearer ')[1];
 
     if (!token) return res.status(401).json({ error: 'No token provided' });
 
@@ -949,57 +946,382 @@ app.post("/api/enrollees/:studentId/finalize", async (req, res) => {
 /* GET /admin/users - returns merged list from Auth and Firestore */
 app.get('/admin/users', requireAdmin, async (req, res) => {
   try {
+    // Optional query params (simple support): role, q (search), limit
+    const { role: roleFilter, q, limit = 100 } = req.query;
+    // We'll fetch all Auth users in pages (listUsers supports pagination).
     const users = [];
     let nextPageToken;
     do {
       const list = await admin.auth().listUsers(1000, nextPageToken);
       for (const u of list.users) {
-        const profileSnap = await db.collection('users').doc(u.uid).get();
-        const profile = profileSnap.exists ? profileSnap.data() : {};
-        users.push({
-          uid: u.uid,
-          email: u.email || null,
-          displayName: u.displayName || profile.displayName || null,
-          role: profile.role || 'applicant' || 'admin',
-          createdAt: u.metadata?.createdAt || null,
-          lastSignInTime: u.metadata?.lastSignInTime || null,
-          customId: profile.customId || null
-        });
+        users.push(u);
       }
       nextPageToken = list.pageToken;
     } while (nextPageToken);
-    return res.json({ users });
+
+    // Map uids
+    const uids = users.map(u => u.uid);
+
+    // Fetch Firestore user docs in parallel (batch)
+    const profilePromises = uids.map(uid => db.collection('users').doc(uid).get());
+    const profileSnaps = await Promise.all(profilePromises);
+    // Create a uid -> profile map
+    const profileMap = {};
+    profileSnaps.forEach((snap) => {
+      if (snap && snap.exists) profileMap[snap.id] = snap.data();
+    });
+
+    // Build final result array with normalized fields
+    let out = users.map((u) => {
+      const profile = profileMap[u.uid] || {};
+      // prefer Firestore createdAt if present, else Auth metadata creationTime
+      let createdAt = null;
+      if (profile.createdAt) {
+        // If Firestore timestamp object, convert to ISO if possible
+        try {
+          if (profile.createdAt.toDate) createdAt = profile.createdAt.toDate().toISOString();
+          else createdAt = new Date(profile.createdAt).toISOString();
+        } catch (e) {
+          createdAt = String(profile.createdAt);
+        }
+      } else if (u.metadata && u.metadata.creationTime) {
+        try {
+          createdAt = new Date(u.metadata.creationTime).toISOString();
+        } catch (e) {
+          createdAt = u.metadata.creationTime;
+        }
+      } else {
+        createdAt = null;
+      }
+
+      const role = profile.role || 'applicant'; // default if missing
+      const status = profile.status || (u.disabled ? 'inactive' : 'active');
+      const archived = !!profile.archived;
+
+      return {
+        uid: u.uid,
+        customId: profile.customId || null,
+        displayName: u.displayName || profile.displayName || null,
+        email: u.email || profile.email || null,
+        role,
+        status,
+        archived,
+        createdAt,
+      };
+    });
+
+    // Apply server-side filters q (search by name/email) and role if provided
+    if (q && q.trim()) {
+      const ql = q.trim().toLowerCase();
+      out = out.filter((it) => {
+        return (it.displayName && it.displayName.toLowerCase().includes(ql)) ||
+               (it.email && it.email.toLowerCase().includes(ql)) ||
+               (it.customId && it.customId.toLowerCase().includes(ql));
+      });
+    }
+    if (roleFilter) {
+      const rf = roleFilter.toLowerCase();
+      out = out.filter(it => (it.role || '').toLowerCase() === rf);
+    }
+
+    // limit the results to 'limit' (default 100)
+    const numLimit = Math.max(1, Math.min(1000, Number(limit || 100)));
+    out = out.slice(0, numLimit);
+
+    return res.json({ users: out });
   } catch (err) {
-    console.error('/admin/users error', err);
-    return res.status(500).json({ error: err.message });
+    console.error('/admin/users error', err && (err.stack || err));
+    return res.status(500).json({ error: err.message || 'Server error', message: 'Failed to list users.' });
   }
 });
 
 /* POST /admin/reset-password -> body: { uid, newPassword?, notifyUser? } */
 app.post('/admin/reset-password', requireAdmin, async (req, res) => {
   try {
-    const { uid, newPassword, notifyUser = false } = req.body;
-    if (!uid) return res.status(400).json({ error: 'Missing uid' });
+    const { uid, notifyUser = false } = req.body;
+    if (!uid) return res.status(400).json({ error: 'Missing uid', message: 'User id is required.' });
 
-    const passwordToUse = newPassword || Math.random().toString(36).slice(-12);
-    await admin.auth().updateUser(uid, { password: passwordToUse });
+    // Get user email (try Firestore first, fallback to Auth)
+    let email = null;
+    try {
+      const profileSnap = await db.collection('users').doc(uid).get();
+      if (profileSnap.exists) email = profileSnap.data().email || null;
+    } catch (e) {
+      console.warn('/admin/reset-password: failed to read profile', e && e.message);
+    }
+    if (!email) {
+      try {
+        const userRecord = await admin.auth().getUser(uid);
+        email = userRecord.email || null;
+      } catch (e) {
+        console.error('/admin/reset-password failed to get user', e && e.message);
+      }
+    }
 
+    if (!email) {
+      return res.status(400).json({ error: 'No email', message: 'Cannot locate an email address for this user.' });
+    }
+
+    // Generate password reset link using the Admin SDK
+    let resetLink;
+    try {
+      resetLink = await admin.auth().generatePasswordResetLink(email);
+    } catch (e) {
+      console.error('/admin/reset-password generatePasswordResetLink error', e && e.message);
+      // Fallback: attempt to set a temporary password (less preferred) - but for now return error
+      return res.status(500).json({ error: 'Failed to generate reset link', message: 'Could not create password reset link.' });
+    }
+
+    // Optionally send email via nodemailer
+    if (notifyUser) {
+      const mailOptions = {
+        from: `"Holy Family Academy" <${SMTP_USER}>`,
+        to: email,
+        subject: "Password reset instructions",
+        html: `<p>We received a request to reset your password. You can reset your password using this secure link:</p>
+               <p><a href="${resetLink}">Reset your password</a></p>
+               <p>If you didn't request this, please ignore this email.</p>`
+      };
+      try {
+        await mailTransporter.sendMail(mailOptions);
+      } catch (mailErr) {
+        console.warn('/admin/reset-password: failed to send email', mailErr && mailErr.message);
+        // fail explicitly: link existed but email failed
+        await writeActivityLog({
+          actorUid: req.adminUser.uid,
+          actorEmail: req.adminUser.email,
+          targetUid: uid,
+          action: 'reset-password',
+          detail: 'generated_link_but_email_failed'
+        });
+        return res.status(500).json({ error: 'Email send failed', message: 'Failed to email the reset link. Please try again.' });
+      }
+
+      await writeActivityLog({
+        actorUid: req.adminUser.uid,
+        actorEmail: req.adminUser.email,
+        targetUid: uid,
+        action: 'reset-password',
+        detail: 'reset-link-generated-and-emailed'
+      });
+
+      return res.json({ success: true, emailed: true, message: 'Password reset link emailed to user.' });
+    }
+
+    // If notifyUser is false, do not expose the link in response (security)
     await writeActivityLog({
       actorUid: req.adminUser.uid,
       actorEmail: req.adminUser.email,
       targetUid: uid,
       action: 'reset-password',
-      detail: notifyUser ? 'password reset and emailed' : 'password reset - admin retrieved'
+      detail: 'reset-link-generated-not-emailed'
     });
 
-    if (notifyUser) {
-      // TODO: send email to user (nodemailer) with the new password or reset link
-      return res.json({ success: true, emailed: true });
-    }
-    return res.json({ success: true, newPassword: passwordToUse });
+    return res.json({ success: true, emailed: false, message: 'Password reset link generated (not emailed).' });
+
   } catch (err) {
-    console.error('/admin/reset-password error', err);
-    return res.status(500).json({ error: err.message });
+    console.error('/admin/reset-password error', err && (err.stack || err));
+    return res.status(500).json({ error: err.message || 'Server error', message: 'Failed to reset password.' });
+  }
+});
+//  supports updates
+app.put('/admin/users/:uid', requireAdmin, async (req, res) => {
+  try {
+    const targetUid = req.params.uid;
+    if (!targetUid) return res.status(400).json({ error: 'Missing uid' });
+
+    const { displayName, role, status } = req.body || {};
+    const updates = {};
+    const authUpdates = {};
+
+    if (displayName !== undefined) {
+      const dn = String(displayName).trim();
+      if (dn.length === 0) return res.status(400).json({ error: 'Invalid displayName' });
+      updates.displayName = dn;
+      authUpdates.displayName = dn;
+    }
+
+    if (role !== undefined) {
+      const r = String(role).toLowerCase();
+      if (r !== 'admin' && r !== 'applicant') {
+        return res.status(400).json({ error: 'Invalid role', message: 'Role must be "admin" or "applicant".' });
+      }
+      updates.role = r;
+    }
+
+    if (status !== undefined) {
+      const s = String(status).toLowerCase();
+      if (s !== 'active' && s !== 'inactive') {
+        return res.status(400).json({ error: 'Invalid status', message: 'Status must be "active" or "inactive".' });
+      }
+      updates.status = s;
+    }
+
+    if (Object.keys(updates).length === 0 && Object.keys(authUpdates).length === 0) {
+      return res.status(400).json({ error: 'No updates provided' });
+    }
+
+    // Update Firebase Auth if needed
+    if (Object.keys(authUpdates).length > 0) {
+      try {
+        await admin.auth().updateUser(targetUid, authUpdates);
+      } catch (e) {
+        // Log but continue to update Firestore (we still want Firestore to be the source of truth)
+        console.warn('PUT /admin/users: failed to update Auth user', targetUid, e && e.message);
+      }
+    }
+
+    // If status changed, update Auth disabled flag accordingly
+    if (updates.status !== undefined) {
+      try {
+        const disabled = updates.status === 'inactive';
+        await admin.auth().updateUser(targetUid, { disabled });
+      } catch (e) {
+        console.warn('PUT /admin/users: failed to update Auth disabled flag for', targetUid, e && e.message);
+      }
+    }
+
+    // Persist to Firestore (merge)
+    await db.collection('users').doc(targetUid).set({
+      ...updates,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    await writeActivityLog({
+      actorUid: req.adminUser.uid,
+      actorEmail: req.adminUser.email,
+      targetUid,
+      action: 'update-user',
+      detail: JSON.stringify({ updates })
+    });
+
+    return res.json({ success: true, updates });
+  } catch (err) {
+    console.error('PUT /admin/users/:uid error', err && (err.stack || err));
+    return res.status(500).json({ error: err.message || 'Server error' });
+  }
+});
+
+// archived
+/* POST /admin/users/:uid/archive
+   Soft-delete (archive): set archived = true, archivedAt, status=inactive and disable Auth account
+*/
+app.post('/admin/users/:uid/archive', requireAdmin, async (req, res) => {
+  try {
+    const targetUid = req.params.uid;
+    if (!targetUid) return res.status(400).json({ error: 'Missing uid' });
+
+    // update Firestore
+    await db.collection('users').doc(targetUid).set({
+      archived: true,
+      archivedAt: admin.firestore.FieldValue.serverTimestamp(),
+      status: 'inactive',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    // disable Firebase Auth account
+    try {
+      await admin.auth().updateUser(targetUid, { disabled: true });
+    } catch (e) {
+      console.warn('Failed to disable auth for archived user', targetUid, e && e.message);
+    }
+
+    await writeActivityLog({
+      actorUid: req.adminUser.uid,
+      actorEmail: req.adminUser.email,
+      targetUid,
+      action: 'archive-user',
+      detail: 'archived user'
+    });
+
+    return res.json({ success: true, message: 'User archived' });
+  } catch (err) {
+    console.error('POST /admin/users/:uid/archive error', err);
+    return res.status(500).json({ error: err.message || 'Server error' });
+  }
+});
+
+
+// unarchived
+app.post('/admin/users/:uid/unarchive', requireAdmin, async (req, res) => {
+  try {
+    const targetUid = req.params.uid;
+    if (!targetUid) return res.status(400).json({ error: 'Missing uid' });
+
+    await db.collection('users').doc(targetUid).set({
+      archived: false,
+      archivedAt: null,
+      status: 'active',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    try {
+      await admin.auth().updateUser(targetUid, { disabled: false });
+    } catch (e) {
+      console.warn('Failed to enable auth for unarchived user', targetUid, e && e.message);
+    }
+
+    await writeActivityLog({
+      actorUid: req.adminUser.uid,
+      actorEmail: req.adminUser.email,
+      targetUid,
+      action: 'unarchive-user',
+      detail: 'unarchived user'
+    });
+
+    return res.json({ success: true, message: 'User unarchived' });
+  } catch (err) {
+    console.error('POST /admin/users/:uid/unarchive error', err);
+    return res.status(500).json({ error: err.message || 'Server error' });
+  }
+});
+
+// delete -allowed when archvied
+app.delete('/admin/users/:uid', requireAdmin, async (req, res) => {
+  try {
+    const targetUid = req.params.uid;
+    if (!targetUid) return res.status(400).json({ error: 'Missing uid' });
+
+    const userDoc = await db.collection('users').doc(targetUid).get();
+    if (userDoc.exists) {
+      const data = userDoc.data();
+      if (!data.archived) {
+        return res.status(400).json({ error: 'Must be archived', message: 'User must be archived before permanent deletion.' });
+      }
+    } else {
+      // If no Firestore doc, require confirmation? For now allow deletion of auth user only if exists.
+    }
+
+    // Delete Firestore doc (if exists)
+    try {
+      await db.collection('users').doc(targetUid).delete();
+    } catch (e) {
+      console.warn('Failed to delete users doc for', targetUid, e && e.message);
+    }
+
+    // Delete Firebase Auth user
+    try {
+      await admin.auth().deleteUser(targetUid);
+    } catch (e) {
+      // If user doesn't exist in Auth, ignore
+      if (e && e.code !== 'auth/user-not-found') {
+        console.error('Failed to delete auth user', targetUid, e && e.message);
+        return res.status(500).json({ error: 'Failed to delete auth user', message: e.message || String(e) });
+      }
+    }
+
+    await writeActivityLog({
+      actorUid: req.adminUser.uid,
+      actorEmail: req.adminUser.email,
+      targetUid,
+      action: 'delete-user',
+      detail: 'hard delete executed'
+    });
+
+    return res.json({ success: true, message: 'User permanently deleted' });
+  } catch (err) {
+    console.error('DELETE /admin/users/:uid error', err);
+    return res.status(500).json({ error: err.message || 'Server error' });
   }
 });
 

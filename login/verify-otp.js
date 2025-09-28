@@ -1,6 +1,5 @@
 // /login/verify-otp.js
 
-
 const DEFAULT_COOLDOWN = 180; // seconds
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -34,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let remaining = Math.max(Math.floor(seconds), 0);
     if (countdownSpan) {
       countdownSpan.style.display = 'inline';
-      countdownSpan.textContent = `You can resend the code in ${formatSeconds(remaining)}`
+      countdownSpan.textContent = `You can resend the code in ${formatSeconds(remaining)}`;
     }
     if (resendLink) resendLink.classList.add('disabled');
     if (countdownTimer) clearInterval(countdownTimer);
@@ -58,14 +57,12 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${m}:${s}`;
   }
 
-  // Kick off: hide countdown by default (it will appear if server tells there's cooldown)
   if (countdownSpan) countdownSpan.style.display = 'none';
 
   // Resend handler
   async function handleResend(e) {
     e && e.preventDefault();
     if (!resendLink || resendLink.classList.contains('disabled')) return;
-    // disable UI immediately
     if (resendLink) resendLink.classList.add('disabled');
     if (countdownSpan) {
       countdownSpan.style.display = 'inline';
@@ -83,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (resp.status === 429) {
         const json = await resp.json().catch(() => ({}));
         const retryAfter = json && json.retryAfter ? Number(json.retryAfter) : DEFAULT_COOLDOWN;
-        // show message
         if (countdownSpan) countdownSpan.textContent = `Please wait ${formatSeconds(retryAfter)} before resending.`;
         startCountdown(retryAfter);
         return;
@@ -93,23 +89,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const nextAllowed = data && (data.nextAllowedIn || DEFAULT_COOLDOWN);
 
       if (!resp.ok && !data.ok) {
-        // show error message (400 or 500)
         const msg = (data && (data.error || data.message)) || 'Failed to resend OTP.';
-        if (countdownSpan) {
-          countdownSpan.textContent = msg;
-        }
-        // still start cooldown to avoid spamming
+        if (countdownSpan) countdownSpan.textContent = msg;
         startCountdown(nextAllowed);
         return;
       }
 
-      // resp.ok
       if (data && data.ok && data.emailed) {
-        // success
         if (countdownSpan) countdownSpan.textContent = data.message || 'OTP resent. Check your email.';
         startCountdown(nextAllowed);
       } else {
-        // emailed:false (send failed) — per your instruction, instruct user to retry login again
         const msg = (data && data.message) || 'Failed to send OTP. Please try logging in again.';
         if (countdownSpan) countdownSpan.textContent = msg;
         startCountdown(nextAllowed);
@@ -122,55 +111,56 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Attach click listener to the anchor .resend-link
   if (resendLink) {
     resendLink.addEventListener('click', handleResend);
   }
 
-  // OTP verify form submit
+  // OTP verify submit
   if (otpForm) {
     otpForm.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       if (!otpInput) return;
       const code = otpInput.value.trim();
-      otpError.textContent = '';
+      if (otpError) otpError.textContent = '';
       if (!code) {
-        otpError.textContent = 'Please enter the 6-digit code.';
+        if (otpError) otpError.textContent = 'Please enter the 6-digit code.';
         return;
       }
-      // disable verify button while calling
+
+      // disable verify button and show text-only "Verifying..."
       verifyBtn.disabled = true;
+      const origText = verifyBtn.textContent;
       verifyBtn.textContent = 'Verifying...';
+
       try {
         const resp = await fetch('/auth/verify-otp', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ otp: code, idToken, email: verifyEmail })
         });
+
         const body = await resp.json().catch(() => ({}));
         if (!resp.ok) {
-          otpError.textContent = body && body.error ? body.error : 'Verification failed.';
-          // if expired, the message will be e.g. "OTP expired. Please resend code."
+          if (otpError) otpError.textContent = body && (body.error || body.message) ? (body.error || body.message) : 'Verification failed.';
           verifyBtn.disabled = false;
-          verifyBtn.textContent = 'Verify';
+          verifyBtn.textContent = origText;
           return;
         }
-        // success: receive token & role
-        if (body && body.token) {
-          localStorage.setItem('token', body.token);
-          // Redirect by role
-          if (body.role === 'admin') window.location.replace('/adminportal/admin.html');
-          else window.location.replace('/teacher-application/teacher.html');
-        } else {
-          otpError.textContent = 'Unexpected server response.';
-          verifyBtn.disabled = false;
-          verifyBtn.textContent = 'Verify';
-        }
+
+        // success: server returns { ok:true, token?, role }
+        // DO NOT write server token to localStorage. Use Firebase ID tokens for subsequent API calls.
+        try { sessionStorage.removeItem('idToken'); sessionStorage.removeItem('verifyEmail'); } catch (e) {}
+
+        // Redirect: role-aware. If the server provided role, use it; else default to admin redirect.
+        const role = body && body.role ? body.role : 'admin';
+        if (role === 'admin') window.location.replace('/adminportal/admin.html');
+        else window.location.replace('/teacher-application/teacher.html');
+
       } catch (err) {
         console.error('verify-otp network error', err);
-        otpError.textContent = 'Network error. Try again later.';
+        if (otpError) otpError.textContent = 'Network error. Try again later.';
         verifyBtn.disabled = false;
-        verifyBtn.textContent = 'Verify';
+        verifyBtn.textContent = origText;
       }
     });
   }

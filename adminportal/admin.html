@@ -8,9 +8,8 @@
         <link rel="stylesheet" href="admin.css">
         <link rel="stylesheet" href="admincontent.css">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
-        <link rel="stylesheet" href="calendar.css">
         <script src='https://cdn.jsdelivr.net/npm/fullcalendar/index.global.min.js'></script>
-        <!-- <script src="../check-auth.js"></script> -->
+        <script type="module" src="../check-auth.js"></script>
     </head>
 
     <body>
@@ -1022,7 +1021,6 @@
                 <div class="user-management-tabs">
                     <div class="tabs">
                         <button class="tab-btn active" data-tab="accounts">User Accounts</button>
-                        <button class="tab-btn" data-tab="roles">Roles & Permissions</button>
                         <button class="tab-btn" data-tab="activity">Activity Log</button>
                     </div>
 
@@ -1036,8 +1034,8 @@
                                 <option>All Roles</option>
                                 <option>Administrator</option>
                                 <option>Teacher</option>
-                                <option>Student</option>
                             </select>
+                            
 
                         </div>
 
@@ -1166,55 +1164,7 @@
                             </table>
                         </div>
                     </div>
-
-                    <div class="tab-content" id="roles">
-                        <div class="roles-header">
-                            <h3>System Roles and Permissions</h3>
-                            <button class="btn-add-role"><i class="fas fa-plus"></i> Add Role</button>
-                        </div>
-
-                        <div class="roles-list">
-                            <div class="role-card">
-                                <div class="role-header">
-                                    <h4>Administrator</h4>
-                                    <span class="user-count">5 users</span>
-                                </div>
-                                <div class="role-permissions">
-                                    <h5>Permissions:</h5>
-                                    <ul>
-                                        <li><i class="fas fa-check"></i> Full system access</li>
-                                        <li><i class="fas fa-check"></i> User management</li>
-                                        <li><i class="fas fa-check"></i> System configuration</li>
-                                    </ul>
-                                </div>
-                                <div class="role-actions">
-                                    <button class="btn-edit-role">Edit</button>
-                                    <button class="btn-manage-users">Manage Users</button>
-                                </div>
-                            </div>
-
-                            <div class="role-card">
-                                <div class="role-header">
-                                    <h4>Teacher</h4>
-                                    <span class="user-count">45 users</span>
-                                </div>
-                                <div class="role-permissions">
-                                    <h5>Permissions:</h5>
-                                    <ul>
-                                        <li><i class="fas fa-check"></i> Class management</li>
-                                        <li><i class="fas fa-check"></i> Grade submission</li>
-                                        <li><i class="fas fa-check"></i> Student records</li>
-                                        <li><i class="fas fa-times"></i> System configuration</li>
-                                    </ul>
-                                </div>
-                                <div class="role-actions">
-                                    <button class="btn-edit-role">Edit</button>
-                                    <button class="btn-manage-users">Manage Users</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
+                   <!-- activity logs -->
                     <div class="tab-content" id="activity">
                         <div class="activity-filters">
                             <div class="date-range">
@@ -1418,7 +1368,6 @@
         <script src="admin-notes.js"></script>
         <script src="admin-announcement.js"></script>
         <script src="admin-interview.js"></script>
-        <script src="admin-mini-calendar.js"></script>
         <script src="admin-schoolcalendar.js"></script>
 
 
