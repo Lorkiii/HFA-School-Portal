@@ -10,30 +10,7 @@ console.log('[debug] admin-user-management loaded, auth:', !!auth, 'currentUser:
 // helper
 const $ = (s) => document.querySelector(s);
 
-// getIdToken helper
-async function getAdminIdToken() {
-  if (auth.currentUser) return auth.currentUser.getIdToken();
-  return new Promise((resolve, reject) => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
-        unsub();
-        reject(new Error("Not signed in"));
-        return;
-      }
-      try {
-        const token = await user.getIdToken();
-        unsub();
-        resolve(token);
-      } catch (err) {
-        unsub();
-        reject(err);
-      }
-    });
-  });
-}
 
-// NOTE: the local apiFetch implementation was removed in favor of imported apiFetch.
-// The imported apiFetch adds Authorization: Bearer <idToken> and handles 401/403.
 
 // timestamp formatting helper
 function safeFormatTimestamp(ts) {

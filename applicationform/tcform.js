@@ -1,39 +1,22 @@
+/* tcform.js - Full file (OCR autofill, uploads, modal + success flow)
+   Replace your current tcform.js with this file.
+*/
+
 /*  Firebase & Supabase  */
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import {
-  getFirestore,
-  doc,
-  setDoc,
-  getDoc,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
 import { firebaseConfig } from "../firebase-config.js";
 import { supabase } from "../supabase-config.js";
 
-// init firebase
+// init firebase (client only for future client needs)
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
 
-// Helpers
+/* ----------------- Helpers ----------------- */
 // generate a random lowercase+digit string
 function randStr(len = 6) {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
 
-// build an email from last name + rand suffix
-function makeEmail(last) {
-  return `${(last || "user").toLowerCase()}${randStr(4)}@hfa-applicants.com`;
-}
-
-// make a random password
-function makePassword() {
-  return randStr(10);
-}
-
-// safe folder name for storage
 function safePart(s = "") {
   return s.toLowerCase()
     .replace(/@/g, "-at-")
@@ -42,12 +25,10 @@ function safePart(s = "") {
     .replace(/(^-|-$)/g, "");
 }
 
-// ---------- OCR / PDF helpers ----------
-
+/* ---------- OCR / PDF helpers ---------- */
 const PDFJS_VERSION = "2.16.105";
 const TESSERACT_VERSION = "v4.0.2";
 
-// load PDF.js library dynamically
 async function loadPDF() {
   if (window.pdfjsLib) {
     window.pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -67,7 +48,6 @@ async function loadPDF() {
   return window.pdfjsLib;
 }
 
-// load Tesseract.js dynamically
 async function loadTess() {
   if (window.Tesseract) return window.Tesseract;
   await new Promise((resolve, reject) => {
@@ -81,7 +61,6 @@ async function loadTess() {
   return window.Tesseract;
 }
 
-// run OCR on a canvas and return extracted text
 async function ocrCanvas(canvas, onProgress = null) {
   const T = await loadTess();
   const worker = T.createWorker({ logger: onProgress || (() => {}) });
@@ -93,18 +72,16 @@ async function ocrCanvas(canvas, onProgress = null) {
   return data?.text || "";
 }
 
-// render a PDF page to canvas and OCR it
 async function renderPdfAndOcr(page, scale = 2, onProgress = null) {
   const vp = page.getViewport({ scale });
-  const canvas = document.createElement("canvas");
+  const canvas = document.createElement('canvas');
   canvas.width = Math.floor(vp.width);
   canvas.height = Math.floor(vp.height);
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext('2d');
   await page.render({ canvasContext: ctx, viewport: vp }).promise;
   return await ocrCanvas(canvas, onProgress);
 }
 
-// extract text from PDF
 async function extractPdfText(file, onProgress = null) {
   const pdfjsLib = await loadPDF();
   const fr = new FileReader();
@@ -140,7 +117,6 @@ async function extractPdfText(file, onProgress = null) {
   });
 }
 
-// extract text from an image using OCR
 async function extractImageText(file, onProgress = null) {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -169,9 +145,7 @@ async function extractImageText(file, onProgress = null) {
   });
 }
 
-// ---------- Autofill / parsing helpers ----------
-
-//date formats into YYYY-MM-DD
+/* ---------- Autofill / parsing helpers ---------- */
 function birthdate(s) {
   const months = {
     jan: 1, january: 1,
@@ -198,34 +172,20 @@ function birthdate(s) {
   return s;
 }
 
-// parse text and autofill form fields (skip fields the user already typed)
+/**
+ * autoFillFromText
+ * Tries to extract: name, email, phone, birthdate, license number, license expiry,
+ * institution, degree/major. Writes into existing inputs ONLY if user hasn't edited them.
+ */
 function autoFillFromText(text) {
-  // try to find labeled or fallback full name
+  if (!text || !text.trim()) return;
+  const raw = text.replace(/\r/g, ' ').replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
+
+  // 1) Name
   const labeledName =
-    text.match(/(?:Applicant['’]s?\s+)?(?:Full|Complete|Name)\s*[:\-]*\s*((?:[A-Z][a-z]+(?:['’][A-Z][a-z]+)?\s+){1,4})(?=\s*(?:[A-Z]|$))/i) || null;
-  const fallbackName = text.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/);
-
-  // address detection (PH-focused)
-  const labeledAddress =
-    text.match(/(?:(?:Current|Present|Permanent|Residential)\s+)?Address\s*[:\-]*\s*((?:\b(?:Brgy|Sitio)\.?\s+[\w\s]+?,?\s*){1,2}(?:\d{1,4}[A-Z]?\s+)?[\w\s.,#-]+?(?:,\s*(?:City\s+of\s+)?[A-Z][\w\s-]+)?(?:,\s*(?:\d{4}\s+)?[A-Z]{2,})?)/i) || null;
-
-  // phone patterns
-  const phoneRx = [
-    /\b(?:\+?63[\s-]?|0)?(?:9\d{2}[\s-]?\d{3}[\s-]?\d{4}|2\d{3}[\s-]?\d{4})\b/,
-    /\b\(?(?:0\d{2})\)?[\s-]?\d{3}[\s-]?\d{4}\b/,
-    /\b\d{4}[\s-]?\d{3}[\s-]?\d{4}\b/
-  ];
-
-  // date patterns
-  const dateRx = [
-    /\b\d{4}[-/](0[1-9]|1[0-2])[-/](0[1-9]|[12][0-9]|3[01])\b/,
-    /\b(0[1-9]|[12][0-9]|3[01])[-/](0[1-9]|1[0-2])[-/]\d{4}\b/,
-    /\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)[\s,-]+(\d{1,2})(?:th|st|nd|rd)?[\s,-]+(\d{4})\b/i,
-    /\b(\d{1,2})[\s-]+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[\s-]+(\d{4})\b/i
-  ];
-
-  // pull name string
-  const nameStr = (labeledName?.[1] || fallbackName?.[1] || "").trim();
+    raw.match(/(?:Applicant(?:'s)?\s+)?(?:Full|Complete|Name)\s*[:\-]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/i)
+    || raw.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/);
+  const nameStr = (labeledName && labeledName[1]) ? labeledName[1].trim() : "";
   if (nameStr) {
     const parts = nameStr.split(/\s+/);
     const fn = parts[0] || "";
@@ -234,63 +194,79 @@ function autoFillFromText(text) {
     const firstEl = document.getElementById("first-name");
     const lastEl = document.getElementById("last-name");
     const midEl = document.getElementById("middle-name");
-    if (firstEl && firstEl.dataset.userEdited !== 'true') firstEl.value = fn;
-    if (lastEl && lastEl.dataset.userEdited !== 'true') lastEl.value = ln;
-    if (midEl && midEl.dataset.userEdited !== 'true') midEl.value = mid;
+    if (firstEl && firstEl.dataset.userEdited !== 'true' && !firstEl.value) firstEl.value = fn;
+    if (lastEl && lastEl.dataset.userEdited !== 'true' && !lastEl.value) lastEl.value = ln;
+    if (midEl && midEl.dataset.userEdited !== 'true' && !midEl.value) midEl.value = mid;
   }
 
-  // phone
-  let ph = null;
-  for (const rx of phoneRx) { ph = text.match(rx); if (ph) break; }
-  if (ph) {
-    const phEl = document.getElementById("contact-number");
-    if (phEl && phEl.dataset.userEdited !== 'true') phEl.value = ph[0];
-  }
-
-  // birthdate
-  let bd = null;
-  for (const rx of dateRx) { bd = text.match(rx); if (bd) break; }
-  if (bd) {
-    const bdNorm = birthdate(bd[0]);
-    const bdEl = document.getElementById("birthdate");
-    if (bdEl && bdEl.dataset.userEdited !== 'true') bdEl.value = bdNorm;
-  }
-
-  // address
-  const addr = (labeledAddress?.[1] || "").trim();
-  if (addr) {
-    const aEl = document.getElementById("address");
-    if (aEl && aEl.dataset.userEdited !== 'true') aEl.value = addr.replace(/\s{2,}/g, " ");
-  }
-
-  // education parsing (institution, major, subjects)
-  const inst = text.match(/(?:University|College|School|Institution)\s*[:—-]+?\s*([A-Z][\w\s-]+(?:\s+University|\s+College)?)/i);
-  const maj = text.match(/(?:Major|Specialization)\s*[:—-]+?\s*([A-Z][\w\s-]+)/i);
-  const subj = text.match(/(?:Subjects? Qualified|Teaching Subjects)\s*[:—-]+?\s*((?:[A-Z][\w\s-]+,?\s*)+)/i);
-
-  if (inst) {
-    const el = document.getElementById("institution");
-    if (el && el.dataset.userEdited !== 'true') el.value = inst[1];
-  }
-  if (maj) {
-    const el = document.getElementById("major");
-    if (el && el.dataset.userEdited !== 'true') el.value = maj[1];
-  }
-  if (subj) {
-    const el = document.getElementById("qualified-subjects");
-    if (el && el.dataset.userEdited !== 'true') {
-      const vals = subj[1].split(/,\s*/).map(s => s.replace(/\b\w/g, c => c.toUpperCase())).join(", ");
-      el.value = vals;
+  // 2) Email
+  const emailMatch = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
+  if (emailMatch) {
+    const emailEl = document.getElementById("email");
+    if (emailEl && emailEl.dataset.userEdited !== 'true' && !emailEl.value) {
+      emailEl.value = emailMatch[0].toLowerCase();
     }
+  }
+
+  // 3) Phone
+  const phoneMatch = raw.match(/(\+?\d{1,3}[\s-\.]?)?(?:\(?\d{2,4}\)?[\s-\.]?)\d{3,4}[\s-\.]?\d{3,4}/);
+  if (phoneMatch) {
+    const phone = phoneMatch[0].replace(/[^\d+]/g, '');
+    const phoneEl = document.getElementById("contact-number");
+    if (phoneEl && phoneEl.dataset.userEdited !== 'true' && !phoneEl.value) {
+      phoneEl.value = phone;
+    }
+  }
+
+  // 4) Birthdate
+  const dateMatch = raw.match(/\b(\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|\d{1,2}[-\/]\d{1,2}[-\/]\d{4}|[A-Za-z]{3,9}\s+\d{1,2},?\s*\d{4}|\d{1,2}\s+[A-Za-z]{3,9},?\s*\d{4})\b/);
+  if (dateMatch) {
+    const bdVal = birthdate(dateMatch[1]);
+    const bdEl = document.getElementById("birthdate");
+    if (bdEl && bdEl.dataset.userEdited !== 'true' && !bdEl.value) {
+      bdEl.value = bdVal;
+    }
+  }
+
+  // 5) License number & expiry
+  const licMatch = raw.match(/\b(?:License|Licence|Lic\.)\s*(?:No\.?|Number|#)?\s*[:\-]?\s*([A-Z0-9\-]{4,20})\b/i);
+  if (licMatch) {
+    const licEl = document.getElementById("license-number");
+    if (licEl && licEl.dataset.userEdited !== 'true' && !licEl.value) licEl.value = licMatch[1].trim();
+  }
+  const licExpMatch = raw.match(/\b(?:Expiry|Expiration|Exp|EXP|Expires)\s*(?:Date|:)?\s*[:\-]?\s*(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}|\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|[A-Za-z]+\s+\d{1,2},?\s*\d{4})\b/);
+  if (licExpMatch) {
+    const val = birthdate(licExpMatch[1]);
+    const el = document.getElementById("license-expiry");
+    if (el && el.dataset.userEdited !== 'true' && !el.value) el.value = val;
+  }
+
+  // 6) Degree / Institution
+  const degreeMatch = raw.match(/\b(Bachelor(?:'s)?|Bachelor of|B\.?A\.?|B\.?S\.?|Master(?:'s)?|M\.?A\.?|M\.?S\.?|Doctor|Ph\.?D\.?)\b/i);
+  if (degreeMatch) {
+    const degEl = document.getElementById("highest-degree");
+    if (degEl && degEl.dataset.userEdited !== 'true' && !degEl.value) degEl.value = degreeMatch[0];
+  }
+  const instMatch = raw.match(/\b([A-Z][\w&\s,.-]{3,60}\b(?:University|College|Institute|School|Academy|Center))\b/i);
+  if (instMatch) {
+    const instEl = document.getElementById("institution");
+    if (instEl && instEl.dataset.userEdited !== 'true' && !instEl.value) instEl.value = instMatch[0].trim();
+  }
+
+  // 7) Major/qualified subjects
+  const majorMatch = raw.match(/\bMajor\s*[:\-]?\s*([A-Za-z &\/\-]{3,60})\b/i) || raw.match(/\b(?:Field of Study|Specialization)\s*[:\-]?\s*([A-Za-z &\/\-]{3,60})\b/i);
+  if (majorMatch) {
+    const majorEl = document.getElementById("major");
+    if (majorEl && majorEl.dataset.userEdited !== 'true' && !majorEl.value) majorEl.value = majorMatch[1].trim();
   }
 }
 
-// ---------- in-memory upload state ----------
+/* ---------- in-memory upload state ---------- */
 const uploads = {}; // e.g. { resume: { file, name }, license: {...} }
 
-// ---------- DOM & events ----------
+/* ---------------- DOM wiring and submit handling ---------------- */
 document.addEventListener("DOMContentLoaded", () => {
-  // DOM references
+  // DOM refs
   const resumeIn = document.getElementById("resume-upload");
   const resumeBtn = document.getElementById("browse-btn");
   const resumeLabel = document.getElementById("file-name");
@@ -308,18 +284,15 @@ document.addEventListener("DOMContentLoaded", () => {
   const lastIn = document.getElementById("last-name");
   const midIn = document.getElementById("middle-name");
 
-  // mark these fields as user-edited when typing
   [firstIn, lastIn, midIn].forEach(el => {
     if (!el) return;
     el.addEventListener("input", () => { el.dataset.userEdited = 'true'; });
   });
 
-  // shared handler when a file is selected (no upload yet)
   async function handleFileSelect(el, key) {
     if (!el || !el.files || el.files.length === 0) return;
     const file = el.files[0];
     uploads[key] = { file, name: file.name };
-
     const labelSpan = document.querySelector(`label[for="${el.id}"] .file-input-text`);
     if (labelSpan) labelSpan.textContent = `Selected: ${file.name}`;
 
@@ -329,8 +302,12 @@ document.addEventListener("DOMContentLoaded", () => {
     if (isPdf) {
       try {
         if (progText) progText.textContent = "Reading PDF content...";
-        const txt = await extractPdfText(file, () => {});
-        if (txt && txt.trim().length) autoFillFromText(txt);
+        const txt = await extractPdfText(file, (p) => {
+          try { if (progText) progText.textContent = `OCR progress: ${Math.round((p.progress||0)*100)}%`; } catch(e){}
+        });
+        if (txt && txt.trim().length) {
+          try { autoFillFromText(txt); } catch (e) { console.warn('autoFillFromText failed', e); }
+        }
       } catch (err) {
         console.warn("PDF extraction failed:", err);
       } finally {
@@ -339,8 +316,12 @@ document.addEventListener("DOMContentLoaded", () => {
     } else if (isImage) {
       try {
         if (progText) progText.textContent = "Running OCR on image...";
-        const txt = await extractImageText(file, () => {});
-        if (txt && txt.trim().length) autoFillFromText(txt);
+        const txt = await extractImageText(file, (p) => {
+          try { if (progText) progText.textContent = `OCR progress: ${Math.round((p.progress||0)*100)}%`; } catch(e){}
+        });
+        if (txt && txt.trim().length) {
+          try { autoFillFromText(txt); } catch (e) { console.warn('autoFillFromText failed', e); }
+        }
       } catch (err) {
         console.warn("Image OCR failed:", err);
       } finally {
@@ -351,32 +332,240 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // wire change events
   if (licenseIn) licenseIn.addEventListener("change", () => handleFileSelect(licenseIn, "license"));
   if (transcriptIn) transcriptIn.addEventListener("change", () => handleFileSelect(transcriptIn, "transcript"));
   if (cvIn) cvIn.addEventListener("change", () => handleFileSelect(cvIn, "cv"));
 
-  // resume browse click
   if (resumeBtn && resumeIn) resumeBtn.addEventListener("click", () => resumeIn.click());
 
-  // resume selection
   if (resumeIn) resumeIn.addEventListener("change", async function () {
     if (!this.files.length) return;
     const f = this.files[0];
     uploads.resume = { file: f, name: f.name };
     if (resumeLabel) resumeLabel.textContent = `Selected: ${f.name}`;
-
     if (progBar) progBar.style.display = "block";
     if (progFill) progFill.style.width = "0%";
     if (progText) progText.textContent = "Ready to upload on submit...";
-
     await handleFileSelect(this, "resume");
-
     if (progFill) progFill.style.width = "100%";
     if (progText) progText.textContent = "Ready to upload on submit!";
   });
 
-  // submit handler: create applicant (server) then upload files (supabase)
+  /* ---------- Confirmation modal wiring (keeps your existing elements) ---------- */
+  const confirmationModal = document.getElementById('confirmation-modal');
+  const confirmationClose = document.getElementById('confirmation-close');
+  const modalCancel = document.getElementById('modal-cancel-btn');
+  const modalConfirmBtn = document.getElementById('modal-confirm-btn');
+
+  const emailInput = document.getElementById('confirm-email-input'); // editable input you added
+  const btnGetCode = document.getElementById('btn-get-code');
+  const countdownSpan = document.getElementById('confirmation-countdown');
+  const codeBlock = document.getElementById('confirmation-code-block'); // visible by default in your HTML
+  const codeInput = document.getElementById('confirm-code-input');
+  const btnConfirmCode = document.getElementById('btn-confirm-code');
+  const btnResend = document.getElementById('btn-resend');
+  const confirmError = document.getElementById('confirm-error');
+
+  const successCard = document.getElementById('success-message');
+  const successOkay = successCard ? successCard.querySelector('.okay-btn') : null;
+
+  function showModal() { if (confirmationModal) confirmationModal.style.display = 'block'; }
+  function hideModal() { if (confirmationModal) confirmationModal.style.display = 'none'; }
+
+  confirmationClose?.addEventListener('click', hideModal);
+  modalCancel?.addEventListener('click', hideModal);
+
+  // countdown state
+  let countdownTimer = null;
+  function startCountdown(seconds) {
+    if (!countdownSpan) return;
+    let remaining = Math.max(0, Math.floor(Number(seconds) || 0));
+    countdownSpan.style.display = 'inline';
+    function tick() {
+      if (remaining <= 0) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+        countdownSpan.style.display = 'none';
+        if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Get code'; }
+        if (btnResend) btnResend.disabled = false;
+        return;
+      }
+      const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
+      const ss = String(remaining % 60).padStart(2, '0');
+      countdownSpan.textContent = `Resend in ${mm}:${ss}`;
+      remaining--;
+    }
+    if (btnGetCode) { btnGetCode.disabled = true; }
+    if (btnResend) btnResend.disabled = true;
+    tick();
+    countdownTimer = setInterval(tick, 1000);
+  }
+
+  // server calls
+  async function sendCode(applicationId, email) {
+    if (!applicationId || !email) {
+      if (confirmError) confirmError.textContent = 'Missing application context or email.';
+      return;
+    }
+    if (!btnGetCode) return;
+    btnGetCode.disabled = true;
+    btnGetCode.textContent = 'Sending...';
+    if (confirmError) confirmError.textContent = '';
+    try {
+      const r = await fetch('/applicants/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId, email })
+      });
+
+      if (r.status === 429) {
+        const j = await r.json().catch(() => ({}));
+        const retry = j && (j.retryAfter || j.nextAllowedIn) ? Number(j.retryAfter || j.nextAllowedIn) : 180;
+        if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Get code'; }
+        startCountdown(retry);
+        if (confirmError) confirmError.textContent = j && (j.error || j.message) ? (j.error || j.message) : 'Please wait before resending.';
+        return;
+      }
+
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) {
+        const msg = j && (j.error || j.message) ? (j.error || j.message) : 'Failed to send code.';
+        if (countdownSpan) {
+          countdownSpan.style.display = 'block';
+          countdownSpan.textContent = msg;
+        } else if (confirmError) confirmError.textContent = msg;
+        if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Get code'; }
+        const after = (j && (j.nextAllowedIn || j.retryAfter)) ? Number(j.nextAllowedIn || j.retryAfter) : 180;
+        startCountdown(after);
+        return;
+      }
+
+      // Success -> show code input block and start cooldown
+      if (codeBlock) codeBlock.style.display = 'block';
+      if (codeInput) codeInput.focus();
+      if (btnGetCode) btnGetCode.textContent = 'Sent';
+      const after = (j && j.nextAllowedIn) ? Number(j.nextAllowedIn) : 180;
+      startCountdown(after);
+    } catch (err) {
+      console.error('sendCode error', err);
+      if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Get code'; }
+      if (confirmError) confirmError.textContent = 'Network error. Try again.';
+    }
+  }
+
+  async function verifyCode(applicationId, email, code, displayName) {
+    if (confirmError) confirmError.textContent = '';
+    if (!code || code.trim().length < 6) {
+      if (confirmError) confirmError.textContent = 'Please enter the 6-digit code.';
+      return;
+    }
+    if (!btnConfirmCode) return;
+    btnConfirmCode.disabled = true;
+    const orig = btnConfirmCode.textContent;
+    btnConfirmCode.textContent = 'Verifying...';
+
+    try {
+      const resp = await fetch('/applicants/confirm-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ applicationId, email, code, displayName })
+      });
+      const j = await resp.json().catch(() => ({}));
+      if (!resp.ok || !j.ok) {
+        const msg = j && (j.error || j.message) ? (j.error || j.message) : 'Verification failed.';
+        if (confirmError) confirmError.textContent = msg;
+        btnConfirmCode.disabled = false;
+        btnConfirmCode.textContent = orig || 'Confirm';
+        return;
+      }
+
+      // Success: show success UI
+      if (successCard) {
+        successCard.style.display = 'block';
+      } else {
+        alert('Application submitted and credentials emailed.');
+      }
+
+      if (j && j.emailed === false) {
+        const note = successCard ? successCard.querySelector('.email-note') : null;
+        if (note) note.textContent = 'Account created but email delivery failed. Contact support.';
+        else alert('Account created but email delivery failed. Contact support.');
+      }
+
+      btnConfirmCode.disabled = false;
+      btnConfirmCode.textContent = orig || 'Confirm';
+    } catch (err) {
+      console.error('verifyCode error', err);
+      if (confirmError) confirmError.textContent = 'Network error. Try again later.';
+      btnConfirmCode.disabled = false;
+      btnConfirmCode.textContent = orig || 'Confirm';
+    }
+  }
+
+  // Wire modal buttons
+  if (btnGetCode) {
+    btnGetCode.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      if (!window._currentApplicationId) {
+        if (confirmError) confirmError.textContent = 'Application context missing. Please submit the form first.';
+        return;
+      }
+      const email = (emailInput && emailInput.value && emailInput.value.trim()) ? emailInput.value.trim() : '';
+      if (!email) {
+        if (confirmError) confirmError.textContent = 'Please enter your email address.';
+        return;
+      }
+      sendCode(window._currentApplicationId, email);
+    });
+  }
+
+  if (btnResend) {
+    btnResend.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      if (!window._currentApplicationId) {
+        if (confirmError) confirmError.textContent = 'Application context missing.';
+        return;
+      }
+      const email = (emailInput && emailInput.value && emailInput.value.trim()) ? emailInput.value.trim() : '';
+      sendCode(window._currentApplicationId, email);
+    });
+  }
+
+  if (btnConfirmCode) {
+    btnConfirmCode.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      if (!window._currentApplicationId) {
+        if (confirmError) confirmError.textContent = 'Application context missing.';
+        return;
+      }
+      const email = (emailInput && emailInput.value && emailInput.value.trim()) ? emailInput.value.trim() : '';
+      const code = (codeInput && codeInput.value) ? codeInput.value.trim() : '';
+      const displayName = `${document.getElementById('first-name').value || ''} ${document.getElementById('last-name').value || ''}`.trim();
+      verifyCode(window._currentApplicationId, email, code, displayName);
+    });
+  }
+
+  // Map modal Confirm button to code verification too
+  if (modalConfirmBtn) {
+    modalConfirmBtn.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      if (btnConfirmCode) btnConfirmCode.click();
+    });
+  }
+
+  // Open confirmation modal
+  function openConfirmationModal(applicationId, emailPrefill) {
+    window._currentApplicationId = applicationId;
+    if (emailInput) emailInput.value = emailPrefill || '';
+    if (codeBlock) codeBlock.style.display = 'block'; // show by default as you requested
+    if (confirmError) confirmError.textContent = '';
+    if (countdownSpan) { countdownSpan.style.display = 'none'; countdownSpan.textContent = ''; }
+    if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Get code'; }
+    if (btnResend) btnResend.disabled = false;
+    showModal();
+  }
+
+  /* ---------- Submit handler ---------- */
   if (submitBtn) submitBtn.addEventListener("click", async (ev) => {
     ev.preventDefault();
 
@@ -401,7 +590,12 @@ document.addEventListener("DOMContentLoaded", () => {
     const subjects = document.getElementById("qualified-subjects").value.trim();
     const empType = document.getElementById("employment-type").value;
 
-    // payload to server
+    // basic validation
+    if (!fn || !ln || !userEmail) {
+      alert('Please fill required fields (first name, last name, email).');
+      return;
+    }
+
     const payload = {
       formType: "teacher",
       lastName: ln,
@@ -425,29 +619,31 @@ document.addEventListener("DOMContentLoaded", () => {
       employmentType: empType
     };
 
-    // debug: show exact payload for inspection
-    console.log('Submitting application payload:',
-      payload.firstName, payload.lastName, payload, payload.contactNumber);
+    // disable submit button while creating application
+    submitBtn.disabled = true;
+    const origText = submitBtn.textContent;
+    submitBtn.textContent = 'Submitting…';
 
     try {
-      //  create applicant record server-side
-      const res = await fetch("http://localhost:3000/api/submit-application", {
+      // Call server to create application (server must NOT create Auth user nor send credentials)
+      const res = await fetch("/applicants/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
-      const result = await res.json();
+      const result = await res.json().catch(() => ({}));
       if (!res.ok || !result.success) {
         console.error("Server creation error:", result);
         alert("Server error: " + (result.error || "Failed to create applicant"));
+        submitBtn.disabled = false;
+        submitBtn.textContent = origText;
         return;
       }
-      const newId = result.newId;
-      const genEmail = result.generatedEmail || null;
 
-      // upload files to supabase in folder last-newId
+      const applicationId = result.applicationId;
+      // upload files to supabase in folder last-applicationId
       const safeLast = safePart(ln || "unknown");
-      const folder = `${safeLast}-${newId}`;
+      const folder = `${safeLast}-${applicationId}`;
       const bucket = "uploads";
       const uploadedFiles = [];
 
@@ -471,15 +667,16 @@ document.addEventListener("DOMContentLoaded", () => {
         if (up) uploadedFiles.push(up);
       }
 
-      //update Firestore with storage links
-      const update = {
-        storageFolderId: folder,
-        documents: uploadedFiles,
-        updatedAt: serverTimestamp()
-      };
-      await setDoc(doc(db, "teacherApplicants", newId), update, { merge: true });
+      // call server to attach files to application (server will write to Firestore)
+      try {
+        await fetch(`/applicants/${encodeURIComponent(applicationId)}/attach-files`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ files: uploadedFiles })
+        }).catch(() => {});
+      } catch (_) { /* non-fatal */ }
 
-      // cleanup UI & state
+      // cleanup UI & state (but keep form fields — user confirms via modal)
       Object.keys(uploads).forEach(k => delete uploads[k]);
       if (resumeIn) resumeIn.value = "";
       if (licenseIn) licenseIn.value = "";
@@ -488,16 +685,58 @@ document.addEventListener("DOMContentLoaded", () => {
       if (resumeLabel) resumeLabel.textContent = "";
       if (progBar) progBar.style.display = "none";
 
-      let okMsg = `Application submitted successfully!`;
-      if (genEmail) okMsg += `\n\nGenerated account email: ${genEmail}\nPlease check your email for the password.`;
-      else okMsg += `\n\nPlease check your email for account details.`;
-
-      alert(okMsg);
-      window.location.reload();
+      // Open confirmation modal so applicant can confirm the email and get code
+      openConfirmationModal(applicationId, userEmail);
 
     } catch (err) {
       console.error("Error submitting application:", err);
       alert("Failed to submit application. Please try again later.");
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = origText;
     }
   });
-});
+
+  /* ---------- Success card OK button: clear form & close ---------- */
+  function clearFormAndResetUI() {
+    // clear text inputs
+    const inputs = document.querySelectorAll("input[type=text], input[type=email], input[type=tel], input[type=date], input[type=number], textarea");
+    inputs.forEach(i => {
+      try { i.value = ""; i.dataset.userEdited = 'false'; } catch(e) {}
+    });
+    // clear selects
+    const selects = document.querySelectorAll("select");
+    selects.forEach(s => { try { s.selectedIndex = 0; } catch(e) {} });
+
+    // reset file inputs and in-memory uploads
+    const fileInputs = document.querySelectorAll("input[type=file]");
+    fileInputs.forEach(f => { try { f.value = ""; } catch(e) {} });
+
+    // reset custom UI elements
+    const resumeLabel = document.getElementById("file-name");
+    if (resumeLabel) resumeLabel.textContent = "";
+    const progBar = document.getElementById("progress-bar");
+    const progFill = document.getElementById("progress-fill");
+    const progText = document.getElementById("progress-text");
+    if (progBar) progBar.style.display = "none";
+    if (progFill) progFill.style.width = "0%";
+    if (progText) progText.textContent = "";
+
+    // clear in-memory upload state
+    try {
+      Object.keys(uploads).forEach(k => delete uploads[k]);
+    } catch (e) { console.warn("clear uploads error", e); }
+
+    // hide modal and success card
+    if (successCard) successCard.style.display = 'none';
+    hideModal();
+  }
+
+  if (successOkay) {
+    successOkay.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      clearFormAndResetUI();
+    });
+  }
+
+}); 

@@ -285,7 +285,6 @@ function renderGridApplicants(applicants) {
     return;
   }
 
-  
   applicants.forEach((a) => {
     const card = document.createElement("div");
     card.className = "teacher-card";
@@ -418,6 +417,7 @@ function createDetail(iconCls, text) {
   div.appendChild(span);
   return div;
 }
+
 function createBtn(cls, label, iconCls) {
   const btn = document.createElement("button");
   btn.type = "button";
@@ -649,7 +649,9 @@ function renderDocuments(docs) {
     dlBtn.className = "doc-download";
     dlBtn.setAttribute("aria-label", "Download document");
     dlBtn.textContent = "Download";
-    dlBtn.addEventListener("click", () => downloadDocument(d.fileUrl, d.fileName));
+    dlBtn.addEventListener("click", () =>
+      downloadDocument(d.fileUrl, d.fileName)
+    );
 
     actions.appendChild(viewBtn);
     actions.appendChild(dlBtn);
@@ -1054,7 +1056,9 @@ function createToast(message, styleClass = "toast-info", timeout = 3500) {
       container.appendChild(t);
     } else {
       // template exists but doesn't include expected .toast structure
-      console.warn("toast-template found but missing .toast wrapper — falling back to JS-created toast");
+      console.warn(
+        "toast-template found but missing .toast wrapper — falling back to JS-created toast"
+      );
     }
   }
 
@@ -1081,8 +1085,13 @@ function createToast(message, styleClass = "toast-info", timeout = 3500) {
   return { node: t, removeFn: remove, timerId: timer };
 }
 
-
-function createToastWithAction(message, styleClass = "toast-info", timeout = 3500, actionText = null, actionCallback = null) {
+function createToastWithAction(
+  message,
+  styleClass = "toast-info",
+  timeout = 3500,
+  actionText = null,
+  actionCallback = null
+) {
   const container = document.getElementById("toast-container");
   if (!container) return;
   const tpl = document.getElementById("toast-template");
@@ -1104,7 +1113,9 @@ function createToastWithAction(message, styleClass = "toast-info", timeout = 350
       }
       container.appendChild(t);
     } else {
-      console.warn("toast-template found but missing .toast wrapper — falling back to JS-created toast");
+      console.warn(
+        "toast-template found but missing .toast wrapper — falling back to JS-created toast"
+      );
     }
   }
 
@@ -1113,7 +1124,13 @@ function createToastWithAction(message, styleClass = "toast-info", timeout = 350
     t.className = `toast ${styleClass}`;
     t.innerHTML = `<div class="toast-body"><span class="toast-msg">${escapeHtml(
       message
-    )}</span>${actionText ? ` <button class="toast-action" type="button">${escapeHtml(actionText)}</button>` : `` }<button class="toast-close" aria-label="Close">×</button></div>`;
+    )}</span>${
+      actionText
+        ? ` <button class="toast-action" type="button">${escapeHtml(
+            actionText
+          )}</button>`
+        : ``
+    }<button class="toast-close" aria-label="Close">×</button></div>`;
     container.appendChild(t);
   }
 

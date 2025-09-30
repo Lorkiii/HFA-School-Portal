@@ -7,7 +7,7 @@
         <title>HFA Teaching Application</title>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
         <link rel="stylesheet" href="tcform.css">
-        
+
     </head>
 
     <body>
@@ -121,15 +121,8 @@
                                 </div>
                                 <div class="form-group">
                                     <label>Major/Specialization <span class="required">*</span></label>
-                                    <select aria-label="Major/Specialization" id="major" required>
-                                        <option value="">Select Major</option>
-                                        <option>Education</option>
-                                        <option>Mathematics</option>
-                                        <option>Science</option>
-                                        <option>English</option>
-                                        <option>History</option>
-                                        <option>Other</option>
-                                    </select>
+                                    <input type="text" id="major" placeholder="Specialization" required>
+                                
                                 </div>
                                 <div class="form-group">
                                     <label>Year Graduated <span class="required">*</span></label>
@@ -227,7 +220,7 @@
                                     <input type="file" id="transcript-upload" class="file-input" accept=".pdf" required>
                                 </div>
                             </div>
-                             <div class="form-group full-width">
+                            <div class="form-group full-width">
                                 <label>Curriculum Vitae (CV) / Resume (PDF/Image) </label>
                                 <div class="file-input-container">
                                     <label for="cv-upload" class="file-input-label">
@@ -253,13 +246,61 @@
                     </div>
                 </div>
             </div>
-             <div class="success-message-card" id="success-message">
+            <!-- confirmation modal -->
+            <div class="confirmation-modal" id="confirmation-modal" style="display: none;">
+                <div class="confirmation-modal-content">
+                    <span class="confirmation-close" id="confirmation-close">
+                        <i class="fas fa-times"></i>
+                    </span>
+                    <h2>Application Confirmation</h2>
+                    <p class="confirmation-message">Are you sure you want to submit your application? Please ensure
+                        all information is correct and the email must be exisiting before proceeding.</p>
+                    <div class="provide-email">
+                        <label for="confirm-email-input">Email Address :</label>
+                        <br>
+                        <!-- editable email input (prefilled with the email from the form) -->
+                        <input id="confirm-email-input" class="confirmation-email-field" type="email"
+                            placeholder="your@email.com" aria-label="Confirm email for credentials" />
+
+                        <small class="confirmation-hint">A 6-digit code will be sent to this address. Confirming email
+                            sends your account credentials.</small>
+
+                        <div class="confirmation-controls" style="margin-top:8px;">
+                            <button id="btn-get-code" class="btn-confirm small" type="button">Get code</button>
+                            <span id="confirmation-countdown" class="confirmation-countdown"
+                                style="display:none;margin-left:10px;"></span>
+                        </div>
+
+                        <!-- static code input + actions — present in the DOM (hidden until needed) -->
+                        <div id="confirmation-code-block" >
+                            <label for="confirm-code-input" style="display:block;margin-bottom:6px;">Enter 6-digit
+                                code</label>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input id="confirm-code-input" maxlength="6" placeholder="123456"
+                                    style="padding:6px;width:120px" />
+                                <button id="btn-confirm-code" class="btn-confirm" type="button">Confirm</button>
+                                <button id="btn-resend" class="btn-resend" type="button">Resend</button>
+                            </div>
+                            <div id="confirm-error" style="color:#c00;margin-top:8px; min-height:18px;"></div>
+                        </div>
+                    </div>
+
+                    <div class="confirmation-actions">
+                        <button id="modal-cancel-btn" class="cancel-btn">Cancel</button>
+                        <button type="button" id="modal-confirm-btn" class="confirmation-btn">Confirm</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- success modal  -->
+            <div class="success-message-card" id="success-message" style="display: none;">
                 <h2>Your application has been submitted successfully!</h2><br>
-                <p>Thank you for applying to Holy Family Academy of Sta Maria Bulacan Inc. We will review your application and get back to you soon.</p>
-                <p class="generated-email"> Generated Email: <span id="generated-email"></span></p>
+                <p>Thank you for applying to Holy Family Academy of Sta Maria Bulacan Inc. We will review your
+                    application and get back to you soon.</p>
                 <span> Please check your email for account details.</span><br>
                 <button class="okay-btn">Okay</button>
-             </div>
+            </div>
+
         </main>
         <script type="module" src="tcform.js"></script>
     </body>

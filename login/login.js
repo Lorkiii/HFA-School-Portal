@@ -128,7 +128,7 @@ async function loginUserWithRole(email, password, expectedRole, redirectUrl, err
       return;
     }
 
-    // Quick Firestore role check
+    // Quick Firestore role check (optional, local quick feedback)
     const uid = userCredential.user.uid;
     try {
       const docRef = doc(db, "users", uid);
@@ -151,8 +151,8 @@ async function loginUserWithRole(email, password, expectedRole, redirectUrl, err
       return;
     }
 
-    // Obtain fresh ID token
-    const idToken = await userCredential.user.getIdToken();
+    // Obtain fresh ID token (force refresh to ensure any forcePasswordChange flag is current)
+    const idToken = await userCredential.user.getIdToken(true);
 
     // Call server /auth/login
     const resp = await fetch("/auth/login", {
@@ -169,26 +169,40 @@ async function loginUserWithRole(email, password, expectedRole, redirectUrl, err
       return;
     }
 
+    // Admin OTP flow
     if (data.needsOtp) {
       // keep idToken and email for OTP verification (short-lived)
       sessionStorage.setItem("verifyEmail", email);
       sessionStorage.setItem("idToken", idToken);
-      // redirect to OTP page (verify-otp will show "Verifying..." there)
-      window.location.href = "/login/verify-otp.html?uid=" + uid + "&redirect=" + encodeURIComponent(redirectUrl);
+      // optionally keep server "message" for UX
+      window.location.href = "/login/verify-otp.html?uid=" + encodeURIComponent(uid) + "&redirect=" + encodeURIComponent(redirectUrl);
       return;
     }
 
+    // If server returned a token, store it in sessionStorage (optional) for server-side calls.
     if (data.token) {
-      // Legacy server JWT returned — we will NOT store it in localStorage.
-      // Redirect based on role; client will use Firebase ID token for future API calls.
-      if (data.role === "admin") window.location.href = "/adminportal/admin.html";
-      else window.location.href = redirectUrl;
+      // optional: store server token for API calls that prefer server JWT
+      try { sessionStorage.setItem("serverToken", data.token); } catch (e) { /* ignore */ }
+    }
+
+    // If user must change password, redirect to change password page.
+    // Keep user signed-in (so changepass can use Firebase SDK to update password).
+    if (data.forcePasswordChange) {
+      // store idToken in sessionStorage so changepass page may re-authenticate/use it if needed
+      try { sessionStorage.setItem("idToken", idToken); } catch (e) { /* ignore */ }
+      // redirect to change password page (you can read uid from query in changepass)
+      window.location.href = "/login/changepass.html?uid=" + encodeURIComponent(uid);
       return;
     }
 
-    // Unexpected response
-    if (errorBox) errorBox.textContent = "Unexpected response from server.";
-    else alert("Unexpected response from server.");
+    // Normal successful login: redirect based on role (server returned role too)
+    if (data.role === "admin") {
+      window.location.href = "/adminportal/admin.html";
+      return;
+    } else {
+      window.location.href = redirectUrl;
+      return;
+    }
 
   } catch (err) {
     console.error("Login error:", err);

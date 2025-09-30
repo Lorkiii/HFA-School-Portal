@@ -2,6 +2,7 @@
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 const auth = getAuth();
 
+
 export async function getIdTokenOrReject() {
   if (auth.currentUser) return auth.currentUser.getIdToken();
   return new Promise((resolve, reject) => {
