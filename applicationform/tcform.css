@@ -450,7 +450,7 @@ h3.schoolname {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  z-index: 10001;
+  z-index: 1001;
 }
 
 .success-message-blur-bg {
@@ -460,7 +460,6 @@ h3.schoolname {
   width: 100vw;
   height: 100vh;
   background: rgba(0,0,0,0.25);
-
   z-index: 10000;
 }
 .success-message-card h2 {
@@ -471,13 +470,9 @@ h3.schoolname {
   color: #333;
   margin-bottom: 1rem;
 }
-.success-message-card .generated-email {
-  font-weight: 600;
-  color: #2a7f2a;
-}
+
 .success-message-card .okay-btn {
   margin-top: 1rem;
-
   padding: 0.8rem 1.5rem;
   background: #2a7f2a;
   color: white;
@@ -511,7 +506,7 @@ h3.schoolname {
   border: 1px solid #888;
   width: 80%;
   max-width: 500px;
-  border-radius: 8px;
+  border-radius: 10px;
   text-align: center;
   margin: 0;
   box-shadow: 0 8px 32px rgba(0,0,0,0.18);
@@ -520,6 +515,21 @@ h3.schoolname {
 .confirmation-modal-content h2 {
   margin-bottom: 1rem;
   color: #2a7f2a;
+}
+/* row: email input + get/resend + countdown */
+.confirmation-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+/* email input next to button */
+.confirmation-email-field {
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 1rem;
 }
 /* confirmation-actions */
 .confirmation-actions {
@@ -574,6 +584,19 @@ h3.schoolname {
   font-weight: bold;
   cursor: pointer;
 }
+/* countdown replaces resend button visually */
+.confirmation-countdown {
+  font-size: 0.95rem;
+  color: #666;
+  min-width: 96px;
+  text-align: center;
+}
+
+/* code row */
+#confirmation-code-block input {
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
 .confirmation-message {
   font-size: 1rem;
   color: #333;
@@ -602,16 +625,15 @@ h3.schoolname {
   gap: 8px;
 }
 
-.btn-confirm.small {
-  padding: 6px 10px;
-  width: 30%;
-  font-size: 1rem;
-  border-radius: 8px;
+.btn-confirm.small, .btn-resend.small {
+  padding: 8px 12px;
+  font-size: 0.95rem;
+  border-radius: 6px;
   background-color: #2a7f2a;
-  color: #ffffff;
+  color: #fff;
   border: none;
   cursor: pointer;
-  transition: all 0.3s;
+  min-width: 92px;
 }
 .btn-confirm.small:hover {
   transform: translateY(-2px);
@@ -646,6 +668,12 @@ h3.schoolname {
   box-shadow: 0 4px 12px rgba(192, 57, 43, 0.2);
 }
 
+@media (max-width: 480px) {
+  .confirmation-row { flex-direction: column; align-items: stretch; }
+  .btn-confirm.small, .btn-resend.small, .confirmation-countdown { min-width: auto; width: 100%; }
+  #confirmation-code-block { flex-direction: column; align-items: stretch; }
+  #confirmation-code-block label { min-width: auto; }
+}
 /* Responsive Design */
 @media (max-width: 768px) {
   .header-container {

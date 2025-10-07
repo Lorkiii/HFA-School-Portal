@@ -1,5 +1,9 @@
-/* tcform.js - Full file (OCR autofill, uploads, modal + success flow)
-   Replace your current tcform.js with this file.
+/* tcform.js - Updated full client script
+   Flow:
+   - Submit -> /applicants/create -> keep files in memory -> open modal
+   - Modal: Get code / Resend / Countdown
+   - Confirm code -> /applicants/confirm-email -> on success upload files -> /applicants/:id/attach-files
+   - Success OK clears form and hides modal
 */
 
 /*  Firebase & Supabase  */
@@ -7,16 +11,15 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { firebaseConfig } from "../firebase-config.js";
 import { supabase } from "../supabase-config.js";
 
-// init firebase (client only for future client needs)
+// init firebase (client-only)
 const app = initializeApp(firebaseConfig);
 
+
 /* ----------------- Helpers ----------------- */
-// generate a random lowercase+digit string
 function randStr(len = 6) {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 }
-
 function safePart(s = "") {
   return s.toLowerCase()
     .replace(/@/g, "-at-")
@@ -25,7 +28,7 @@ function safePart(s = "") {
     .replace(/(^-|-$)/g, "");
 }
 
-/* ---------- OCR / PDF helpers ---------- */
+// ---------- OCR / PDF helpers ----------
 const PDFJS_VERSION = "2.16.105";
 const TESSERACT_VERSION = "v4.0.2";
 
@@ -145,7 +148,8 @@ async function extractImageText(file, onProgress = null) {
   });
 }
 
-/* ---------- Autofill / parsing helpers ---------- */
+
+// ---------- Autofill / parsing helpers ----------
 function birthdate(s) {
   const months = {
     jan: 1, january: 1,
@@ -172,16 +176,11 @@ function birthdate(s) {
   return s;
 }
 
-/**
- * autoFillFromText
- * Tries to extract: name, email, phone, birthdate, license number, license expiry,
- * institution, degree/major. Writes into existing inputs ONLY if user hasn't edited them.
- */
 function autoFillFromText(text) {
   if (!text || !text.trim()) return;
   const raw = text.replace(/\r/g, ' ').replace(/\n/g, ' ').replace(/\s{2,}/g, ' ').trim();
 
-  // 1) Name
+  // Name
   const labeledName =
     raw.match(/(?:Applicant(?:'s)?\s+)?(?:Full|Complete|Name)\s*[:\-]\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})/i)
     || raw.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/);
@@ -199,7 +198,7 @@ function autoFillFromText(text) {
     if (midEl && midEl.dataset.userEdited !== 'true' && !midEl.value) midEl.value = mid;
   }
 
-  // 2) Email
+  // Email
   const emailMatch = raw.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i);
   if (emailMatch) {
     const emailEl = document.getElementById("email");
@@ -208,7 +207,7 @@ function autoFillFromText(text) {
     }
   }
 
-  // 3) Phone
+  // Phone
   const phoneMatch = raw.match(/(\+?\d{1,3}[\s-\.]?)?(?:\(?\d{2,4}\)?[\s-\.]?)\d{3,4}[\s-\.]?\d{3,4}/);
   if (phoneMatch) {
     const phone = phoneMatch[0].replace(/[^\d+]/g, '');
@@ -218,7 +217,7 @@ function autoFillFromText(text) {
     }
   }
 
-  // 4) Birthdate
+  // Birthdate
   const dateMatch = raw.match(/\b(\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|\d{1,2}[-\/]\d{1,2}[-\/]\d{4}|[A-Za-z]{3,9}\s+\d{1,2},?\s*\d{4}|\d{1,2}\s+[A-Za-z]{3,9},?\s*\d{4})\b/);
   if (dateMatch) {
     const bdVal = birthdate(dateMatch[1]);
@@ -228,7 +227,7 @@ function autoFillFromText(text) {
     }
   }
 
-  // 5) License number & expiry
+  // License number & expiry
   const licMatch = raw.match(/\b(?:License|Licence|Lic\.)\s*(?:No\.?|Number|#)?\s*[:\-]?\s*([A-Z0-9\-]{4,20})\b/i);
   if (licMatch) {
     const licEl = document.getElementById("license-number");
@@ -241,7 +240,7 @@ function autoFillFromText(text) {
     if (el && el.dataset.userEdited !== 'true' && !el.value) el.value = val;
   }
 
-  // 6) Degree / Institution
+  // Degree / Institution / Major
   const degreeMatch = raw.match(/\b(Bachelor(?:'s)?|Bachelor of|B\.?A\.?|B\.?S\.?|Master(?:'s)?|M\.?A\.?|M\.?S\.?|Doctor|Ph\.?D\.?)\b/i);
   if (degreeMatch) {
     const degEl = document.getElementById("highest-degree");
@@ -252,8 +251,6 @@ function autoFillFromText(text) {
     const instEl = document.getElementById("institution");
     if (instEl && instEl.dataset.userEdited !== 'true' && !instEl.value) instEl.value = instMatch[0].trim();
   }
-
-  // 7) Major/qualified subjects
   const majorMatch = raw.match(/\bMajor\s*[:\-]?\s*([A-Za-z &\/\-]{3,60})\b/i) || raw.match(/\b(?:Field of Study|Specialization)\s*[:\-]?\s*([A-Za-z &\/\-]{3,60})\b/i);
   if (majorMatch) {
     const majorEl = document.getElementById("major");
@@ -261,7 +258,7 @@ function autoFillFromText(text) {
   }
 }
 
-/* ---------- in-memory upload state ---------- */
+// ---------- in-memory upload state ----------
 const uploads = {}; // e.g. { resume: { file, name }, license: {...} }
 
 /* ---------------- DOM wiring and submit handling ---------------- */
@@ -303,7 +300,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         if (progText) progText.textContent = "Reading PDF content...";
         const txt = await extractPdfText(file, (p) => {
-          try { if (progText) progText.textContent = `OCR progress: ${Math.round((p.progress||0)*100)}%`; } catch(e){}
+          if (progText) progText.textContent = `OCR progress: ${Math.round((p.progress||0)*100)}%`;
         });
         if (txt && txt.trim().length) {
           try { autoFillFromText(txt); } catch (e) { console.warn('autoFillFromText failed', e); }
@@ -317,7 +314,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         if (progText) progText.textContent = "Running OCR on image...";
         const txt = await extractImageText(file, (p) => {
-          try { if (progText) progText.textContent = `OCR progress: ${Math.round((p.progress||0)*100)}%`; } catch(e){}
+          if (progText) progText.textContent = `OCR progress: ${Math.round((p.progress||0)*100)}%`;
         });
         if (txt && txt.trim().length) {
           try { autoFillFromText(txt); } catch (e) { console.warn('autoFillFromText failed', e); }
@@ -351,19 +348,20 @@ document.addEventListener("DOMContentLoaded", () => {
     if (progText) progText.textContent = "Ready to upload on submit!";
   });
 
-  /* ---------- Confirmation modal wiring (keeps your existing elements) ---------- */
+
+  /* ---------- Confirmation modal wiring & improved UI ---------- */
   const confirmationModal = document.getElementById('confirmation-modal');
   const confirmationClose = document.getElementById('confirmation-close');
   const modalCancel = document.getElementById('modal-cancel-btn');
   const modalConfirmBtn = document.getElementById('modal-confirm-btn');
 
-  const emailInput = document.getElementById('confirm-email-input'); // editable input you added
-  const btnGetCode = document.getElementById('btn-get-code');
+  const emailInput = document.getElementById('confirm-email-input');
+  const btnGetCode = document.getElementById('btn-get-code'); // will act as Get / Resend
   const countdownSpan = document.getElementById('confirmation-countdown');
-  const codeBlock = document.getElementById('confirmation-code-block'); // visible by default in your HTML
+  const codeBlock = document.getElementById('confirmation-code-block');
   const codeInput = document.getElementById('confirm-code-input');
   const btnConfirmCode = document.getElementById('btn-confirm-code');
-  const btnResend = document.getElementById('btn-resend');
+  const btnResend = document.getElementById('btn-resend'); // optional (we'll keep but hide/show as needed)
   const confirmError = document.getElementById('confirm-error');
 
   const successCard = document.getElementById('success-message');
@@ -381,13 +379,16 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!countdownSpan) return;
     let remaining = Math.max(0, Math.floor(Number(seconds) || 0));
     countdownSpan.style.display = 'inline';
+    // hide resend/button during countdown (we'll hide btnGetCode)
+    if (btnGetCode) btnGetCode.style.display = 'none';
+    if (btnResend) btnResend.style.display = 'none';
     function tick() {
       if (remaining <= 0) {
         clearInterval(countdownTimer);
         countdownTimer = null;
         countdownSpan.style.display = 'none';
-        if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Get code'; }
-        if (btnResend) btnResend.disabled = false;
+        // restore the "Resend" button
+        if (btnGetCode) { btnGetCode.style.display = ''; btnGetCode.disabled = false; btnGetCode.textContent = 'Resend'; }
         return;
       }
       const mm = String(Math.floor(remaining / 60)).padStart(2, '0');
@@ -395,8 +396,6 @@ document.addEventListener("DOMContentLoaded", () => {
       countdownSpan.textContent = `Resend in ${mm}:${ss}`;
       remaining--;
     }
-    if (btnGetCode) { btnGetCode.disabled = true; }
-    if (btnResend) btnResend.disabled = true;
     tick();
     countdownTimer = setInterval(tick, 1000);
   }
@@ -412,40 +411,46 @@ document.addEventListener("DOMContentLoaded", () => {
     btnGetCode.textContent = 'Sending...';
     if (confirmError) confirmError.textContent = '';
     try {
-      const r = await fetch('/applicants/send-code', {
+      const resp = await fetch('/applicants/send-code', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ applicationId, email })
       });
 
-      if (r.status === 429) {
-        const j = await r.json().catch(() => ({}));
-        const retry = j && (j.retryAfter || j.nextAllowedIn) ? Number(j.retryAfter || j.nextAllowedIn) : 180;
-        if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Get code'; }
-        startCountdown(retry);
-        if (confirmError) confirmError.textContent = j && (j.error || j.message) ? (j.error || j.message) : 'Please wait before resending.';
+      // rate-limit response handling
+      if (resp.status === 429) {
+        const respJson = await resp.json().catch(() => ({}));
+        const retrySec = respJson && (respJson.retryAfter || respJson.nextAllowedIn) ? Number(respJson.retryAfter || respJson.nextAllowedIn) : 180;
+        // start countdown immediately on 429
+        startCountdown(retrySec);
+        if (confirmError) confirmError.textContent = respJson && (respJson.error || respJson.message) ? (respJson.error || respJson.message) : 'Please wait before resending.';
         return;
       }
 
-      const j = await r.json().catch(() => ({}));
-      if (!r.ok || !j.ok) {
-        const msg = j && (j.error || j.message) ? (j.error || j.message) : 'Failed to send code.';
-        if (countdownSpan) {
-          countdownSpan.style.display = 'block';
-          countdownSpan.textContent = msg;
-        } else if (confirmError) confirmError.textContent = msg;
-        if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Get code'; }
-        const after = (j && (j.nextAllowedIn || j.retryAfter)) ? Number(j.nextAllowedIn || j.retryAfter) : 180;
+      const jsonResp = await resp.json().catch(() => ({}));
+      if (!resp.ok || !jsonResp.ok) {
+        const msg = jsonResp && (jsonResp.error || jsonResp.message) ? (jsonResp.error || jsonResp.message) : 'Failed to send code.';
+        if (confirmError) confirmError.textContent = msg;
+        // if server returned nextAllowedIn, start countdown
+        const after = (jsonResp && (jsonResp.nextAllowedIn || jsonResp.retryAfter)) ? Number(jsonResp.nextAllowedIn || jsonResp.retryAfter) : 180;
         startCountdown(after);
         return;
       }
 
-      // Success -> show code input block and start cooldown
+      // Success -> show code input block and change Get -> Resend (but do not start cooldown until user clicks Resend)
       if (codeBlock) codeBlock.style.display = 'block';
       if (codeInput) codeInput.focus();
-      if (btnGetCode) btnGetCode.textContent = 'Sent';
-      const after = (j && j.nextAllowedIn) ? Number(j.nextAllowedIn) : 180;
-      startCountdown(after);
+
+      // change the primary button to act as Resend (visible)
+      if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Resend'; btnGetCode.style.display = ''; }
+      // ensure countdown hidden
+      if (countdownSpan) countdownSpan.style.display = 'none';
+
+      // If server provided cooldown (allowed next send), we may use it when user clicks Resend
+      // we'll store it on the button for later use
+      const nextAllowedIn = (jsonResp && jsonResp.nextAllowedIn) ? Number(jsonResp.nextAllowedIn) : null;
+      btnGetCode.dataset.nextAllowedIn = nextAllowedIn || '';
+
     } catch (err) {
       console.error('sendCode error', err);
       if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Get code'; }
@@ -453,7 +458,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  async function verifyCode(applicationId, email, code, displayName) {
+  async function verifyCodeAndAttach(applicationId, email, code, displayName) {
     if (confirmError) confirmError.textContent = '';
     if (!code || code.trim().length < 6) {
       if (confirmError) confirmError.textContent = 'Please enter the 6-digit code.';
@@ -470,25 +475,84 @@ document.addEventListener("DOMContentLoaded", () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ applicationId, email, code, displayName })
       });
-      const j = await resp.json().catch(() => ({}));
-      if (!resp.ok || !j.ok) {
-        const msg = j && (j.error || j.message) ? (j.error || j.message) : 'Verification failed.';
+      const respJson = await resp.json().catch(() => ({}));
+      if (!resp.ok || !respJson.ok) {
+        const msg = respJson && (respJson.error || respJson.message) ? (respJson.error || respJson.message) : 'Verification failed.';
         if (confirmError) confirmError.textContent = msg;
         btnConfirmCode.disabled = false;
         btnConfirmCode.textContent = orig || 'Confirm';
         return;
       }
 
-      // Success: show success UI
-      if (successCard) {
-        successCard.style.display = 'block';
-      } else {
-        alert('Application submitted and credentials emailed.');
+      // At this point server created the user and updated teacherApplicants/{id}.status='submitted'
+      // Now upload files to Supabase and call attach-files
+      try {
+        // build safe folder
+        const ln = (document.getElementById("last-name").value || "unknown").trim();
+        const safeLast = safePart(ln || "unknown");
+        const folder = `${safeLast}-${applicationId}`;
+        const bucket = "uploads";
+        const uploadedFiles = [];
+
+        // helper upload
+        async function uploadFinal(fileObj, name) {
+          if (!fileObj) return null;
+          const stamp = `${Date.now()}_${name.replace(/\s+/g, "_")}`;
+          const path = `teacherApplicants/${folder}/${stamp}`;
+          const { error: uErr } = await supabase.storage.from(bucket).upload(path, fileObj, { cacheControl: "3600", upsert: true });
+          if (uErr) {
+            console.error("Upload failed:", path, uErr);
+            return null;
+          }
+          const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
+          return { fileName: name, fileUrl: pub.publicUrl, filePath: path };
+        }
+
+        // iterate over in-memory uploads
+        for (const k of Object.keys(uploads)) {
+          const entry = uploads[k];
+          if (!entry || !entry.file) continue;
+          const up = await uploadFinal(entry.file, entry.name || `${k}.dat`);
+          if (up) uploadedFiles.push(up);
+        }
+
+        // POST attach-files with email for server-side verification
+        try {
+          const attachResp = await fetch(`/applicants/${encodeURIComponent(applicationId)}/attach-files`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ files: uploadedFiles, email })
+          });
+          const attachJson = await attachResp.json().catch(() => ({}));
+          if (!attachResp.ok || !(attachJson && attachJson.ok)) {
+            // attach failed, still show the success card but indicate attach issue
+            console.warn("attach-files failed", attachJson);
+            const noteEl = successCard ? successCard.querySelector('.email-note') : null;
+            if (noteEl) noteEl.textContent = 'Files uploaded but attaching to application failed. Contact support.';
+          }
+        } catch (e) {
+          console.warn("attach-files call error", e);
+          const noteEl = successCard ? successCard.querySelector('.email-note') : null;
+          if (noteEl) noteEl.textContent = 'Files uploaded but attaching to application failed. Contact support.';
+        }
+
+      } catch (uploadErr) {
+        console.error("File upload error after confirm:", uploadErr);
+        if (successCard) {
+          const noteEl = successCard.querySelector('.email-note');
+          if (noteEl) noteEl.textContent = 'File upload failed. Please try uploading from your dashboard or contact support.';
+        }
       }
 
-      if (j && j.emailed === false) {
-        const note = successCard ? successCard.querySelector('.email-note') : null;
-        if (note) note.textContent = 'Account created but email delivery failed. Contact support.';
+      // show success UI
+      if (successCard) successCard.style.display = 'block';
+      
+      else alert('Application submitted and credentials emailed.');
+
+      // if server indicated emailed:false, surface a note
+      if (respJson && respJson.emailed === false) {
+        const noteEl = successCard ? successCard.querySelector('.email-note') : null;
+        if (noteEl) noteEl.textContent = 'Account created but email delivery failed. Contact support.';
         else alert('Account created but email delivery failed. Contact support.');
       }
 
@@ -502,7 +566,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  // Wire modal buttons
+  // Wire modal buttons behavior
   if (btnGetCode) {
     btnGetCode.addEventListener('click', (ev) => {
       ev.preventDefault();
@@ -511,22 +575,32 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
       const email = (emailInput && emailInput.value && emailInput.value.trim()) ? emailInput.value.trim() : '';
-      if (!email) {
-        if (confirmError) confirmError.textContent = 'Please enter your email address.';
+      if (!email) { if (confirmError) confirmError.textContent = 'Please enter your email address.'; return; }
+
+      // If button currently shows 'Get code' or 'Resend', treat both as sendCode.
+      // If it shows 'Resend' and there is a nextAllowedIn stored, start countdown instead of immediate send.
+      const btnText = (btnGetCode.textContent || '').toLowerCase().trim();
+      const storedNext = Number(btnGetCode.dataset.nextAllowedIn || 0);
+
+      if (btnText === 'resend' && storedNext > 0) {
+        // Start countdown using stored nextAllowedIn and prevent immediate resend
+        startCountdown(storedNext);
         return;
       }
+
       sendCode(window._currentApplicationId, email);
     });
   }
-
   if (btnResend) {
+    // some HTML had a separate resend button; keep compatible (hidden by CSS until needed)
     btnResend.addEventListener('click', (ev) => {
       ev.preventDefault();
       if (!window._currentApplicationId) {
-        if (confirmError) confirmError.textContent = 'Application context missing.';
-        return;
+        if (confirmError) confirmError.textContent = 'Application context missing.'; return;
       }
       const email = (emailInput && emailInput.value && emailInput.value.trim()) ? emailInput.value.trim() : '';
+      if (!email) { if (confirmError) confirmError.textContent = 'Please enter your email.'; return; }
+      // when using separate resend, disable and start cooldown after success
       sendCode(window._currentApplicationId, email);
     });
   }
@@ -535,13 +609,12 @@ document.addEventListener("DOMContentLoaded", () => {
     btnConfirmCode.addEventListener('click', (ev) => {
       ev.preventDefault();
       if (!window._currentApplicationId) {
-        if (confirmError) confirmError.textContent = 'Application context missing.';
-        return;
+        if (confirmError) confirmError.textContent = 'Application context missing.'; return;
       }
       const email = (emailInput && emailInput.value && emailInput.value.trim()) ? emailInput.value.trim() : '';
       const code = (codeInput && codeInput.value) ? codeInput.value.trim() : '';
       const displayName = `${document.getElementById('first-name').value || ''} ${document.getElementById('last-name').value || ''}`.trim();
-      verifyCode(window._currentApplicationId, email, code, displayName);
+      verifyCodeAndAttach(window._currentApplicationId, email, code, displayName);
     });
   }
 
@@ -553,15 +626,58 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // Open confirmation modal
+  // Success OK button: clear form and UI
+  function clearFormAndResetUI() {
+    // clear text inputs
+    const inputs = document.querySelectorAll("input[type=text], input[type=email], input[type=tel], input[type=date], input[type=number], input[type=file], textarea");
+    inputs.forEach(i => {
+      try { i.value = ""; i.dataset.userEdited = 'false'; } catch(e) {}
+    });
+    // clear selects
+    const selects = document.querySelectorAll("select");
+    selects.forEach(s => { try { s.selectedIndex = 0; } catch(e) {} });
+
+    // reset file inputs and in-memory uploads
+    const fileInputs = document.querySelectorAll("input[type=file]");
+    fileInputs.forEach(f => { try { f.value = ""; } catch(e) {} });
+
+    // reset custom UI elements
+    const resumeLabel = document.getElementById("file-name");
+    if (resumeLabel) resumeLabel.textContent = "";
+    const progBar = document.getElementById("progress-bar");
+    const progFill = document.getElementById("progress-fill");
+    const progText = document.getElementById("progress-text");
+    if (progBar) progBar.style.display = "none";
+    if (progFill) progFill.style.width = "0%";
+    if (progText) progText.textContent = "";
+
+    // clear in-memory upload state
+    try { Object.keys(uploads).forEach(k => delete uploads[k]); } catch (e) { console.warn("clear uploads error", e); }
+
+    // hide modal and success card
+    if (successCard) successCard.style.display = 'none';
+    hideModal();
+    // clear _currentApplicationId
+    window._currentApplicationId = null;
+  }
+
+  if (successOkay) {
+    successOkay.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      clearFormAndResetUI();
+    });
+  }
+
+  // Open confirmation modal helper
   function openConfirmationModal(applicationId, emailPrefill) {
     window._currentApplicationId = applicationId;
     if (emailInput) emailInput.value = emailPrefill || '';
-    if (codeBlock) codeBlock.style.display = 'block'; // show by default as you requested
+    // show code block as requested
+    if (codeBlock) codeBlock.style.display = 'block';
     if (confirmError) confirmError.textContent = '';
     if (countdownSpan) { countdownSpan.style.display = 'none'; countdownSpan.textContent = ''; }
-    if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Get code'; }
-    if (btnResend) btnResend.disabled = false;
+    if (btnGetCode) { btnGetCode.disabled = false; btnGetCode.textContent = 'Get code'; btnGetCode.style.display = ''; btnGetCode.dataset.nextAllowedIn = ''; }
+    if (btnResend) btnResend.style.display = 'none';
     showModal();
   }
 
@@ -639,51 +755,7 @@ document.addEventListener("DOMContentLoaded", () => {
         submitBtn.textContent = origText;
         return;
       }
-
       const applicationId = result.applicationId;
-      // upload files to supabase in folder last-applicationId
-      const safeLast = safePart(ln || "unknown");
-      const folder = `${safeLast}-${applicationId}`;
-      const bucket = "uploads";
-      const uploadedFiles = [];
-
-      async function uploadFinal(fileObj, name) {
-        if (!fileObj) return null;
-        const stamp = `${Date.now()}_${name}`;
-        const path = `teacherApplicants/${folder}/${stamp}`;
-        const { error: uErr } = await supabase.storage.from(bucket).upload(path, fileObj, { cacheControl: "3600", upsert: true });
-        if (uErr) {
-          console.error("Upload failed:", path, uErr);
-          return null;
-        }
-        const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
-        return { fileName: name, fileUrl: pub.publicUrl, filePath: path };
-      }
-
-      for (const k of Object.keys(uploads)) {
-        const entry = uploads[k];
-        if (!entry || !entry.file) continue;
-        const up = await uploadFinal(entry.file, entry.name || `${k}.dat`);
-        if (up) uploadedFiles.push(up);
-      }
-
-      // call server to attach files to application (server will write to Firestore)
-      try {
-        await fetch(`/applicants/${encodeURIComponent(applicationId)}/attach-files`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ files: uploadedFiles })
-        }).catch(() => {});
-      } catch (_) { /* non-fatal */ }
-
-      // cleanup UI & state (but keep form fields — user confirms via modal)
-      Object.keys(uploads).forEach(k => delete uploads[k]);
-      if (resumeIn) resumeIn.value = "";
-      if (licenseIn) licenseIn.value = "";
-      if (transcriptIn) transcriptIn.value = "";
-      if (cvIn) cvIn.value = "";
-      if (resumeLabel) resumeLabel.textContent = "";
-      if (progBar) progBar.style.display = "none";
 
       // Open confirmation modal so applicant can confirm the email and get code
       openConfirmationModal(applicationId, userEmail);
@@ -696,47 +768,4 @@ document.addEventListener("DOMContentLoaded", () => {
       submitBtn.textContent = origText;
     }
   });
-
-  /* ---------- Success card OK button: clear form & close ---------- */
-  function clearFormAndResetUI() {
-    // clear text inputs
-    const inputs = document.querySelectorAll("input[type=text], input[type=email], input[type=tel], input[type=date], input[type=number], textarea");
-    inputs.forEach(i => {
-      try { i.value = ""; i.dataset.userEdited = 'false'; } catch(e) {}
-    });
-    // clear selects
-    const selects = document.querySelectorAll("select");
-    selects.forEach(s => { try { s.selectedIndex = 0; } catch(e) {} });
-
-    // reset file inputs and in-memory uploads
-    const fileInputs = document.querySelectorAll("input[type=file]");
-    fileInputs.forEach(f => { try { f.value = ""; } catch(e) {} });
-
-    // reset custom UI elements
-    const resumeLabel = document.getElementById("file-name");
-    if (resumeLabel) resumeLabel.textContent = "";
-    const progBar = document.getElementById("progress-bar");
-    const progFill = document.getElementById("progress-fill");
-    const progText = document.getElementById("progress-text");
-    if (progBar) progBar.style.display = "none";
-    if (progFill) progFill.style.width = "0%";
-    if (progText) progText.textContent = "";
-
-    // clear in-memory upload state
-    try {
-      Object.keys(uploads).forEach(k => delete uploads[k]);
-    } catch (e) { console.warn("clear uploads error", e); }
-
-    // hide modal and success card
-    if (successCard) successCard.style.display = 'none';
-    hideModal();
-  }
-
-  if (successOkay) {
-    successOkay.addEventListener('click', (ev) => {
-      ev.preventDefault();
-      clearFormAndResetUI();
-    });
-  }
-
-}); 
+});

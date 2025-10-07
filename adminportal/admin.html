@@ -7,8 +7,10 @@
         <title>HFA Admin Portal</title>
         <link rel="stylesheet" href="admin.css">
         <link rel="stylesheet" href="admincontent.css">
+        <link rel="stylesheet" href="messagemodal.css">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
         <script src='https://cdn.jsdelivr.net/npm/fullcalendar/index.global.min.js'></script>
+
         <script type="module" src="../check-auth.js"></script>
     </head>
 
@@ -31,7 +33,6 @@
 
             </nav>
         </header>
-
         <!-- sidebar -->
 
         <aside class="sidebar">
@@ -75,20 +76,12 @@
                 <!-- secondary sidebar -->
                 <nav class="secondary-sidebar">
                     <ul class="sidebar-links">
-                        <li><a href="#school-calendar"><i class="fas fa-calendar-alt"></i> School Calendar</a>
+                        <li>
+                            <a href="#school-calendar"><i class="fas fa-calendar-alt"></i> School Calendar</a>
                         </li>
 
-                        <!-- Admin Settings Dropdown -->
-                        <li class="dropdown">
-                            <a href="#" class="dropdown-toggle">
-                                <i class="fas fa-cog"></i> Settings <i class="fas fa-chevron-down"></i>
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li><a href="#profile-settings"><i class="fas fa-user-cog"></i> Profile Settings</a>
-                                </li>
-                                <li><a href="#system-preferences"><i class="fas fa-sliders-h"></i> System
-                                        Preferences</a></li>
-                            </ul>
+                        <li>
+                            <a href="#profile-settings"><i class="fas fa-user-cog"></i> Profile Settings</a>
                         </li>
                         <li class="logout-link"><a href="#" class="logout-btn" id="logout-btn"><i
                                     class="fas fa-sign-out-alt"></i>
@@ -119,7 +112,7 @@
                         </div>
                     </div>
 
-                    <!-- Quick Stats (kept minimal for now) -->
+                    <!-- Quick Stats -->
                     <div class="quick-stats">
                         <div class="stat-card total-students">
                             <div class="stat-top">
@@ -382,14 +375,10 @@
                     <div id="upload-toast-container" aria-live="polite" aria-atomic="true"></div>
                 </div>
             </section>
-            <!-- Student Management = -->
+            <!-- ===== START: Student Management (replace existing section) ===== -->
             <section id="Student-management">
                 <div class="section-header">
                     <h2><i class="fas fa-user-graduate"></i> Student Management</h2>
-                    <div class="action-buttons">
-                        <button class="btn-add" id="btn-add-student"><i class="fas fa-plus"></i> Add New
-                            Student</button>
-                    </div>
                 </div>
 
                 <!-- Tabs -->
@@ -400,6 +389,7 @@
                     <button class="tab-btn" data-tab="enrolled">Enrolled</button>
                     <button class="tab-btn" data-tab="archived">Archived</button>
                 </div>
+
                 <!-- Counts -->
                 <div class="quick-stats" id="counts-row">
                     <div class="stat-card">
@@ -415,6 +405,7 @@
                         <p id="count-complete">0</p>
                     </div>
                 </div>
+
                 <!-- Filters / Search -->
                 <div class="tracker-controls">
                     <div class="search-sort">
@@ -440,18 +431,18 @@
 
                     <div class="view-options">
                         <button class="view-option active" data-view="table">Table View</button>
-                        <button class="view-option" data-view="cards">Card View</button>
+                        
                     </div>
                 </div>
+
                 <!-- Table view -->
                 <div class="records-table applicant-table" id="table-view">
                     <table>
                         <thead>
                             <tr>
-                                <th>ID</th>
+                                <th>Student ID</th>
                                 <th>Name</th>
                                 <th>Grade</th>
-                                <th>Student ID</th>
                                 <th>Form</th>
                                 <th>Old/New</th>
                                 <th>Req. Progress</th>
@@ -462,19 +453,21 @@
 
                         <!-- row template that JS will clone for each student  -->
                         <template id="student-row-template">
+                            <!-- data-id should be set by JS to the Firestore document id -->
                             <tr data-id="">
-                                <td class="cell-id"></td>
-                                <td class="cell-name"></td>
-                                <td class="cell-grade"></td>
-                                <td class="cell-studentid"></td>
-                                <td class="cell-form"></td>
-                                <td class="cell-oldnew"></td>
-                                <td class="cell-progress"></td>
-                                <td class="cell-status"></td>
+                                <td class="cell-studentid">-</td>
+                                <td class="cell-name">-</td>
+                                <td class="cell-grade">-</td>
+                                <td class="cell-form">-</td>
+                                <td class="cell-oldnew">-</td>
+                                <td class="cell-progress">
+                                    <div class="progress-bar small">
+                                        <div class="progress-fill" style="width:0%"></div>
+                                    </div>
+                                </td>
+                                <td class="cell-status">-</td>
                                 <td class="student-actions">
                                     <button class="student-btn student-view" title="View"><i class="fas fa-eye"
-                                            aria-hidden="true"></i></button>
-                                    <button class="student-btn student-edit" title="Edit"><i class="fas fa-pen"
                                             aria-hidden="true"></i></button>
                                     <button class="student-btn student-archive" title="Archive"><i
                                             class="fas fa-archive" aria-hidden="true"></i></button>
@@ -489,95 +482,185 @@
                     </table>
                 </div>
 
-
-                <!-- Card view -->
+                <!-- Card view (kept unchanged) -->
                 <div class="applicants-container applicant-cards hidden" id="cards-view"></div>
             </section>
 
-            <!-- ====== Student Detail Modal (static HTML) ====== -->
-            <div id="student-modal" class="modal" aria-hidden="true">
-                <div class="modal-content" role="dialog" aria-modal="true">
-                    <span class="close" id="modal-close">&times;</span>
+            <!-- ====== Student Detail Modal (consolidated & cleaned) ====== -->
+            <!-- ====== HFA Student Detail Modal (namespaced: hfa-stu-*) ====== -->
+            <div id="hfa-stu-modal-overlay" class="hfa-stu-modal-overlay" style="display:none;">
+                <div id="hfa-stu-modal" class="hfa-stu-modal-content" role="dialog" aria-modal="true"
+                    aria-labelledby="hfa-stu-title">
 
-                    <!-- header area  -->
-                    <div class="modal-header">
-                        <h3 id="modal-name">Student Name</h3>
-                        <div id="modal-meta" class="modal-meta">Form • Grade • Section</div>
-                        <div class="progress small">
-                            <div id="modal-progress" class="progress-bar"></div>
+                    <header class="hfa-stu-header">
+                        <div class="hfa-stu-header-left">
+                            <h3 id="hfa-stu-title" class="hfa-stu-name">Student Name</h3>
+                            <div class="hfa-stu-sub" id="hfa-stu-subtitle">
+                                <span id="hfa-stu-type">SHS</span> • <span id="hfa-stu-grade">Grade 12</span> • <span
+                                    id="hfa-stu-status">New</span>
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- Main modal grid -->
-                    <div class="modal-grid">
-                        <!-- requirements -->
-                        <div class="modal-left">
-                            <div id="modal-left-body">
+                        <div class="hfa-stu-actions">
+                            <button id="hfa-stu-edit-btn" class="btn small">Edit</button>
+                            <button id="hfa-stu-archive-btn" class="btn danger small">Archive</button>
+                            <button id="hfa-stu-approve-btn" class="btn primary small">Approve & Enroll</button>
+                        </div>
+                    </header>
+
+                    <div class="hfa-stu-body">
+                        <div class="hfa-stu-grid">
+                            <!-- LEFT: Requirements -->
+                            <aside class="hfa-stu-left">
                                 <h4>Requirements</h4>
-                                <div id="modal-requirements" class="requirements-list"></div>
-                            </div>
-                        </div>
+                                <div class="hfa-stu-req-scroll">
+                                    <ul id="hfa-stu-requirements-list" class="hfa-stu-req-list">
+                                        <!-- JS populates checkboxes -->
+                                    </ul>
+                                </div>
+                            </aside>
 
-                        <!-- RIGHT: metadata, edit panel, archive confirm, actions -->
-                        <div class="modal-right">
-                            <div id="modal-right-body">
-                                <!-- Meta -->
-                                <div class="modal-meta-block" id="modal-meta-block"></div>
-
-                                <!-- Edit panel -->
-                                <div id="student-edit-panel" class="hidden">
-                                    <h4>Edit Applicant</h4>
-                                    <div class="edit-form">
-                                        <label>First name
-                                            <input id="edit-first" type="text" />
-                                        </label>
-                                        <label>Last name
-                                            <input id="edit-last" type="text" />
-                                        </label>
-                                        <label>Grade
-                                            <input id="edit-grade" type="text" />
-                                        </label>
-                                        <label>Student ID
-                                            <input id="edit-section" type="text" />
-                                        </label>
+                            <!-- RIGHT: Info + Documents -->
+                            <section class="hfa-stu-right">
+                                <div class="hfa-stu-info-section">
+                                    <h4>Student Information</h4>
+                                    <div class="hfa-stu-info-grid">
+                                        <div class="hfa-stu-info-item"><strong>Student ID</strong>
+                                            <div id="hfa-stu-id" class="hfa-stu-info-value">-</div>
+                                        </div>
+                                        <div class="hfa-stu-info-item"><strong>First Name</strong>
+                                            <div id="hfa-stu-first" class="hfa-stu-info-value">-</div>
+                                        </div>
+                                        <div class="hfa-stu-info-item"><strong>Last Name</strong>
+                                            <div id="hfa-stu-last" class="hfa-stu-info-value">-</div>
+                                        </div>
+                                        <div class="hfa-stu-info-item"><strong>Middle Name</strong>
+                                            <div id="hfa-stu-middle" class="hfa-stu-info-value">-</div>
+                                        </div>
+                                        <div class="hfa-stu-info-item"><strong>Birthdate</strong>
+                                            <div id="hfa-stu-birth" class="hfa-stu-info-value">-</div>
+                                        </div>
+                                        <div class="hfa-stu-info-item"><strong>Contact</strong>
+                                            <div id="hfa-stu-contact" class="hfa-stu-info-value">-</div>
+                                        </div>
+                                        <div class="hfa-stu-info-item hfa-stu-full"><strong>Address</strong>
+                                            <div id="hfa-stu-address" class="hfa-stu-info-value">-</div>
+                                        </div>
+                                        <div class="hfa-stu-info-item"><strong>Grade</strong>
+                                            <div id="hfa-stu-grade2" class="hfa-stu-info-value">-</div>
+                                        </div>
+                                        <div class="hfa-stu-info-item"><strong>Track</strong>
+                                            <div id="hfa-stu-track" class="hfa-stu-info-value">-</div>
+                                        </div>
                                     </div>
-                                    <div class="edit-actions">
-                                        <button id="edit-cancel" class="btn btn-secondary">Cancel</button>
-                                        <button id="edit-save" class="btn btn-primary">Save</button>
-                                    </div>
-                                    <div id="edit-error" class="edit-error"></div>
                                 </div>
 
-                                <!-- Archive confirm -->
-                                <div id="archive-confirm" class="hidden">
-                                    <p>Archive this applicant (hidden from default lists)?</p>
-                                    <div class="confirm-actions">
-                                        <button id="archive-cancel" class="btn btn-secondary">Cancel</button>
-                                        <button id="archive-confirm-btn" class="btn btn-danger">Confirm Archive</button>
+                                <div class="hfa-stu-docs-section">
+                                    <h4>Uploaded Documents</h4>
+                                    <div id="hfa-stu-documents" class="hfa-stu-docs-list">
+                                        <div class="hfa-stu-doc-empty">No files uploaded yet.</div>
                                     </div>
                                 </div>
 
-                                <!-- Delete confirm -->
-                                <div id="delete-confirm" class="hidden">
-                                    <p>Are you sure you want to permanently delete this applicant?</p>
-                                    <button id="delete-cancel" class="btn btn-secondary">Cancel</button>
-                                    <button id="delete-confirm-btn" class="btn btn-danger">Delete</button>
+                                <div id="hfa-stu-inline-confirm" class="hfa-stu-inline-confirm" style="display:none;">
+                                    <div id="hfa-stu-confirm-msg" class="hfa-stu-confirm-msg">Are you sure?</div>
+                                    <div class="hfa-stu-confirm-actions">
+                                        <button id="hfa-stu-confirm-yes" class="btn danger">Yes</button>
+                                        <button id="hfa-stu-confirm-no" class="btn">Cancel</button>
+                                    </div>
                                 </div>
 
-                                <!-- actions area -->
-                                <div id="modal-actions" class="modal-actions">
-                                    <button id="modal-view" class="btn btn-secondary">View</button>
-                                    <button id="modal-edit" class="btn btn-secondary">Edit</button>
-                                    <button id="modal-archive" class="btn btn-secondary">Archive</button>
-                                    <button id="modal-delete" class="btn btn-secondary">Delete</button>
-                                    <button id="btn-approve-enroll" class="btn btn-primary">Approve & Enroll</button>
-                                </div>
-                            </div>
+                            </section>
                         </div>
                     </div>
-                    <!-- END modal-grid -->
+
+                    <footer class="hfa-stu-footer">
+                        <div class="hfa-stu-footer-left">
+                            <small class="hfa-stu-note">Last updated: <span id="hfa-stu-updated">—</span></small>
+                        </div>
+                        <div class="hfa-stu-footer-right">
+                            <button id="hfa-stu-close-2" class="btn">Close</button>
+                        </div>
+                    </footer>
                 </div>
             </div>
+            <!-- ====== End HFA Student Modal ====== -->
+             <!-- Enrollment confirmation -->
+            <div class="enroll-modal" id="enroll-modal" style="display: none;">
+                <div class="enroll-content" id="enroll-content">
+                    <span class="enroll-close-btn" id="enroll-close-btn" aria-label="Close"></button>
+                        <i class="fas fa-times"></i>
+                    </span>
+                        <h3>Enroll Confirmation</h3>
+                    
+                        <p class="enroll-message-confirmation">Are you sure you want to enroll this student?</p>
+                <div class="enroll-footer">
+                        <button id="enroll-send-message" aria-label="enroll-send-message">Send Message</button>
+                        <button id="confirm-enroll-btn" class="confirm-enroll-btn">Confirm</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- ===== Message Modal ===== -->
+            <div id="hfaMsgModalOverlay" class="hfa-msg-overlay" style="display: none;" aria-hidden="true">
+                <div id="hfaMsgModal" class="hfa-msg-modal" role="dialog" aria-modal="true"
+                    aria-labelledby="hfaMsgTitle">
+
+                    <!-- top-right close -->
+                    <button id="hfaMsgClose" class="hfa-msg-close" aria-label="Close message modal">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+
+                    <header class="hfa-msg-header">
+                        <div class="hfa-msg-title-wrap">
+                            <h3 id="hfaMsgTitle" class="hfa-msg-title">Send Message</h3>
+                            <div class="hfa-msg-sub">Send email to the selected applicant</div>
+                        </div>
+
+                        <div class="hfa-msg-actions">
+                            <button id="hfaMsgSendBtn" class="hfa-msg-btn hfa-msg-btn-primary small">Send</button>
+                            <button id="hfaMsgCancelBtn" class="hfa-msg-btn small">Cancel</button>
+                        </div>
+                    </header>
+
+                    <div class="hfa-msg-body">
+                        <div class="hfa-msg-grid">
+                            <div class="hfa-msg-row">
+                                <label class="hfa-msg-label" for="hfaMsgRecipient">Recipient Email</label>
+                                <input id="hfaMsgRecipient" class="hfa-msg-input" type="email"
+                                    placeholder="applicant@example.com" />
+                            </div>
+
+                            <div class="hfa-msg-row">
+                                <label class="hfa-msg-label">Phone (for display)</label>
+                                <div id="hfaMsgPhone" class="hfa-msg-info">—</div>
+                            </div>
+
+                            <div class="hfa-msg-row full">
+                                <label class="hfa-msg-label" for="hfaMsgSubject">Subject</label>
+                                <input id="hfaMsgSubject" class="hfa-msg-input" type="text"
+                                    placeholder="Welcome to Holy Family Academy" />
+                            </div>
+
+                            <div class="hfa-msg-row full">
+                                <label class="hfa-msg-label" for="hfaMsgBody">Message</label>
+                                <textarea id="hfaMsgBody" class="hfa-msg-textarea" rows="8"
+                                    placeholder="Type message..."></textarea>
+                            </div>
+
+                            <div class="hfa-msg-row full">
+                                <div id="hfaMsgError" class="hfa-msg-error" aria-live="polite"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <footer class="hfa-msg-footer">
+                        <small class="hfa-msg-tip">Tip: personalize the message before sending.</small>
+                    </footer>
+
+                </div>
+            </div>
+            <!-- ===== End HFA Message Modal ===== -->
             <!-- Toast container -->
             <div id="admin-toast-container" aria-live="polite"></div>
 
@@ -588,6 +671,8 @@
                     <button type="button" class="toast-action"></button>
                 </div>
             </template>
+
+
             <!-- Teacher Applicants Tracker -->
             <section id="applicant-tracker">
                 <div class="section-header">
@@ -995,7 +1080,7 @@
                     </form>
                 </div>
             </div>
-            <!-- Toast container (already present in your markup) -->
+            <!-- Toast container  -->
             <div id="toast-container" aria-live="polite" class="toast-stack"></div>
 
             <template id="toast-template">
@@ -1035,7 +1120,7 @@
                                 <option>Administrator</option>
                                 <option>Teacher</option>
                             </select>
-                            
+
 
                         </div>
                         <div class="table-responsive">
@@ -1163,7 +1248,7 @@
                             </table>
                         </div>
                     </div>
-                   <!-- activity logs -->
+                    <!-- activity logs -->
                     <div class="tab-content" id="activity">
                         <div class="activity-filters">
                             <div class="date-range">

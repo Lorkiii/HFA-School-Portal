@@ -142,7 +142,6 @@ document.addEventListener("DOMContentLoaded", () => {
       psa: document.getElementById("psa-upload")?.files?.[0] || null,
       goodMoral: document.getElementById("good-moral-upload")?.files?.[0] || null,
       form137: document.getElementById("form-137")?.files?.[0] || null,
-      completionCertificate: document.getElementById("completion-certificate")?.files?.[0] || null,
       clearance: document.getElementById("clearance-upload")?.files?.[0] || null
     };
 

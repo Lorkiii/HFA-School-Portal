@@ -11,7 +11,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 import jwt from "jsonwebtoken";
 import cors from "cors";
-import { supabaseServer } from "./server-supabase-config.js";
+import { supabaseServer } from "../server-supabase-config.js";
+
+//importing the routes
+import createEnrolleesRouter from "./routes/enrollees.js";
+import createAdminMessagesRouter from "./routes/admin-messages.js";
+import createFilesRouter from "./routes/files.js";
 
 // --- FILE PATH HELPERS ---
 const __filename = fileURLToPath(import.meta.url);
@@ -46,7 +51,7 @@ function revokeToken(token) {
 
 // --- LOAD FIREBASE SERVICE ACCOUNT (server-side only) ---
 const serviceAccount = JSON.parse(
-  fs.readFileSync(new URL("./serviceAccountKey.json", import.meta.url))
+  fs.readFileSync(new URL('./serviceAccountKey.json', import.meta.url), 'utf8')
 );
 
 // --- EXPRESS APP SETUP ---
@@ -68,10 +73,8 @@ admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
 const db = admin.firestore();
-
 // --- SUPABASE SERVER CLIENT (service role) ---
 const supabase = supabaseServer; // from server-supabase-config.js
-
 // --- SMTP / EMAIL SETUP ---
 // jwt .env secret
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -204,7 +207,7 @@ app.post("/auth/verify-otp", async (req, res) => {
         uid = null;
       }
     }
-
+    // throws an error if the uid is missing
     if (!uid) {
       if (!email) return res.status(400).json({ error: "Missing uid/idToken or email to locate OTP" });
       // find entry in otpStore by email
@@ -269,7 +272,7 @@ app.post("/auth/logout", (req, res) => {
   }
 });
 
-// ========== Resend OTP configuration & helper ==========
+//  Resend OTP configuration & helper 
 const RESEND_COOLDOWN_MS = 3 * 60 * 1000; // 3 minutes
 const RESEND_WINDOW_MS = 60 * 60 * 1000; // 1 hour rolling window
 const MAX_RESENDS = 5; // max resends per RESEND_WINDOW_MS
@@ -284,7 +287,7 @@ function findUidByEmailInOtpStore(email) {
   return null;
 }
 
-// ========== POST /auth/resend-otp ==========
+// POST /auth/resend-otp
 app.post("/auth/resend-otp", async (req, res) => {
   try {
     const { idToken, email } = req.body || {};
@@ -397,7 +400,7 @@ app.post("/auth/resend-otp", async (req, res) => {
 });
 
 // --- MIDDLEWARE ---
-// Updated requireAdmin: accept Firebase ID tokens OR server JWTs (signed with JWT_SECRET)
+// Updated requireAdmin: accept Firebase ID tokens OR server JWTs 
 // and reject revoked server JWTs
 async function requireAdmin(req, res, next) {
   try {
@@ -442,11 +445,11 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-// requireAuth middleware (for applicants / teacher-protected endpoints) ----
-// Accepts Firebase ID tokens OR server JWTs (signed with JWT_SECRET).
+// requireAuth middleware (for applicants / teacher-protected endpoints) 
+// Accepts Firebase ID tokens OR server JWTs (signed with JWT_SECRET)
 async function requireAuth(req, res, next) {
   try {
-    // get token from Authorization: Bearer <token> or cookie __session
+    // get token from Authorization: Bearer <token> 
     let token = null;
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.split('Bearer ')[1];
@@ -571,7 +574,7 @@ app.get('/auth/validate', async (req, res) => {
  * POST /auth/clear-force-password
  * Body: { uid? }
  * - Requires authentication (Firebase ID token or server JWT) via requireAuth middleware.
- * - Clears users/{uid}.forcePasswordChange = false for the requesting user (or for uid if admin).
+ * - Clears users/{uid}.forcePasswordChange = false for the requesting user 
  */
 app.post('/auth/clear-force-password', requireAuth, async (req, res) => {
   try {
@@ -608,7 +611,9 @@ app.post('/auth/clear-force-password', requireAuth, async (req, res) => {
   }
 });
 
-// --- STATIC FILE SERVING ---
+// STATIC FILE SERVING 
+const PROJECT_ROOT = path.join(__dirname, '..');
+
 app.use("/adminportal", (req, res, next) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
   res.setHeader("Pragma", "no-cache");
@@ -616,19 +621,19 @@ app.use("/adminportal", (req, res, next) => {
   res.setHeader("Surrogate-Control", "no-store");
   next();
 });
-app.use(express.static(path.join(__dirname)));
-app.use("/login", express.static(path.join(__dirname, "login")));
-app.use("/adminportal", express.static(path.join(__dirname, "adminportal")));
-app.use("/applicationform", express.static(path.join(__dirname, "applicationform")));
-app.use("/teacher-application", express.static(path.join(__dirname, "teacher-application")));
-app.use("/assets", express.static(path.join(__dirname, "assets")));
+app.use(express.static(PROJECT_ROOT));
+app.use("/login", express.static(path.join(PROJECT_ROOT, "login")));
+app.use("/adminportal", express.static(path.join(PROJECT_ROOT, "adminportal")));
+app.use("/applicationform", express.static(path.join(PROJECT_ROOT, "applicationform")));
+app.use("/teacher-application", express.static(path.join(PROJECT_ROOT, "teacher-application")));
+app.use("/assets", express.static(path.join(PROJECT_ROOT, "assets")));
 
 // Serve main.html
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "main.html"));
+  res.sendFile(path.join(PROJECT_ROOT, "main.html"));
 });
 app.get("/main.html", (req, res) => {
-  res.sendFile(path.join(__dirname, "main.html"));
+  res.sendFile(path.join(PROJECT_ROOT, "main.html"));
 });
 
 // requirements mapping
@@ -639,7 +644,6 @@ const requirementMap = {
   form137: "FORM 137",
   completionCertificate: "Certificate of Completion",
   clearance: "Clearance Certificate",
-  idPhoto: "ID Photo",
   medicalForm: "Medical Form",
 };
 
@@ -692,7 +696,7 @@ app.post("/approve-applicant/:id", async (req, res) => {
   }
 });
 
-// --- FORM SUBMISSION ENDPOINT (legacy) ---
+// FORM SUBMISSION ENDPOINT
 app.post("/api/submit-application", async (req, res) => {
   try {
     const formData = req.body;
@@ -702,8 +706,8 @@ app.post("/api/submit-application", async (req, res) => {
     else if (formData.formType === "shs") collectionName = "shsApplicants";
     else if (formData.formType === "teacher") {
       
-      // The new client should call /applicants/create. Here we still support old calls:
-      // create auth user & send credentials (legacy, not recommended).
+      // The new client should call /applicants/create. 
+      // create auth user & send credentials 
       // For safety, return an error telling client to use /applicants/create.
       return res.status(400).json({ error: "Use /applicants/create for teacher applications" });
     } else return res.status(400).json({ error: "Invalid form type." });
@@ -727,74 +731,77 @@ app.post("/api/submit-application", async (req, res) => {
   }
 });
 
-/* ---------- NEW endpoints for applicant create + email confirmation ---------- */
+/* NEW endpoints for applicant create + email confirmation  */
 
-/**
- * POST /applicants/create
- * Body: application payload (teacher form)
- * Creates teacherApplicants/{id} doc with status "pending" and returns applicationId.
- * DOES NOT create Firebase Auth user or send credentials.
- */
-app.post('/applicants/create', async (req, res) => {
-  try {
-    const formData = req.body || {};
-    if (formData.formType !== 'teacher') return res.status(400).json({ error: 'Invalid call for non-teacher form' });
 
-    const firstName = (formData.firstName || "").trim();
-    const lastName = (formData.lastName || "").trim();
-    const displayName = `${firstName} ${lastName}`.trim();
-
-    // create a Firestore doc with auto-id
-    const docRef = db.collection('teacherApplicants').doc(); // new id
-    const id = docRef.id;
-
-    const toSave = {
-      ...formData,
-      firstName,
-      lastName,
-      displayName,
-      contactEmail: (formData.email || "").toLowerCase(),
-      status: "pending",
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
-
-    await docRef.set(toSave);
-    return res.json({ success: true, applicationId: id });
-  } catch (err) {
-    console.error('/applicants/create error', err && (err.stack || err));
-    return res.status(500).json({ error: 'Server error' });
-  }
-});
-
-/**
- * POST /applicants/:id/attach-files
- * Body: { files: [...] }
- * Optional helper: attach uploaded file metadata to the application record.
- */
 app.post('/applicants/:id/attach-files', async (req, res) => {
   try {
-    const id = req.params.id;
+    const applicationId = req.params.id;
     const files = Array.isArray(req.body.files) ? req.body.files : [];
-    if (!id) return res.status(400).json({ error: 'Missing id' });
+    // Optional: client may provide the email that was confirmed
+    const providedEmail = (req.body.email || "").toString().trim().toLowerCase() || null;
 
-    await db.collection('teacherApplicants').doc(id).set({
-      documents: files,
+    console.log('/attach-files called', { applicationId, filesLength: files.length, providedEmail });
+
+    if (!applicationId) {
+      return res.status(400).json({ ok: false, error: 'Missing application id' });
+    }
+    if (!Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ ok: false, error: 'No files provided' });
+    }
+
+    const appRef = db.collection('teacherApplicants').doc(applicationId);
+    const appSnap = await appRef.get();
+    if (!appSnap.exists) {
+      console.warn('/attach-files application not found', applicationId);
+      return res.status(404).json({ ok: false, error: 'Application not found' });
+    }
+    const appData = appSnap.data() || {};
+
+    // Minimal security check: only allow attachments when application has been "submitted"
+    if ((appData.status || '').toLowerCase() !== 'submitted') {
+      return res.status(403).json({
+        ok: false,
+        error: 'Application not ready for attachments',
+        message: 'Application must be submitted (email confirmed) before attaching files.'
+      });
+    }
+
+    // If client provided email, ensure it matches the application record to avoid attaching to wrong applicant
+    if (providedEmail) {
+      const appEmail = (appData.contactEmail || appData.email || "").toString().trim().toLowerCase();
+      if (appEmail && appEmail !== providedEmail) {
+        console.warn('/attach-files email mismatch', { applicationId, appEmail, provided: providedEmail });
+        return res.status(403).json({ ok: false, error: 'Email mismatch' });
+      }
+    }
+
+    // Build sanitized file objects. IMPORTANT: use admin.firestore.Timestamp.now() for timestamps,
+    // not FieldValue.serverTimestamp() (the latter cannot be placed inside array elements).
+    const nowTs = admin.firestore.Timestamp.now();
+    const safeFiles = files.map(f => ({
+      fileName: String(f.fileName || f.name || '').slice(0, 255),
+      fileUrl: String(f.fileUrl || f.publicUrl || f.url || ''),
+      filePath: String(f.filePath || f.path || ''),
+      uploadedAt: nowTs
+    }));
+
+    // Persist to application doc (merge)
+    await appRef.set({
+      documents: safeFiles,
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     }, { merge: true });
 
-    return res.json({ ok: true });
+    console.log(`/attach-files success for ${applicationId} attached ${safeFiles.length} files`);
+    return res.json({ ok: true, message: 'Files attached', num: safeFiles.length });
   } catch (err) {
     console.error('/applicants/:id/attach-files error', err && (err.stack || err));
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Server error', message: err && err.message });
   }
 });
 
-/**
- * POST /applicants/send-code
- * Body: { applicationId, email }
- * Generate 6-digit code, store to Firestore collection email_confirmations/{applicationId},
- * send email to applicant, and return cooldown info.
- */
+
+/* Generate 6-digit code, with resend cooldown */
 app.post('/applicants/send-code', async (req, res) => {
   try {
     const { applicationId, email } = req.body || {};
@@ -836,7 +843,7 @@ app.post('/applicants/send-code', async (req, res) => {
         return res.status(429).json({ error: 'Resend limit reached', retryAfter });
       }
     }
-
+    // otp sends
     const otp = generateOtp();
     entry.otp = otp;
     entry.expiresAt = now + (5 * 60 * 1000); // 5 min
@@ -852,7 +859,7 @@ app.post('/applicants/send-code', async (req, res) => {
       subject: "Your application confirmation code",
       html: `<p>Your confirmation code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`
     };
-
+    // resend functions
     try {
       await mailTransporter.sendMail(mailOptions);
       const nextAllowedIn = Math.ceil(cooldownMs / 1000);
@@ -871,95 +878,151 @@ app.post('/applicants/send-code', async (req, res) => {
 /**
  * POST /applicants/confirm-email
  * Body: { applicationId, email, code, displayName }
- * Verifies the code; if valid:
- *  - create Firebase Auth user (email + temp password),
- *  - create users/{uid} doc with forcePasswordChange,
- *  - update teacherApplicants/{applicationId} with uid & status,
- *  - send credentials email (temp password) to applicant
+  - send credentials email (temp password) to applicant
  */
 app.post('/applicants/confirm-email', async (req, res) => {
   try {
     const { applicationId, email, code, displayName } = req.body || {};
-    if (!applicationId || !email || !code) return res.status(400).json({ error: 'Missing fields' });
+    if (!applicationId || !email || !code) {
+      return res.status(400).json({ ok: false, error: 'Missing required fields: applicationId, email, code' });
+    }
 
+    const lowerEmail = String(email).trim().toLowerCase();
+
+    // Read confirmation session
     const CONF = db.collection('email_confirmations').doc(applicationId);
     const confSnap = await CONF.get();
-    if (!confSnap.exists) return res.status(400).json({ error: 'No confirmation session found. Please submit application and request code.' });
-
-    const data = confSnap.data();
-    if (!data || String(data.otp) !== String(code)) {
-      return res.status(401).json({ error: 'Invalid code' });
+    if (!confSnap.exists) {
+      return res.status(400).json({ ok: false, error: 'No confirmation session found. Please request a code first.' });
     }
-    if (Date.now() > (data.expiresAt || 0)) {
-      await CONF.delete().catch(()=>{});
-      return res.status(400).json({ error: 'Code expired. Please resend.' });
+    const confData = confSnap.data() || {};
+
+    // Verify OTP matches
+    if (!confData.otp || String(confData.otp) !== String(code).trim()) {
+      return res.status(401).json({ ok: false, error: 'Invalid code' });
     }
 
-    // delete confirmation to avoid reuse
-    await CONF.delete().catch(()=>{});
+    // Check expiry
+    const expiresAt = Number(confData.expiresAt || 0);
+    if (Date.now() > expiresAt) {
+      // remove stale confirmation session
+      await CONF.delete().catch(() => {});
+      return res.status(400).json({ ok: false, error: 'Code expired. Please request a new code.' });
+    }
 
-    // ensure application exists
+    // Optional stored-email check: if confirmation session has an email recorded, ensure it matches provided email
+    if (confData.email && String(confData.email).trim().toLowerCase() !== lowerEmail) {
+      return res.status(400).json({ ok: false, error: 'Email mismatch with confirmation session' });
+    }
+
+    // Ensure application exists and is not already processed
     const appRef = db.collection('teacherApplicants').doc(applicationId);
     const appSnap = await appRef.get();
-    if (!appSnap.exists) return res.status(404).json({ error: 'Application not found' });
+    if (!appSnap.exists) {
+      return res.status(404).json({ ok: false, error: 'Application not found' });
+    }
+    const appData = appSnap.data() || {};
 
-    // check if email already has a user
+    // If application already submitted or already has uid, prevent re-processing
+    const currentStatus = (appData.status || '').toString().toLowerCase();
+    if (currentStatus === 'submitted' || appData.uid) {
+      return res.status(400).json({ ok: false, error: 'Application already processed' });
+    }
+
+    // If application has a stored contactEmail or email, ensure it matches provided email (optional but safer)
+    const appEmail = ((appData.contactEmail || appData.email) || '').toString().trim().toLowerCase();
+    if (appEmail && appEmail !== lowerEmail) {
+      // mismatch between application and provided email -> deny
+      return res.status(400).json({ ok: false, error: 'Provided email does not match application record' });
+    }
+    // Check if email is already used in Auth
     try {
-      await admin.auth().getUserByEmail(email);
-      return res.status(400).json({ error: 'Email already in use' });
+      await admin.auth().getUserByEmail(lowerEmail);
+      // If found, reject — we don't want to overwrite existing user.
+      return res.status(400).json({ ok: false, error: 'Email already in use' });
     } catch (err) {
       if (!(err && err.code && err.code === 'auth/user-not-found')) {
         console.error('getUserByEmail check failed', err && err.message);
-        return res.status(500).json({ error: 'Failed verifying email availability' });
+        return res.status(500).json({ ok: false, error: 'Failed to verify email availability' });
       }
+      // user-not-found -> good to proceed
     }
+    // All checks passed -> consume confirmation (delete to prevent reuse)
+    await CONF.delete().catch(() => {});
 
-    // create temp password
-    const tempPassword = (function() {
+    // Generate temporary password (uses your helper generateRandomPassword)
+    const tempPassword = generateRandomPassword ? generateRandomPassword() : (function defaultPwd() {
       const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%";
       return Array.from({ length: 12 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join("");
     })();
 
+    // Create Firebase Auth user
     let userRecord;
     try {
       userRecord = await admin.auth().createUser({
-        email,
+        email: lowerEmail,
         password: tempPassword,
-        displayName: displayName || (email.split('@')[0])
+        displayName: displayName || appData.displayName || (lowerEmail.split('@')[0])
       });
-    } catch (e) {
-      console.error('createUser failed', e && e.message);
-      return res.status(500).json({ error: 'Failed to create user account' });
+    } catch (createErr) {
+      console.error('createUser failed', createErr && createErr.message);
+      return res.status(500).json({ ok: false, error: 'Failed to create user account' });
     }
 
     const newUid = userRecord.uid;
 
-    // create users/{uid} doc with forcePasswordChange flag
-    await db.collection('users').doc(newUid).set({
-      uid: newUid,
-      email,
-      displayName: displayName || null,
-      role: 'applicant',
-      forcePasswordChange: true,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    // Persist users/{uid} doc and update application doc. If Firestore writes fail, attempt to roll back created Auth user.
+    try {
+      // users doc
+      await db.collection('users').doc(newUid).set({
+        uid: newUid,
+        email: lowerEmail,
+        displayName: displayName || appData.displayName || null,
+        role: 'applicant',
+        forcePasswordChange: true,
+        createdAt: admin.firestore.FieldValue.serverTimestamp()
+      });
 
-    // update application doc
-    await appRef.set({
-      uid: newUid,
-      status: 'submitted',
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
+      // update application doc: attach uid and set submitted status
+      await appRef.set({
+        uid: newUid,
+        status: 'submitted',
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
 
-    // send credentials email
+      // Log activity (best-effort; your writeActivityLog helper used elsewhere)
+      try {
+        await writeActivityLog({
+          actorUid: newUid,
+          actorEmail: lowerEmail,
+          targetUid: newUid,
+          action: 'applicant-created',
+          detail: `applicationId:${applicationId}`
+        });
+      } catch (logErr) {
+        console.warn('writeActivityLog failed', logErr && logErr.message);
+      }
+
+    } catch (fsErr) {
+      console.error('Firestore write failed after createUser; attempting cleanup', fsErr && fsErr.message);
+      // try delete created auth user to avoid orphaned auth account
+      try {
+        await admin.auth().deleteUser(newUid);
+      } catch (delErr) {
+        console.error('Failed to delete created auth user after Firestore failure', delErr && delErr.message);
+      }
+      return res.status(500).json({ ok: false, error: 'Failed to finalize account creation' });
+    }
+
+    // Try to send credentials email 
     const mailOptions = {
       from: `"Holy Family Academy" <${SMTP_USER}>`,
-      to: email,
-      subject: "Your account is ready",
+      to: lowerEmail,
+      subject: "Your application account is ready",
       html: `
         <h3>Your application account</h3>
-        <p>Your account has been created. Login using:</p>
-        <p><strong>Email:</strong> ${email}</p>
+        <p>Your applicant account has been created. Use the credentials below to sign in:</p>
+        <p><strong>Email:</strong> ${lowerEmail}</p>
         <p><strong>Temporary password:</strong> ${tempPassword}</p>
         <p>On first login you will be required to change your password.</p>
       `
@@ -967,18 +1030,72 @@ app.post('/applicants/confirm-email', async (req, res) => {
 
     try {
       await mailTransporter.sendMail(mailOptions);
-      return res.json({ ok: true, emailed: true });
+      return res.json({ ok: true, emailed: true, message: 'Account created and emailed' });
     } catch (mailErr) {
       console.warn('/applicants/confirm-email: mail send failed', mailErr && mailErr.message);
+      // Still a success (account created). Return emailed:false so client can show appropriate message.
       return res.json({ ok: true, emailed: false, message: 'Account created but emailing failed' });
     }
-
   } catch (err) {
     console.error('/applicants/confirm-email error', err && (err.stack || err));
-    return res.status(500).json({ error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Server error' });
   }
 });
+// create user after getting confirm
+app.post('/applicants/create', async (req, res) => {
+  try {
+    const formData = req.body || {};
 
+    // Basic validation — require formType === 'teacher' and minimal fields (adjust as needed)
+    if (!formData.formType || String(formData.formType) !== 'teacher') {
+      return res.status(400).json({ success: false, error: 'Invalid formType. Expecting formType: "teacher".' });
+    }
+
+    const firstName = (formData.firstName || '').toString().trim();
+    const lastName = (formData.lastName || '').toString().trim();
+    const emailRaw = (formData.email || formData.contactEmail || '').toString().trim();
+    const email = emailRaw ? emailRaw.toLowerCase() : '';
+
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({ success: false, error: 'Missing required fields: firstName, lastName, email.' });
+    }
+
+    // Prepare document to persist
+    const now = admin.firestore.FieldValue.serverTimestamp();
+    const toSave = {
+      ...formData,
+      contactEmail: email,
+      status: 'pending',  // pending until email is confirmed
+      requirements: defaultRequirementsObject(),
+      isNew: true,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    const docRef = await db.collection('teacherApplicants').add(toSave);
+    const applicationId = docRef.id;
+
+    // Create/seed an email_confirmations doc so send-code can update/read it reliably.
+    // It's okay if send-code also creates this doc, this is just convenience.
+    try {
+      await db.collection('email_confirmations').doc(applicationId).set({
+        email,
+        otp: null,
+        expiresAt: 0,
+        lastSentAt: 0,
+        resendCount: 0,
+        firstResendAt: Date.now()
+      }, { merge: true });
+    } catch (seedErr) {
+      console.warn('/applicants/create: failed to seed email_confirmations (non-fatal)', seedErr && seedErr.message);
+    }
+
+    return res.json({ success: true, applicationId });
+  } catch (err) {
+    console.error('/applicants/create error', err && (err.stack || err));
+    return res.status(500).json({ success: false, error: 'Server error' });
+  }
+});
 /* GET /admin/users - returns merged list from Auth and Firestore */
 app.get('/admin/users', requireAdmin, async (req, res) => {
   try {
@@ -1368,7 +1485,31 @@ app.get('/admin/activity-logs', requireAdmin, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+//routes for the enrollees (both shs and jhs)
+app.use("/api", createEnrolleesRouter({
+  db,
+  supabase,
+  admin,
+  mailTransporter,
+  defaultRequirementsObject,
+  writeActivityLog,
+  UPLOAD_BUCKET: "uploads" // make sure this matches your bucket name
+}));
 
+// admin message
+app.use("/api", createAdminMessagesRouter({
+  db,
+  mailTransporter,
+  writeActivityLog,
+  requireAdmin
+}));
+//file uploads
+app.use("/api", createFilesRouter({
+  supabaseServer,
+  requireAdmin,
+ BUCKET: "uploads",
+  MAX_TTL: 300
+}));
 // HELPERS
 
 function generateRandomPassword() {
@@ -1376,37 +1517,6 @@ function generateRandomPassword() {
   return Array.from({ length: 12 }, () =>
     chars.charAt(Math.floor(Math.random() * Math.random() * chars.length))
   ).join("");
-}
-
-function generateEmailFromSurname(surname) {
-  const base = (surname || "user")
-    .toString()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-  const suffix = Math.random().toString(36).substring(2, 6); // 4 chars
-  return `${base}.${suffix}@hfa-application.com`;
-}
-
-async function generateUniqueEmailFromSurname(surname, attempts = 5) {
-  for (let i = 0; i < attempts; i++) {
-    const candidate = generateEmailFromSurname(surname);
-    try {
-      await admin.auth().getUserByEmail(candidate);
-      continue;
-    } catch (err) {
-      if (err && (err.code === "auth/user-not-found" || err.code === "auth/user-not-found")) {
-        return candidate;
-      }
-      if (err && err.code && err.code !== "auth/user-not-found") {
-        throw err;
-      }
-      return candidate;
-    }
-  }
-  return `${(surname || "user")
-    .toString()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")}.${Date.now()}@hfa-application.com`;
 }
 
 // --- START SERVER ---

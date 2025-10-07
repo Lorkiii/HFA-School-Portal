@@ -21,6 +21,7 @@
     "firebase-functions": "^6.4.0",
     "fullcalendar": "^6.1.19",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.5",
     "pdfjs-dist": "^5.4.54",
