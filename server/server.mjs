@@ -11,12 +11,19 @@ import path from "path";
 import { fileURLToPath } from "url";
 import jwt from "jsonwebtoken";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import { supabaseServer } from "../server-supabase-config.js";
+
+import createDbClient from "./dbClient.js";
+import createAttachApplicantId from "./attachApplicantId.js";
 
 //importing the routes
 import createEnrolleesRouter from "./routes/enrollees.js";
 import createAdminMessagesRouter from "./routes/admin-messages.js";
 import createFilesRouter from "./routes/files.js";
+import createApplicantMessagesRouter from './routes/applicant-messages.js';
+import createApplicantsRouter from "./routes/applicants.js";
+
 
 // --- FILE PATH HELPERS ---
 const __filename = fileURLToPath(import.meta.url);
@@ -68,6 +75,9 @@ app.use(
 app.use(bodyParser.json({ limit: "15mb" }));
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// parse cookies (needed for cookie-based sessions)
+app.use(cookieParser());
+
 // --- INITIALIZE FIREBASE ADMIN ---
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -82,6 +92,7 @@ if (!JWT_SECRET) {
   console.error("FATAL: JWT_SECRET is not set. Please set JWT_SECRET in your environment or .env file and restart the server.");
   process.exit(1);
 }
+
 
 // SMTP credentials: support SMTP_USER or SMTP_EMAIL env var names
 const SMTP_USER = process.env.SMTP_USER || process.env.SMTP_EMAIL;
@@ -103,6 +114,17 @@ const mailTransporter = nodemailer.createTransport({
 // Helper to generate 6-digit OTP
 function generateOtp() {
   return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+// Helper: cookie options based on environment
+function cookieOptionsForEnv() {
+  const opts = {
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 24 * 60 * 60 * 1000 // 1 day
+  };
+  opts.secure = (process.env.NODE_ENV === 'production'); // use secure cookie in production
+  return opts;
 }
 
 // ----------------- AUTH ENDPOINTS -----------------
@@ -128,7 +150,6 @@ app.post("/auth/login", async (req, res) => {
       console.warn("/auth/login invalid idToken", err && err.message);
       return res.status(401).json({ error: "Invalid idToken" });
     }
-
     const uid = decoded.uid;
     const email = decoded.email || null;
 
@@ -179,6 +200,9 @@ app.post("/auth/login", async (req, res) => {
     const tokenPayload = { uid, role, email };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "1d" });
 
+    // set cookie for session
+    res.cookie('__session', token, cookieOptionsForEnv());
+
     return res.json({ ok: true, token, role, forcePasswordChange });
   } catch (err) {
     console.error("/auth/login error", err && (err.stack || err));
@@ -218,9 +242,7 @@ app.post("/auth/verify-otp", async (req, res) => {
         }
       }
     }
-
     if (!uid) return res.status(400).json({ error: "No pending OTP found. Please login again." });
-
     const stored = otpStore.get(uid);
     if (!stored) return res.status(400).json({ error: "No pending OTP for this account. Please login again." });
 
@@ -244,6 +266,9 @@ app.post("/auth/verify-otp", async (req, res) => {
     const tokenPayload = { uid, role, email: userEmail };
     const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "1d" });
 
+    // set cookie for session
+    res.cookie('__session', token, cookieOptionsForEnv());
+
     return res.json({ ok: true, token, role, forcePasswordChange });
   } catch (err) {
     console.error("/auth/verify-otp error", err && (err.stack || err));
@@ -262,9 +287,20 @@ app.post("/auth/logout", (req, res) => {
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ")) token = authHeader.split("Bearer ")[1];
     else token = req.body && req.body.token;
+    // if no explicit token supplied, try cookie
+    if (!token && req.cookies && req.cookies.__session) token = req.cookies.__session;
+
     if (!token) return res.status(400).json({ error: "No token provided to revoke" });
 
     revokeToken(token);
+
+    // clear cookie (if present)
+    res.clearCookie('__session', {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: (process.env.NODE_ENV === 'production')
+    });
+
     return res.json({ success: true, message: "Logged out" });
   } catch (err) {
     console.error("/auth/logout error", err);
@@ -404,10 +440,11 @@ app.post("/auth/resend-otp", async (req, res) => {
 // and reject revoked server JWTs
 async function requireAdmin(req, res, next) {
   try {
-    // Read token only from Authorization header (Bearer ...)
+    // Read token from Authorization header (Bearer ...) OR from cookie __session
     let token = null;
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.split('Bearer ')[1];
+    else if (req.cookies && req.cookies.__session) token = req.cookies.__session;
 
     if (!token) return res.status(401).json({ error: 'No token provided', message: 'Missing authentication token. Please sign in.' });
 
@@ -447,12 +484,17 @@ async function requireAdmin(req, res, next) {
 
 // requireAuth middleware (for applicants / teacher-protected endpoints) 
 // Accepts Firebase ID tokens OR server JWTs (signed with JWT_SECRET)
+// It will read token from Authorization header or from cookie __session
 async function requireAuth(req, res, next) {
   try {
-    // get token from Authorization: Bearer <token> 
+    // get token from Authorization: Bearer <token> OR from cookie __session
     let token = null;
     const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) token = authHeader.split('Bearer ')[1];
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split('Bearer ')[1];
+    } else if (req.cookies && req.cookies.__session) {
+      token = req.cookies.__session;
+    }
 
     if (!token) return res.status(401).json({ error: 'No token provided' });
 
@@ -1485,6 +1527,10 @@ app.get('/admin/activity-logs', requireAdmin, async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+// -------------calling the routes---------------------
+const dbClient = createDbClient({ db, admin });
+const attachApplicantId = createAttachApplicantId({ dbClient });
+const applicantMessagesRouter = createApplicantMessagesRouter({ dbClient, requireAuth  });
 //routes for the enrollees (both shs and jhs)
 app.use("/api", createEnrolleesRouter({
   db,
@@ -1507,9 +1553,20 @@ app.use("/api", createAdminMessagesRouter({
 app.use("/api", createFilesRouter({
   supabaseServer,
   requireAdmin,
- BUCKET: "uploads",
+  requireAuth,
+  dbClient,
+  BUCKET: "uploads",
   MAX_TTL: 300
 }));
+
+// for applicants message
+app.use('/api/applicant-messages', requireAuth, attachApplicantId, applicantMessagesRouter);
+
+// applicants router under /api/applicants
+app.use('/api/applicants', createApplicantsRouter({ 
+  db, requireAuth, requireAdmin 
+}));
+
 // HELPERS
 
 function generateRandomPassword() {

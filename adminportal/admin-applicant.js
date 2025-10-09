@@ -1,6 +1,4 @@
 // admin-applicant.js - rewritten with clear names and unique toast helpers
-// single-line comments only
-
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
   getFirestore,
@@ -13,8 +11,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
 import { firebaseConfig } from "../firebase-config.js";
-import { supabase } from "../supabase-config.js"; // kept for later
-
 // init firebase
 let app;
 let db;
@@ -39,7 +35,6 @@ let isArchivedView = false; // toggle archived vs active
 document.addEventListener("DOMContentLoaded", () => {
   safeInit();
 });
-
 // initialize UI and fetch data
 async function safeInit() {
   // wire archived toggle
@@ -64,7 +59,6 @@ async function safeInit() {
   filterAndRenderApplicants();
   updateStatsOverview();
 }
-
 // fetch applicants from firestore
 async function fetchApplicants() {
   if (!db) return;
@@ -521,7 +515,6 @@ function renderTableApplicants(applicants) {
     tbody.appendChild(tr);
   });
 }
-
 function createTd(txt) {
   const td = document.createElement("td");
   td.textContent = txt;
@@ -545,7 +538,6 @@ function actionIcon(iconCls, title) {
   btn.innerHTML = `<i class="${iconCls}"></i>`;
   return btn;
 }
-
 // modal details
 function viewApplicantDetails(id) {
   selectedApplicantId = id;
@@ -560,17 +552,12 @@ function viewApplicantDetails(id) {
     if (el) el.textContent = txt;
   };
 
-  setText(
-    "teacher-modal-name",
-    `${a.firstName || ""} ${a.middleName || ""} ${a.lastName || ""}`.trim()
-  );
+  setText("teacher-modal-name",`${a.firstName || ""} ${a.middleName || ""} ${a.lastName || ""}`.trim());
   const stEl = document.getElementById("teacher-modal-status");
-  if (stEl) {
-    stEl.textContent = formatStatus(a.status);
+  if (stEl) {stEl.textContent = formatStatus(a.status);
     stEl.className = `status-badge status-${a.status}`;
   }
   setText("teacher-modal-id", `APP-${String(id).slice(0, 6).toUpperCase()}`);
-
   setText(
     "modal-teacher-fullname",
     `${a.firstName || ""} ${a.middleName || ""} ${a.lastName || ""} ${
@@ -997,7 +984,6 @@ function updateStatsOverview() {
     (document.getElementById("approved-teachers-count").textContent =
       stats.approved);
 }
-
 // utilities
 function formatDate(d) {
   if (!d) return "N/A";
@@ -1054,14 +1040,8 @@ function createToast(message, styleClass = "toast-info", timeout = 3500) {
       const msg = t.querySelector(".toast-msg");
       if (msg) msg.textContent = message;
       container.appendChild(t);
-    } else {
-      // template exists but doesn't include expected .toast structure
-      console.warn(
-        "toast-template found but missing .toast wrapper — falling back to JS-created toast"
-      );
-    }
+    } 
   }
-
   // fallback if template not present or malformed (t is null)
   if (!t) {
     t = document.createElement("div");

@@ -93,6 +93,8 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
   });
+    window.addEventListener("hashchange", checkHash);
+  checkHash();
   // date widget
   (function () {
     // Node selectors (matches your HTML classes)
@@ -139,12 +141,6 @@ document.addEventListener("DOMContentLoaded", function () {
     // Update every 1 second so the minute flips exactly on time.
     setInterval(updateDateTime, 1000);
   })();
-
-  // calendar widget
-
-  window.addEventListener("hashchange", checkHash);
-  checkHash();
-
   // Logout
   document.getElementById("logout-btn").addEventListener("click", () => {
     logoutAndRedirect("../login/login.html");

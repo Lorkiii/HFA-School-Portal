@@ -73,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const body = idToken ? { idToken } : { email: verifyEmail };
       const resp = await fetch('/auth/resend-otp', {
         method: 'POST',
+        credentials: 'include', // include cookie so server can read session if needed
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
@@ -135,6 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         const resp = await fetch('/auth/verify-otp', {
           method: 'POST',
+          credentials: 'include', // <-- ensure cookie is set/received
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ otp: code, idToken, email: verifyEmail })
         });
@@ -148,8 +150,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // success: server returns { ok:true, token?, role }
-        // DO NOT write server token to localStorage. Use Firebase ID tokens for subsequent API calls.
+        // Clear temporary sessionStorage keys used for verification
         try { sessionStorage.removeItem('idToken'); sessionStorage.removeItem('verifyEmail'); } catch (e) {}
+
+        // Optionally store server token (if returned) — useful for API calls that use Authorization header.
+        // The main auth mechanism is the HttpOnly __session cookie the server set.
+        if (body && body.token) {
+          try { sessionStorage.setItem('serverToken', body.token); } catch (e) { /* ignore */ }
+        }
 
         // Redirect: role-aware. If the server provided role, use it; else default to admin redirect.
         const role = body && body.role ? body.role : 'admin';

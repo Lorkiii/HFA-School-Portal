@@ -17,6 +17,7 @@ export default function createEnrolleesRouter(deps = {}) {
     defaultRequirementsObject,
     writeActivityLog,
     UPLOAD_BUCKET = "uploads",
+    UPLOAD_SESSION_TTL_MS = (1000 * 60 * 60) // 1 hour default
   } = deps;
 
   const router = express.Router();
@@ -57,7 +58,6 @@ export default function createEnrolleesRouter(deps = {}) {
       const studentId = docRef.id;
 
       // Build upload session doc that tracks allowed paths for this enrollee
-      // For each requested slot create a planned path
       const allowedPaths = {};
       for (const rf of requestedFiles) {
         const slot = String(rf.slot || "").trim();
@@ -72,11 +72,12 @@ export default function createEnrolleesRouter(deps = {}) {
       }
 
       // Persist upload session so upload route can validate
+      const expiresAt = Date.now() + UPLOAD_SESSION_TTL_MS;
       await db.collection("enrollee_upload_sessions").doc(studentId).set({
         studentId,
         allowedPaths,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expiresAt: Date.now() + (1000 * 60 * 60) // expires in 1 hour (ms)
+        expiresAt // store as number (ms since epoch) for easy server-side check
       });
 
       console.log("/api/enrollees created", { studentId, formType, requestedCount: requestedFiles.length });
@@ -106,9 +107,17 @@ export default function createEnrolleesRouter(deps = {}) {
       if (!sessionSnap.exists) return res.status(404).json({ ok: false, error: "Upload session not found" });
       const session = sessionSnap.data() || {};
       const allowed = (session.allowedPaths || {})[slot];
-    if (!allowed || !allowed.path) {
+      if (!allowed || !allowed.path) {
         return res.status(403).json({ ok: false, error: "Slot not allowed for upload" });
       }
+
+      // --- EXPIRY CHECK (added) ---
+      if (session.expiresAt && typeof session.expiresAt === "number") {
+        if (Date.now() > session.expiresAt) {
+          return res.status(403).json({ ok: false, error: "Upload session expired" });
+        }
+      }
+      // --- end expiry check ---
 
       if (!req.file || !req.file.buffer) return res.status(400).json({ ok: false, error: "No file provided" });
 
@@ -121,8 +130,7 @@ export default function createEnrolleesRouter(deps = {}) {
       console.log(`/api/enrollees/${studentId}/upload: uploading slot=${slot} path=${path} size=${fileBuffer.length}`);
 
       // Use supabase server client to upload
-      // NOTE: supabase JS server upload signature: supabase.storage.from(bucket).upload(path, file, { upsert: true })
-      // where file can be a Buffer in Node environment
+      // supabase.storage.from(bucket).upload(path, fileBuffer, { upsert: true, contentType })
       const { error: uploadError } = await supabase.storage.from(bucket).upload(path, fileBuffer, {
         cacheControl: "3600",
         upsert: true,
@@ -148,7 +156,6 @@ export default function createEnrolleesRouter(deps = {}) {
         uploadedAt: admin.firestore.Timestamp.now()
       };
 
-      // Use a dedicated collection to store uploaded files metadata or append to upload session
       await db.collection("enrollee_upload_sessions").doc(studentId).set({
         uploadedFiles: admin.firestore.FieldValue.arrayUnion(docToAppend),
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
@@ -198,6 +205,11 @@ export default function createEnrolleesRouter(deps = {}) {
       const sessionSnap = await sessionRef.get();
       const session = sessionSnap.exists ? sessionSnap.data() : null;
       const uploadedArray = session && Array.isArray(session.uploadedFiles) ? session.uploadedFiles : [];
+
+      // If upload session expired, still allow finalize only if uploadedFiles recorded
+      if (session && session.expiresAt && Date.now() > session.expiresAt && (!uploadedArray || !uploadedArray.length)) {
+        return res.status(403).json({ ok: false, error: "Upload session expired and no uploaded files found" });
+      }
 
       // Build map of uploaded slots (merge with provided files but prefer server recorded uploadedFiles)
       const uploadedBySlot = {};
@@ -272,7 +284,6 @@ export default function createEnrolleesRouter(deps = {}) {
 
       return res.json({ ok: true, studentId, uploadedSlots, numFiles: documents.length });
     } catch (err) {
-      console.error("/api/enrollees/:id/finalize error", err && (err.stack || err));
       console.error("/api/enrollees/:id/finalize error", err && (err.stack || err));
       return res.status(500).json({ ok: false, error: "Server error", message: err && err.message });
     }

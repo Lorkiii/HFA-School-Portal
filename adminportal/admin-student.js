@@ -1083,7 +1083,6 @@ function closeStudentModal() {
 window.closeStudentModal = closeStudentModal; // expose globally as requested
 
 /* ------------------ Archive/Delete flows ------------------ */
-
 function openArchiveConfirm(app) {
   currentModalApp = app;
   if (!stuOverlay || stuOverlay.style.display !== 'flex') openStudentModal(app);

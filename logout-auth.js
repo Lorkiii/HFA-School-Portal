@@ -8,52 +8,63 @@ export async function logoutAndRedirect(loginPath = "/login/login.html") {
 
     // prefer Firebase client ID token if signed in
     try {
-      if (auth.currentUser) {
-        tokenToRevoke = await auth.currentUser.getIdToken();
+      if (auth && auth.currentUser) {
+        tokenToRevoke = await auth.currentUser.getIdToken().catch(() => null);
       }
     } catch (e) {
-      // ignore, fallback to localStorage token (legacy)
+      // ignore, fallback to localStorage/sessionStorage token (legacy)
     }
-
-    // fallback: if legacy server JWT exists in localStorage, use it
+    // fallback: if legacy server JWT exists in sessionStorage/localStorage, use it
     try {
-      if (!tokenToRevoke && typeof localStorage !== "undefined") {
-        tokenToRevoke = localStorage.getItem("token");
+      if (!tokenToRevoke && typeof sessionStorage !== "undefined") {
+        tokenToRevoke = sessionStorage.getItem("serverToken") || null;
       }
     } catch (e) {
       // ignore storage issues
     }
+    try {
+      if (!tokenToRevoke && typeof localStorage !== "undefined") {
+        tokenToRevoke = localStorage.getItem("token") || null;
+      }
+    } catch (e) {}
 
-    // Remove any existing legacy token from storage (we are moving away from it)
+    // Remove any existing legacy tokens from storage (we are moving away from them)
+    try { sessionStorage.removeItem("serverToken"); } catch (e) {}
     try { localStorage.removeItem("token"); } catch (e) {}
+    try { sessionStorage.removeItem("idToken"); } catch (e) {}
+    try { sessionStorage.removeItem("verifyEmail"); } catch (e) {}
 
     // Attempt to hit server logout endpoint (best-effort)
-    if (tokenToRevoke) {
-      try {
-        await fetch("/auth/logout", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": "Bearer " + tokenToRevoke
-          },
-          body: JSON.stringify({ token: tokenToRevoke })
-        });
-      } catch (err) {
-        console.warn("Logout: revoke request failed", err);
-      }
-    }
-
-    // Sign out Firebase client so auth.currentUser becomes null
     try {
-      await signOut(auth);
-    } catch (e) {
-      console.warn("Firebase signOut failed:", e);
+      // Send credentials so server can read and clear cookie __session
+      await fetch("/auth/logout", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          // If we have a token, include it in body for servers that expect it (server also reads cookie)
+        },
+        body: JSON.stringify({ token: tokenToRevoke })
+      });
+    } catch (err) {
+      console.warn("Logout: revoke request failed (continuing)", err);
     }
 
-    // Finally redirect to login
-    window.location.replace(loginPath);
+    // Sign out Firebase client so auth.currentUser becomes null (best-effort)
+    try {
+      if (auth) await signOut(auth);
+    } catch (e) {
+      console.warn("Firebase signOut failed (continuing):", e);
+    }
+
+    // Finally redirect to login (replace history so Back won't return to protected page)
+    try {
+      window.location.replace(loginPath);
+    } catch (e) {
+      window.location.href = loginPath;
+    }
   } catch (err) {
     console.error("logout error", err);
-    try { window.location.replace(loginPath); } catch (e) {}
+    try { window.location.replace(loginPath); } catch (e) { window.location.href = loginPath; }
   }
 }

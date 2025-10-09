@@ -154,9 +154,10 @@ async function loginUserWithRole(email, password, expectedRole, redirectUrl, err
     // Obtain fresh ID token (force refresh to ensure any forcePasswordChange flag is current)
     const idToken = await userCredential.user.getIdToken(true);
 
-    // Call server /auth/login
+    // Call server /auth/login — include credentials so cookie is set
     const resp = await fetch("/auth/login", {
       method: "POST",
+      credentials: 'include', // <<< important to receive HttpOnly cookie
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ idToken })
     });
@@ -175,32 +176,27 @@ async function loginUserWithRole(email, password, expectedRole, redirectUrl, err
       sessionStorage.setItem("verifyEmail", email);
       sessionStorage.setItem("idToken", idToken);
       // optionally keep server "message" for UX
-      window.location.href = "/login/verify-otp.html?uid=" + encodeURIComponent(uid) + "&redirect=" + encodeURIComponent(redirectUrl);
+      window.location.replace("/login/verify-otp.html?uid=" + encodeURIComponent(uid) + "&redirect=" + encodeURIComponent(redirectUrl));
       return;
     }
 
-    // If server returned a token, store it in sessionStorage (optional) for server-side calls.
+    // If server returned a token, store it in sessionStorage (optional)
     if (data.token) {
-      // optional: store server token for API calls that prefer server JWT
       try { sessionStorage.setItem("serverToken", data.token); } catch (e) { /* ignore */ }
     }
 
     // If user must change password, redirect to change password page.
-    // Keep user signed-in (so changepass can use Firebase SDK to update password).
     if (data.forcePasswordChange) {
-      // store idToken in sessionStorage so changepass page may re-authenticate/use it if needed
       try { sessionStorage.setItem("idToken", idToken); } catch (e) { /* ignore */ }
-      // redirect to change password page (you can read uid from query in changepass)
-      window.location.href = "/login/changepass.html?uid=" + encodeURIComponent(uid);
+      window.location.replace("/login/changepass.html?uid=" + encodeURIComponent(uid));
       return;
     }
-
     // Normal successful login: redirect based on role (server returned role too)
     if (data.role === "admin") {
-      window.location.href = "/adminportal/admin.html";
+      window.location.replace("/adminportal/admin.html");
       return;
     } else {
-      window.location.href = redirectUrl;
+      window.location.replace(redirectUrl);
       return;
     }
 

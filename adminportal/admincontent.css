@@ -1206,9 +1206,9 @@ button.post.posting::after {
 }
 
 .hfa-stu-info-item strong {
-  color: #333;
+  color: #2c8010;
   font-weight: 600;
-  font-size: 0.97rem;
+  font-size: 1rem;
 }
 .hfa-stu-info-value {
   color: #555;
