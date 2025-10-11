@@ -1,0 +1,15 @@
+.Mycalendar{
+    box-sizing: border-box;
+     border:1px solid #e6eef3;
+     padding: 50px 60px;
+     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+:root {
+  --fc-daygrid-event-dot-width: 10px;
+}
+.fc-daygrid-event { 
+  position: relative; 
+  white-space: nowrap;
+  border-radius: 2px; 
+  font-size: var(--fc-small-font-size);
+}

@@ -96,7 +96,6 @@
       <section id="dashboard">
         <!-- Application Status Section -->
         <div class="main-content">
-
           <div class="section-container">
             <div class="dashboard-header">
               <h1>Applicant's Dashboard</h1>
@@ -286,10 +285,132 @@
       <!-- application status content -->
       <section id="application-status">
         <!-- application-status-content -->
-        <div class="status-content" id="status-content">
-          <div class="status-header">
-            <h2><i class="fa-light fa-file"></i> Application Status</h2>
+        <div class="app-status-card">
+
+          <!-- Paste this inside #status-content (teacher.html) -->
+          <div class="status-card">
+            <div class="status-card-header">
+              <h3>Application Details</h3>
+              <button id="status-refresh-btn" class="btn small">Refresh</button>
+            </div>
+
+            <div class="status-card-body two-column">
+              <div class="status-col left">
+                <div class="field"><label>Full name</label>
+                  <div class="value"><span id="status-fullname">—</span></div>
+                </div>
+                <div class="field"><label>Email</label>
+                  <div class="value"><span id="status-email">—</span></div>
+                </div>
+                <div class="field"><label>Phone</label>
+                  <div class="value"><span id="status-phone">—</span></div>
+                </div>
+                <div class="field"><label>Address</label>
+                  <div class="value"><span id="status-address">—</span></div>
+                </div>
+                <div class="field"><label>Birthdate</label>
+                  <div class="value"><span id="status-birthdate">—</span></div>
+                </div>
+
+                <div class="field"><label>Preferred level</label>
+                  <div class="value"><span id="status-preferred-level">—</span></div>
+                </div>
+                <div class="field"><label>Degree</label>
+                  <div class="value"><span id="status-degree">—</span></div>
+                </div>
+                <div class="field"><label>Major</label>
+                  <div class="value"><span id="status-major">—</span></div>
+                </div>
+              </div>
+
+              <div class="status-col right">
+                <div class="field"><label>Institution</label>
+                  <div class="value"><span id="status-institution">—</span></div>
+                </div>
+                <div class="field"><label>Graduation Year</label>
+                  <div class="value"><span id="status-gradyear">—</span></div>
+                </div>
+                <div class="field"><label>Experience (years)</label>
+                  <div class="value"><span id="status-experience">—</span></div>
+                </div>
+                <div class="field"><label>Previous Schools</label>
+                  <div class="value"><span id="status-previous-schools">—</span></div>
+                </div>
+                <div class="field"><label>License No.</label>
+                  <div class="value"><span id="status-license">—</span></div>
+                </div>
+                <div class="field"><label>Subjects</label>
+                  <div class="value"><span id="status-subjects">—</span></div>
+                </div>
+                <div class="field"><label>Employment</label>
+                  <div class="value"><span id="status-employment">—</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="status-card-footer">
+              <small id="status-submitted-at">Submitted: —</small>
+            </div>
           </div>
+
+
+          <aside class="app-status-right">
+            <div class="progress-card">
+              <div class="progress-header">
+                <div>
+                  <div class="progress-title">Application progress</div>
+                  <div id="submitted-at-timeline" class="progress-sub">Submitted: —</div>
+                </div>
+              </div>
+
+              <div id="app-status-timeline" class="progress-steps">
+                <div class="timeline-item" data-step="submitted">
+                  <div class="marker"></div>
+                  <div class="step-content">
+                    <div class="step-title">Application Submitted</div>
+                    <div class="step-desc">Your application documents have been received.</div>
+                  </div>
+                </div>
+
+                <div class="timeline-item" data-step="reviewing">
+                  <div class="marker"></div>
+                  <div class="step-content">
+                    <div class="step-title">Under Review</div>
+                    <div class="step-desc">Your qualifications are being reviewed.</div>
+                  </div>
+                </div>
+
+                <div class="timeline-item" data-step="interview_scheduled">
+                  <div class="marker"></div>
+                  <div class="step-content">
+                    <div class="step-title">Interview Scheduled</div>
+                    <div class="step-desc">Interview will be scheduled by Admissions.</div>
+                    <div id="status-interview-info" class="step-meta" style="display:none;">
+                      <div><strong>Date:</strong> <span id="status-interview-date">—</span></div>
+                      <div><strong>Location:</strong> <span id="status-interview-details">—</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="timeline-item" data-step="demo">
+                  <div class="marker"></div>
+                  <div class="step-content">
+                    <div class="step-title">Demo Teaching</div>
+                    <div class="step-desc">Demo teaching (if applicable).</div>
+                  </div>
+                </div>
+
+                <div class="timeline-item" data-step="decision">
+                  <div class="marker"></div>
+                  <div class="step-content">
+                    <div class="step-title">Final Decision</div>
+                    <div class="step-desc">Administration will review all evaluation results.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+
         </div>
       </section>
     </main>

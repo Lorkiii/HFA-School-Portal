@@ -32,7 +32,8 @@ export default function createFilesRouter({
   router.get("/signed-url", requireAdmin, async (req, res) => {
     try {
       const rawPath = String(req.query.path || "").trim();
-      if (!rawPath) return res.status(400).json({ ok: false, error: "Missing path" });
+      if (!rawPath)
+        return res.status(400).json({ ok: false, error: "Missing path" });
 
       // parse TTL and cap it
       let ttl = parseInt(req.query.ttl, 10) || 60;
@@ -40,20 +41,46 @@ export default function createFilesRouter({
       if (ttl > MAX_TTL) ttl = MAX_TTL;
 
       const objectPath = normalizeObjectPath(rawPath);
-      if (!objectPath) return res.status(400).json({ ok: false, error: "Invalid path" });
+      if (!objectPath)
+        return res.status(400).json({ ok: false, error: "Invalid path" });
 
-      const { data, error } = await supabaseServer.storage.from(BUCKET).createSignedUrl(objectPath, ttl);
+      const { data, error } = await supabaseServer.storage
+        .from(BUCKET)
+        .createSignedUrl(objectPath, ttl);
 
       if (error) {
-        console.error("[files:signed-url] createSignedUrl error", { path: objectPath, ttl, error });
-        return res.status(500).json({ ok: false, error: "Failed to create signed url", detail: error.message || error });
+        console.error("[files:signed-url] createSignedUrl error", {
+          path: objectPath,
+          ttl,
+          error,
+        });
+        return res
+          .status(500)
+          .json({
+            ok: false,
+            error: "Failed to create signed url",
+            detail: error.message || error,
+          });
       }
 
       const expiresAt = Date.now() + ttl * 1000;
-      return res.json({ ok: true, url: data && data.signedUrl ? data.signedUrl : null, expiresAt });
+      return res.json({
+        ok: true,
+        url: data && data.signedUrl ? data.signedUrl : null,
+        expiresAt,
+      });
     } catch (err) {
-      console.error("[files:signed-url] unexpected error", err && (err.stack || err));
-      return res.status(500).json({ ok: false, error: "Server error", message: err && err.message });
+      console.error(
+        "[files:signed-url] unexpected error",
+        err && (err.stack || err)
+      );
+      return res
+        .status(500)
+        .json({
+          ok: false,
+          error: "Server error",
+          message: err && err.message,
+        });
     }
   });
 
@@ -62,7 +89,12 @@ export default function createFilesRouter({
     try {
       // requireAuth must be provided
       if (!requireAuth) {
-        return res.status(500).json({ ok: false, error: "Server misconfiguration: requireAuth not provided" });
+        return res
+          .status(500)
+          .json({
+            ok: false,
+            error: "Server misconfiguration: requireAuth not provided",
+          });
       }
 
       // Run requireAuth middleware inline (so this route works regardless of outer mounting)
@@ -72,10 +104,12 @@ export default function createFilesRouter({
       if (res.headersSent) return; // auth middleware already responded
 
       const user = req.user || {};
-      if (!user || !user.uid) return res.status(401).json({ ok: false, error: "Unauthorized" });
+      if (!user || !user.uid)
+        return res.status(401).json({ ok: false, error: "Unauthorized" });
 
       const rawPath = String(req.query.path || "").trim();
-      if (!rawPath) return res.status(400).json({ ok: false, error: "Missing path" });
+      if (!rawPath)
+        return res.status(400).json({ ok: false, error: "Missing path" });
 
       // parse TTL and cap it
       let ttl = parseInt(req.query.ttl, 10) || 60;
@@ -83,7 +117,8 @@ export default function createFilesRouter({
       if (ttl > MAX_TTL) ttl = MAX_TTL;
 
       const objectPath = normalizeObjectPath(rawPath);
-      if (!objectPath) return res.status(400).json({ ok: false, error: "Invalid path" });
+      if (!objectPath)
+        return res.status(400).json({ ok: false, error: "Invalid path" });
 
       // Ownership verification: two simple strategies
       let ownerVerified = false;
@@ -95,53 +130,110 @@ export default function createFilesRouter({
         if (dbClient && typeof dbClient.getApplicantById === "function") {
           try {
             const applicant = await dbClient.getApplicantById(appId);
-            if (applicant && applicant.uid && String(applicant.uid) === String(user.uid)) {
+            if (
+              applicant &&
+              applicant.uid &&
+              String(applicant.uid) === String(user.uid)
+            ) {
               ownerVerified = true;
             }
           } catch (e) {
-            console.warn("[files:signed-url-owner] getApplicantById failed", e && e.message);
+            console.warn(
+              "[files:signed-url-owner] getApplicantById failed",
+              e && e.message
+            );
           }
         }
       }
 
       // Strategy 2: fallback - find the applicant doc for this uid and inspect its documents array
       if (!ownerVerified) {
-        if (dbClient && typeof dbClient.findApplicantIdByUid === "function" && typeof dbClient.getApplicantById === "function") {
+        if (
+          dbClient &&
+          typeof dbClient.findApplicantIdByUid === "function" &&
+          typeof dbClient.getApplicantById === "function"
+        ) {
           try {
             const myAppId = await dbClient.findApplicantIdByUid(user.uid);
             if (myAppId) {
               const myApplicant = await dbClient.getApplicantById(myAppId);
-              const docsArr = Array.isArray(myApplicant?.documents) ? myApplicant.documents : (Array.isArray(myApplicant?.attachments) ? myApplicant.attachments : []);
+              const docsArr = Array.isArray(myApplicant?.documents)
+                ? myApplicant.documents
+                : Array.isArray(myApplicant?.attachments)
+                ? myApplicant.attachments
+                : [];
               ownerVerified = docsArr.some((f) => {
-                const fp = (f && (f.filePath || f.path || f.fileUrl || f.url || f.file_url) || "").toString().replace(/^\/+/, "");
+                const fp = (
+                  (f &&
+                    (f.filePath ||
+                      f.path ||
+                      f.fileUrl ||
+                      f.url ||
+                      f.file_url)) ||
+                  ""
+                )
+                  .toString()
+                  .replace(/^\/+/, "");
                 return fp === objectPath;
               });
             }
           } catch (e) {
-            console.warn("[files:signed-url-owner] fallback ownership lookup failed", e && e.message);
+            console.warn(
+              "[files:signed-url-owner] fallback ownership lookup failed",
+              e && e.message
+            );
           }
         } else {
           // dbClient missing helper methods -> cannot verify ownership here
-          console.warn("[files:signed-url-owner] dbClient lacks expected methods (findApplicantIdByUid/getApplicantById)");
+          console.warn(
+            "[files:signed-url-owner] dbClient lacks expected methods (findApplicantIdByUid/getApplicantById)"
+          );
         }
       }
 
       if (!ownerVerified) {
-        return res.status(403).json({ ok: false, error: "Forbidden: you do not own this file" });
+        return res
+          .status(403)
+          .json({ ok: false, error: "Forbidden: you do not own this file" });
       }
 
       // Create signed URL via Supabase
-      const { data, error } = await supabaseServer.storage.from(BUCKET).createSignedUrl(objectPath, ttl);
+      const { data, error } = await supabaseServer.storage
+        .from(BUCKET)
+        .createSignedUrl(objectPath, ttl);
       if (error) {
-        console.error("[files:signed-url-owner] createSignedUrl error", { path: objectPath, ttl, error });
-        return res.status(500).json({ ok: false, error: "Failed to create signed url", detail: error.message || error });
+        console.error("[files:signed-url-owner] createSignedUrl error", {
+          path: objectPath,
+          ttl,
+          error,
+        });
+        return res
+          .status(500)
+          .json({
+            ok: false,
+            error: "Failed to create signed url",
+            detail: error.message || error,
+          });
       }
 
       const expiresAt = Date.now() + ttl * 1000;
-      return res.json({ ok: true, url: data && data.signedUrl ? data.signedUrl : null, expiresAt });
+      return res.json({
+        ok: true,
+        url: data && data.signedUrl ? data.signedUrl : null,
+        expiresAt,
+      });
     } catch (err) {
-      console.error("[files:signed-url-owner] unexpected error", err && (err.stack || err));
-      return res.status(500).json({ ok: false, error: "Server error", message: err && err.message });
+      console.error(
+        "[files:signed-url-owner] unexpected error",
+        err && (err.stack || err)
+      );
+      return res
+        .status(500)
+        .json({
+          ok: false,
+          error: "Server error",
+          message: err && err.message,
+        });
     }
   });
 

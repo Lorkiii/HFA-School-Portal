@@ -23,6 +23,8 @@ import createAdminMessagesRouter from "./routes/admin-messages.js";
 import createFilesRouter from "./routes/files.js";
 import createApplicantMessagesRouter from './routes/applicant-messages.js';
 import createApplicantsRouter from "./routes/applicants.js";
+import interviewsRouter from "./routes/interview.js";
+import createAdminActionsRouter from "./routes/admin-actions.js";
 
 
 // --- FILE PATH HELPERS ---
@@ -1566,6 +1568,20 @@ app.use('/api/applicant-messages', requireAuth, attachApplicantId, applicantMess
 app.use('/api/applicants', createApplicantsRouter({ 
   db, requireAuth, requireAdmin 
 }));
+// for interview schedule
+app.use("/api", interviewsRouter({
+  db,
+  admin,
+  requireAdmin,
+  writeActivityLog
+}));
+// admin actions in applicant progress
+app.use("/api", createAdminActionsRouter({
+    db,
+   admin,
+   requireAdmin,
+   writeActivityLog
+ }));
 
 // HELPERS
 

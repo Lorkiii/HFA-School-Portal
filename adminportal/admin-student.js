@@ -60,6 +60,7 @@ const stuAddressEl = document.getElementById('hfa-stu-address');
 const stuGrade2El = document.getElementById('hfa-stu-grade2');
 const stuTrackEl = document.getElementById('hfa-stu-track');
 const stuUpdatedEl = document.getElementById('hfa-stu-updated');
+const stuEmailEl = document.getElementById('hfa-stu-email');
 
 const stuInlineConfirm = document.getElementById('hfa-stu-inline-confirm');
 const stuConfirmYes = document.getElementById('hfa-stu-confirm-yes');
@@ -275,10 +276,6 @@ function createProgressBar(percent = 0) {
 
 /* ------------------ File extraction/normalization ------------------ */
 
-/**
- * Extract files/documents metadata from various shapes in applicant.raw.
- * Return array of normalized files: { name, url, path, size, mime, slot }
- */
 function extractFilesFromApp(raw) {
   if (!raw) return [];
   // server.finalize persisted 'documents' array: { slot, fileName, filePath, fileUrl, size, uploadedAt }
@@ -438,54 +435,6 @@ function renderTableRows(list) {
   studentsBody.appendChild(frag);
 }
 
-function renderCards(list) {
-  if (!cardsView) return;
-  cardsView.innerHTML = '';
-  const frag = document.createDocumentFragment();
-
-  list.forEach(app => {
-    if (!app) return;
-    const card = document.createElement('div'); card.className = 'applicant-card';
-
-    const header = document.createElement('div'); header.className = 'applicant-header';
-    const left = document.createElement('div'); left.textContent = `${(app.formType || '').toUpperCase()} — ${app.gradeLevel || '-'}`;
-    const right = document.createElement('div'); right.className = `status-badge ${app.enrolled ? 'status-active' : 'status-review'}`;
-    right.textContent = app.enrolled ? 'Enrolled' : 'Pending';
-    header.appendChild(left); header.appendChild(right);
-    card.appendChild(header);
-
-    const info = document.createElement('div'); info.className = 'applicant-info';
-    const photo = document.createElement('div'); photo.className = 'applicant-photo';
-    photo.appendChild(createIcon('fas fa-user-circle'));
-    const details = document.createElement('div'); details.className = 'applicant-details';
-    const h3 = document.createElement('h3'); h3.textContent = app.fullName || '-';
-    const p1 = document.createElement('p'); p1.textContent = `Grade: ${app.gradeLevel || '-'}`;
-    const p2 = document.createElement('p'); p2.textContent = `Section: ${app.section || '-'}`;
-    details.appendChild(h3); details.appendChild(p1); details.appendChild(p2);
-    info.appendChild(photo); info.appendChild(details);
-    card.appendChild(info);
-
-    const reqList = document.createElement('ul'); reqList.className = 'requirements-list';
-    Object.entries(app.requirements).forEach(([k, v]) => {
-      const li = document.createElement('li');
-      li.textContent = `${v && v.label ? v.label : k}: ${(v && v.checked) ? '✓' : '✗'}`;
-      reqList.appendChild(li);
-    });
-    card.appendChild(reqList);
-
-    const actions = document.createElement('div'); actions.className = 'applicant-actions';
-    const btnView = document.createElement('button'); btnView.className = 'student-btn student-view'; btnView.title='View'; btnView.appendChild(createIcon('fas fa-eye')); btnView.addEventListener('click', () => openStudentModal(app)); actions.appendChild(btnView);
-    const btnArchive = document.createElement('button'); btnArchive.className = 'student-btn student-archive'; btnArchive.title='Archive'; btnArchive.appendChild(createIcon('fas fa-archive')); btnArchive.addEventListener('click', () => openArchiveConfirm(app)); actions.appendChild(btnArchive);
-    const btnMessage = document.createElement('button'); btnMessage.className = 'student-btn student-message'; btnMessage.title='Message'; btnMessage.appendChild(createIcon('fas fa-envelope')); btnMessage.addEventListener('click', ()=>openMessageModal(app, { afterEnroll:false })); actions.appendChild(btnMessage);
-    const btnEnroll = document.createElement('button'); btnEnroll.className='student-btn student-enroll'; btnEnroll.textContent = app.enrolled ? 'Enrolled' : 'Enroll'; btnEnroll.disabled = app.enrolled; btnEnroll.addEventListener('click', () => { if (!app.enrolled) openEnrollConfirm(app); }); actions.appendChild(btnEnroll);
-
-    card.appendChild(actions);
-    frag.appendChild(card);
-  });
-
-  cardsView.appendChild(frag);
-}
-
 /* ------------------ Student modal (namespaced) ------------------ */
 
 function openStudentModal(app) {
@@ -515,6 +464,7 @@ function openStudentModal(app) {
   if (stuMiddleEl) stuMiddleEl.textContent = (app.raw && (app.raw.middleName || app.raw.middle)) || '-';
   if (stuBirthEl) stuBirthEl.textContent = (app.raw && (app.raw.birthDate || app.raw.dob || app.raw.birthdate)) || '-';
   if (stuContactEl) stuContactEl.textContent = (app.raw && (app.raw.contactNumber || app.raw.phone || app.raw.contact)) || '-';
+  if (stuEmailEl) stuEmailEl.textContent = (app.raw && (app.raw.email || app.raw.emailaddress || app.raw.emailAddress)) || '-';
   if (stuAddressEl) stuAddressEl.textContent = (app.raw && (app.raw.address || app.raw.homeAddress || app.raw.residentialAddress)) || '-';
   if (stuGrade2El) stuGrade2El.textContent = app.gradeLevel || '-';
   // track from multiple possible fields (normalizeApplicant sets app.track)
@@ -953,7 +903,7 @@ function openMessageModal(app, { afterEnroll = false } = {}) {
   _messageModalState.app = app || null;
   _messageModalState.afterEnroll = !!afterEnroll;
 
-  const emailFromDoc = (app && app.raw && (app.raw.email || app.raw.contactEmail)) || "";
+  const emailFromDoc = (app && app.raw && (app.raw.email || app.raw.contactEmail || app.raw.emailaddress)) || "";
   const phoneFromDoc = (app && app.raw && (app.raw.contactNumber || app.raw.phone)) || "";
 
   if (messageRecipient) {

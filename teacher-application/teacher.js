@@ -1,3 +1,6 @@
+// teacher.js (fixed)
+// Replaces your existing teacher.js — preserves original behavior and only fixes applicant status population mapping & exposure.
+
 import { logoutAndRedirect } from "../logout-auth.js";
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -25,7 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
         overlay.classList.add('active');
         updateLayout();
     }
-    
+
     // Function to close sidebar
     function hideSidebar() {
         sidebar.classList.remove('show');
@@ -41,43 +44,43 @@ document.addEventListener('DOMContentLoaded', () => {
             hideSidebar();
         }
     });
-        // Event Listeners
+    // Event Listeners
     openSidebar.addEventListener('click', showSidebar);
     closeSidebar.addEventListener('click', hideSidebar);
     overlay.addEventListener('click', hideSidebar);
 
-function checkHash() {
-    const hash = window.location.hash || "#dashboard";
-    const targetSection = document.querySelector(hash);
+    function checkHash() {
+        const hash = window.location.hash || "#dashboard";
+        const targetSection = document.querySelector(hash);
 
-    document
-        .querySelectorAll("section")
-      .forEach((sec) => (sec.style.display = "none"));
-    if (targetSection) targetSection.style.display = "block";
-    else document.querySelector("#dashboard").style.display = "block";
+        document
+            .querySelectorAll("section")
+            .forEach((sec) => (sec.style.display = "none"));
+        if (targetSection) targetSection.style.display = "block";
+        else document.querySelector("#dashboard").style.display = "block";
 
-    navLinks.forEach((link) => {
-      link.classList.remove("active");
-      if (link.getAttribute("href") === hash) {
-        link.classList.add("active");
-        
-      }
-    });
-  }
+        navLinks.forEach((link) => {
+            link.classList.remove("active");
+            if (link.getAttribute("href") === hash) {
+                link.classList.add("active");
+
+            }
+        });
+    }
     // Smooth scrolling for sidebar links
-  navLinks.forEach((link) => {
-    link.addEventListener("click", function (e) {
-      if (this.hash && this.hash !== "#") {
-        e.preventDefault();
-        history.pushState(null, null, this.hash);
-        checkHash();
-        if (window.innerWidth < 992) hideSidebar();
-      }
+    navLinks.forEach((link) => {
+        link.addEventListener("click", function (e) {
+            if (this.hash && this.hash !== "#") {
+                e.preventDefault();
+                history.pushState(null, null, this.hash);
+                checkHash();
+                if (window.innerWidth < 992) hideSidebar();
+            }
+        });
     });
-  });
 
-   window.addEventListener("hashchange", checkHash);
-  checkHash();
+    window.addEventListener("hashchange", checkHash);
+    checkHash();
     // Logout button
     const logoutBtn = document.getElementById("logout-btn");
     if (logoutBtn) {
@@ -95,6 +98,38 @@ function checkHash() {
             return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m];
         });
     }
+    function timestampToIso(val) {
+    if (!val) return null;
+  // already ISO/string
+  if (typeof val === 'string') return val;
+  // Firestore Timestamp (has toDate)
+  if (typeof val.toDate === 'function') {
+    try { return val.toDate().toISOString(); } catch (e) {}
+  }
+  // Plain object with _seconds/_nanoseconds (common when server serializes)
+  if (typeof val === 'object' && (val._seconds !== undefined || val.seconds !== undefined)) {
+    const seconds = Number(val._seconds ?? val.seconds ?? 0);
+    const nanos = Number(val._nanoseconds ?? val.nanoseconds ?? 0);
+    const ms = seconds * 1000 + Math.floor(nanos / 1e6);
+    try { return new Date(ms).toISOString(); } catch (e) { return String(val); }
+  }
+  // Date instance
+  if (val instanceof Date) return val.toISOString();
+  // Fallback to string conversion
+  try { return String(val); } catch (e) { return null; }
+}
+
+// Helper: convert ISO or timestamp-ish to local friendly string for display
+function formatForDisplay(val) {
+  const iso = timestampToIso(val);
+  if (!iso) return '—';
+  try {
+    // show locale string — easier to read than raw ISO
+    return new Date(iso).toLocaleString();
+  } catch (e) {
+    return iso;
+  }
+}
 
     // Minimal applicant state; will be replaced by server data on loadApplicant()
     const applicantState = {
@@ -107,7 +142,26 @@ function checkHash() {
         assignedReviewer: '—',
         interview: null, // or { date: '...', location: '...' }
         attachments: [],
-        messages: []
+        messages: [],
+        // personal fields placeholders (will be set in loadApplicant)
+        firstName: '',
+        middleName: '',
+        lastName: '',
+        displayName: null,
+        email: null,
+        phone: null,
+        address: null,
+        birthDate: null,
+        preferredLevel: null,
+        degree: null,
+        major: null,
+        institution: null,
+        gradYear: null,
+        experience: null,
+        previousSchools: null,
+        license: null,
+        subjects: null,
+        employment: null
     };
 
     // ---------- AUTH helper ----------
@@ -162,6 +216,8 @@ function checkHash() {
             const payload = await res.json();
             const app = payload && payload.applicant ? payload.applicant : payload;
 
+            const createdIso = timestampToIso(app.createdAt || app.created_at || null) || timestampToIso(app.submittedAt || app.submitted_at || null) || null;
+
             if (!app) {
                 console.warn('/api/applicants/me returned unexpected payload', payload);
                 showToast('Failed to load applicant information.');
@@ -172,11 +228,8 @@ function checkHash() {
             applicantState.id = app.id || app.applicationId || app.docId || applicantState.id || '';
             applicantState.uid = app.uid || app.userUid || '';
             // use createdAt || submittedAt (server may return Firestore timestamp object)
-            if (app.createdAt && typeof app.createdAt === 'object' && app.createdAt.toDate) {
-                applicantState.createdAt = app.createdAt.toDate().toLocaleString();
-            } else {
-                applicantState.createdAt = app.createdAt || app.submittedAt || '';
-            }
+            applicantState.createdAt = createdIso;          
+            applicantState.submittedAt = createdIso;         
             applicantState.submittedAt = applicantState.createdAt;
             applicantState.status = app.status || app.currentStatus || applicantState.status;
             applicantState.nextStepText = app.nextStepText || app.nextStep || '';
@@ -197,6 +250,27 @@ function checkHash() {
 
             // messages normalization
             applicantState.messages = Array.isArray(app.messages) ? app.messages.slice() : [];
+
+            // store other personal fields for status view (if present in app)
+            // === IMPORTANT: copy name parts too (this fixes the fullname not showing) ===
+            applicantState.firstName = app.firstName || app.first_name || (app.name && typeof app.name === 'string' ? app.name.split(' ')[0] : '') || '';
+            applicantState.middleName = app.middleName || app.middle_name || '';
+            applicantState.lastName = app.lastName || app.last_name || (app.name && typeof app.name === 'string' ? app.name.split(' ').slice(1).join(' ') : '') || '';
+            applicantState.displayName = app.displayName || app.fullName || app.name || applicantState.displayName || null;
+            applicantState.email = app.contactEmail || app.email || applicantState.email || null;
+            applicantState.phone = app.contactNumber || app.contactNum || app.phone || app.contact || applicantState.phone || null;
+            applicantState.address = app.address || null;
+            applicantState.birthDate = app.birthdate || app.birthDate || null;
+            applicantState.preferredLevel = app.preferredLevel || app.preferred || null;
+            applicantState.degree = app.highestDegree || app.highest_degree || app.degree || null;
+            applicantState.major = app.major || app.field || null;
+            applicantState.institution = app.institution || null;
+            applicantState.gradYear = app.gradYear || app.yearGraduated || app.grad_year || null;
+            applicantState.experience = app.experienceYears || app.experience || app.teachingExperience || null;
+            applicantState.previousSchools = app.previousSchools || null;
+            applicantState.license = app.licenseNumber || app.license_no || app.license || null;
+            applicantState.subjects = app.qualifiedSubjects || app.subjects || null;
+            applicantState.employment = app.employmentType || app.employment || null;
 
             return applicantState;
         } catch (err) {
@@ -446,8 +520,112 @@ function checkHash() {
             }
         }
     }
+    // ----------------- Application Status population helpers -----------------
 
-    // ---------- Message modal logic (use existing modal & toast template) ----------
+    // Populate the application-status view (reads from normalized applicant state)
+    // Build and write applicant fields into the #application-status card
+    function populateApplicationStatus(state) {
+      if (!state) return;
+
+      function set(id, val) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = (val === null || val === undefined || (typeof val === 'string' && val.trim() === '')) ? '—' : String(val);
+      }
+
+      // Build full name from firstName, middleName (if present), lastName. Fallback to displayName.
+      const first = (state.firstName || '').toString().trim();
+      const middle = (state.middleName || '').toString().trim();
+      const last = (state.lastName || '').toString().trim();
+      const parts = [];
+      if (first) parts.push(first);
+      if (middle) parts.push(middle);
+      if (last) parts.push(last);
+      const fullName = parts.length ? parts.join(' ') : (state.displayName || '');
+
+      // Map fields (robust to a few variant key names)
+      const email = state.email || state.contactEmail || '';
+      const phone = state.phone || state.contactNumber || state.contact || '';
+      const address = state.address || '';
+      const birthdate = state.birthDate || state.birthdate || '';
+      const preferredLevel = state.preferredLevel || state.preferred || '';
+      const degree = state.degree || state.highestDegree || '';
+      const major = state.major || '';
+      const institution = state.institution || '';
+      const gradYear = state.gradYear || state.yearGraduated || '';
+      const experience = state.experience || state.experienceYears || '';
+      const previousSchools = Array.isArray(state.previousSchools) ? state.previousSchools.join(', ') : (state.previousSchools || '');
+      const licenseNo = state.license || state.licenseNumber || '';
+      const subjects = Array.isArray(state.subjects) ? state.subjects.join(', ') : (state.subjects || state.qualifiedSubjects || '');
+      const employment = state.employment || state.employmentType || '';
+
+      // Write to DOM (these IDs must exist in your teacher.html)
+      set('status-fullname', fullName || state.displayName || '—');
+      set('status-email', email || '—');
+      set('status-phone', phone || '—');
+      set('status-address', address || '—');
+      set('status-birthdate', birthdate || '—');
+
+      set('status-preferred-level', preferredLevel || '—');
+      set('status-degree', degree || '—');
+      set('status-major', major || '—');
+      set('status-institution', institution || '—');
+      set('status-gradyear', gradYear || '—');
+      set('status-experience', experience || '—');
+      set('status-previous-schools', previousSchools || '—');
+      set('status-license', licenseNo || '—');
+      set('status-subjects', subjects || '—');
+      set('status-employment', employment || '—');
+
+      // update submitted-at in two possible places (safe if HTML has duplicate id)
+        const submittedVal = state.submittedAt || state.createdAt || null;
+        const submittedDisplay = formatForDisplay(submittedVal);
+        const el1 = document.getElementById('status-submitted-at');
+        if (el1) el1.textContent = 'Submitted: ' + (submittedDisplay || '—');
+        const el2 = document.getElementById('submitted-at-timeline');
+        if (el2) el2.textContent = 'Submitted: ' + (submittedDisplay || '—');
+
+
+      // Interview info mapping
+      if (state.interview && (state.interview.date || state.interview.location)) {
+        const dateEl = document.getElementById('status-interview-date');
+        const detailsEl = document.getElementById('status-interview-details');
+        if (dateEl) dateEl.textContent = state.interview.date || '—';
+        if (detailsEl) detailsEl.textContent = state.interview.location || '—';
+        const infoEl = document.getElementById('status-interview-info');
+        if (infoEl) infoEl.style.display = 'block';
+      } else {
+        const infoEl = document.getElementById('status-interview-info');
+        if (infoEl) infoEl.style.display = 'none';
+      }
+    }
+
+    // expose for convenience/debugging
+    try { window.populateApplicationStatus = populateApplicationStatus; } catch (e) {}
+
+    function updateApplicationStatusTimeline(statusKey, interview) {
+        const order = ['submitted', 'reviewing', 'interview_scheduled', 'demo', 'decision'];
+        const idx = Math.max(0, order.indexOf(statusKey || 'submitted'));
+        const items = document.querySelectorAll('#app-status-timeline .timeline-item');
+        items.forEach((it, i) => {
+            if (i <= idx) it.classList.add('completed');
+            else it.classList.remove('completed');
+        });
+
+        // Interview info
+        const meta = document.getElementById('status-interview-info');
+        if (interview && (interview.date || interview.location)) {
+            const dateEl = document.getElementById('status-interview-date');
+            const detailsEl = document.getElementById('status-interview-details');
+            if (dateEl) dateEl.textContent = interview.date || '—';
+            if (detailsEl) detailsEl.textContent = interview.location || '—';
+            if (meta) meta.style.display = 'block';
+        } else {
+            if (meta) meta.style.display = 'none';
+        }
+    }
+
+    // ----------------- Message modal logic (use existing modal & toast template) -----------------
     const btnMessage = document.getElementById('btn-message-admin');
     const btnCompose = document.getElementById('btn-compose');
     const modalOverlay = document.getElementById('hfaMsgModalOverlay');
@@ -628,13 +806,11 @@ function checkHash() {
             credentials: 'include',
             headers: headers
         });
-
         if (res.status === 401) {
             // not authorized -> logout
             logoutAndRedirect("../login/login.html");
             return;
         }
-
         if (!res.ok) {
             const txt = await res.text().catch(() => '');
             let parsed = null;
@@ -679,6 +855,38 @@ function checkHash() {
         return data.url;
     }
 
+    // ----------------- Application Status Refresh Button Handler -----------------
+    const statusRefreshBtn = document.getElementById('status-refresh-btn');
+    if (statusRefreshBtn) {
+        statusRefreshBtn.addEventListener('click', async function () {
+            statusRefreshBtn.disabled = true;
+            const orig = statusRefreshBtn.textContent;
+            statusRefreshBtn.textContent = 'Refreshing…';
+            try {
+                const loaded = await loadApplicant();
+                if (!loaded) {
+                    // loadApplicant handles redirect/toast
+                    return;
+                }
+                populateApplicationStatus(applicantState);
+                await loadApplicantMessages();
+                // populate the static status panel
+
+                updateApplicationStatusTimeline(applicantState.status, applicantState.interview);
+                // refresh other UI
+                renderOverviewCards();
+                renderAttachments();
+                renderNotes();
+                updateTimeline(applicantState.status); // existing dashboard timeline
+            } catch (err) {
+                console.error('status refresh failed', err);
+                showToast('Refresh failed. Check console.');
+            } finally {
+                statusRefreshBtn.disabled = false;
+                statusRefreshBtn.textContent = orig || 'Refresh';
+            }
+        });
+    }
     // ---------- Initialize UI (render everything) ----------
     async function init() {
         // load applicant from server then render
@@ -687,7 +895,6 @@ function checkHash() {
             // load failed: either redirected or toast shown
             return;
         }
-
         // Load messages explicitly from server so they persist after refresh
         await loadApplicantMessages();
 
@@ -695,7 +902,17 @@ function checkHash() {
         renderOverviewCards();
         renderAttachments();
         renderNotes();
+
+        // update dashboard timeline
         updateTimeline(applicantState.status);
+
+        // populate the static Application Status panel (left fields) and its timeline (right)
+        try {
+            populateApplicationStatus(applicantState);
+            updateApplicationStatusTimeline(applicantState.status, applicantState.interview);
+        } catch (e) {
+            console.warn('populateApplicationStatus failed', e);
+        }
     }
     // Call init (do not block DOMContentLoaded)
     init().catch(function (err) {

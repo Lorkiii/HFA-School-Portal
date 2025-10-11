@@ -1,15 +1,4 @@
 (function(){
-  // small date/time widget
-  function updateDateTime(){
-    const d = new Date();
-    const dateStr = d.toLocaleDateString(undefined, { year:'numeric', month:'long', day:'numeric' });
-    const timeStr = d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
-    document.getElementById('header-current-date').textContent = dateStr;
-    document.getElementById('header-current-time').textContent = timeStr;
-  }
-  updateDateTime();
-  setInterval(updateDateTime, 60*1000);
-
   // fetch fallback stats (no server call here)
   const statsFallback = {
     totalStudents: 0,
@@ -17,10 +6,9 @@
     totalClasses: 0,
     enrollmentTarget: 200
   };
-
   // try to read pre-provided stats stored in window (optional)
   const stats = window.__ADMIN_STATS__ || statsFallback;
-
+ 
   // fill quick stats
   document.getElementById('stat-total-students').textContent = (stats.totalStudents || 0).toLocaleString();
   document.getElementById('stat-students-meta').textContent = `as of ${new Date().toLocaleDateString()}`;

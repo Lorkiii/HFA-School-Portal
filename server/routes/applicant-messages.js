@@ -1,16 +1,10 @@
 // server/routes/applicant-messages.js
 import express from "express";
 
-/**
- * createApplicantMessagesRouter({
- *   dbClient,          // object with methods to interact with your DB (insertMessage, getMessagesForApplicant, getAdminUsers, insertNotification, getApplicantById)
- *   requireAuth,       // middleware that ensures req.user exists { uid, email, name, isAdmin }
- * })
- */
 export default function createApplicantMessagesRouter({
   dbClient,
   requireAuth,
-} = {}) {
+  } = {}) {
   if (!dbClient) throw new Error("dbClient is required");
 
   const router = express.Router();

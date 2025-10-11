@@ -2810,6 +2810,25 @@ button.post.posting::after {
   font-size: 1.05rem;
   opacity: 0.95;
 }
+#schedule-interview-modal{
+  z-index: 1601;
+}
+/* Edit input styles for teacher modal */
+.modal-input {
+  width: 180px;
+  padding:8px 10px;
+  border:1px solid #e6eef3;
+  border-radius:6px;
+  margin-top:4px;
+  font-size:0.95rem;
+  color:#0f172a;
+  box-sizing:border-box;
+  border-radius: 8px;
+}
+
+.field-error { color:#b91c1c; font-size:0.92rem; }
+
+
 /* Responsive adjustments */
 @media (max-width: 1024px) {
   #applicant-tracker .teacher-applicants-grid {

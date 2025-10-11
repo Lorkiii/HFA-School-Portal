@@ -8,6 +8,8 @@
         <link rel="stylesheet" href="admin.css">
         <link rel="stylesheet" href="admincontent.css">
         <link rel="stylesheet" href="messagemodal.css">
+        <link rel="stylesheet" href="progressmodal.css">
+        <link rel="stylesheet" href="calendar.css">
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
         <script src='https://cdn.jsdelivr.net/npm/fullcalendar/index.global.min.js'></script>
 
@@ -151,7 +153,6 @@
                         <div class="analytics-card enrollment-card">
                             <div class="card-header">
                                 <h3 class="card-title"><i class="fas fa-user-clock"></i> Enrollment Status</h3>
-                                <a href="#" class="see-more">View All</a>
                             </div>
 
                             <div class="enrollment-progress" id="enrollment-progress">
@@ -204,10 +205,6 @@
                                         </div>
                                     </li>
                                 </ul>
-
-                                <div class="recent-sub-footer" style="margin-top:10px; text-align:right;">
-                                    <a href="#" id="manage-submissions" class="view-all-btn">Manage Submissions</a>
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -249,24 +246,7 @@
 
                     <!-- Quick Task Center -->
                     <div class="operations-grid">
-                        <div class="operations-card quick-tasks">
-                            <h3><i class="fas fa-rocket"></i> Quick Task Center</h3>
-                            <div class="task-categories">
-                                <div class="task-column">
-                                    <h4>Admission</h4>
-                                    <button class="task-btn">Verify Application</button>
-                                    <button class="task-btn outline">Verify Enrollment</button>
-                                </div>
-
-                                <div class="task-column">
-                                    <h4>User Management</h4>
-                                    <button class="task-btn">Edit Account</button>
-                                    <button class="task-btn outline">Reset Passwords</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Announcements + Mini Calendar area combined -->
+                      
                         <div class="announcement-recent-grid">
                             <!-- Announcements -->
                             <div class="operations-card announcements-card">
@@ -431,7 +411,7 @@
 
                     <div class="view-options">
                         <button class="view-option active" data-view="table">Table View</button>
-                        
+
                     </div>
                 </div>
 
@@ -543,6 +523,9 @@
                                         <div class="hfa-stu-info-item"><strong>Contact</strong>
                                             <div id="hfa-stu-contact" class="hfa-stu-info-value">-</div>
                                         </div>
+                                        <div class="hfa-stu-info-item"><strong>Email</strong>
+                                            <div id="hfa-stu-email" class="hfa-stu-info-value">-</div>
+                                        </div>
                                         <div class="hfa-stu-info-item hfa-stu-full"><strong>Address</strong>
                                             <div id="hfa-stu-address" class="hfa-stu-info-value">-</div>
                                         </div>
@@ -585,22 +568,22 @@
                 </div>
             </div>
             <!-- ====== End HFA Student Modal ====== -->
-             <!-- Enrollment confirmation -->
+            <!-- Enrollment confirmation -->
             <div class="enroll-modal" id="enroll-modal" style="display: none;">
                 <div class="enroll-content" id="enroll-content">
                     <span class="enroll-close-btn" id="enroll-close-btn" aria-label="Close"></button>
                         <i class="fas fa-times"></i>
                     </span>
-                        <h3>Enroll Confirmation</h3>
-                    
-                        <p class="enroll-message-confirmation">Are you sure you want to enroll this student?</p>
-                <div class="enroll-footer">
+                    <h3>Enroll Confirmation</h3>
+
+                    <p class="enroll-message-confirmation">Are you sure you want to enroll this student?</p>
+                    <div class="enroll-footer">
                         <button id="enroll-send-message" aria-label="enroll-send-message">Send Message</button>
                         <button id="confirm-enroll-btn" class="confirm-enroll-btn">Confirm</button>
                     </div>
                 </div>
             </div>
-            
+
             <!-- ===== Message Modal ===== -->
             <div id="hfaMsgModalOverlay" class="hfa-msg-overlay" style="display: none;" aria-hidden="true">
                 <div id="hfaMsgModal" class="hfa-msg-modal" role="dialog" aria-modal="true"
@@ -744,16 +727,6 @@
                                 <option value="Junior High School">Junior High School</option>
                                 <option value="Senior High School">Senior High School</option>
                             </select>
-                            <select aria-label="Teacher Subject Filter" id="teacher-subject-filter"
-                                class="filter-select">
-                                <option value="">All Subjects</option>
-                                <option value="Mathematics">Mathematics</option>
-                                <option value="Science">Science</option>
-                                <option value="English">English</option>
-                                <option value="Filipino">Filipino</option>
-                                <option value="Social Studies">Social Studies</option>
-                                <option value="Other">Other</option>
-                            </select>
                         </div>
                     </div>
                     <div class="view-toggle">
@@ -773,7 +746,6 @@
                 <div class="teacher-applicants-grid" id="teacher-grid-view">
                     <!-- Cards will be dynamically inserted here -->
                 </div>
-
                 <!-- Table View -->
                 <div class="teacher-applicants-table" id="teacher-table-view" style="display: none;">
                     <table>
@@ -849,12 +821,14 @@
 
 
                     <div class="teacher-card-footer">
-                        <button class="btn btn-view-teacher" type="button"><i class="fas fa-eye"></i> View</button>
-                        <button class="btn btn-message-teacher" type="button"><i class="fas fa-envelope"></i>
+                        <button class="btn btn-view-teacher" type="button" title="View"><i class="fas fa-eye"></i>
+                            View</button>
+                        <button class="btn btn-message-teacher" type="button" title="Message"><i
+                                class="fas fa-envelope"></i>
                             Message</button>
-                        <button class="btn btn-schedule-teacher" type="button"><i class="fas fa-calendar"></i>
-                            Schedule</button>
-
+                        <button class="btn btn-progress-teacher" type="button" title="Progress">
+                            <i class="fas fa-tasks" aria-hidden="true"></i> Progress
+                        </button>
                     </div>
                 </div>
             </template>
@@ -879,23 +853,33 @@
                                 <h4><i class="fas fa-user"></i> Personal Information</h4>
                                 <div class="info-grid">
                                     <div class="info-item">
-                                        <label>Full Name:</label>
+                                        <label>Full Name:<input id="input-modal-firstName" type="text"
+                                                class="modal-input" style="display:none" placeholder="First name"><input
+                                                id="input-modal-middleName" type="text" class="modal-input"
+                                                style="display:none" placeholder="Middle name"><input
+                                                id="input-modal-lastName" type="text" class="modal-input"
+                                                style="display:none" placeholder="Last name"></label>
                                         <span id="modal-teacher-fullname"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>Email:</label>
+                                        <label>Email:<input id="input-modal-email" type="email" class="modal-input"
+                                                style="display:none" placeholder="Email"></label>
                                         <span id="modal-teacher-email"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>Contact:</label>
+                                        <label>Contact:<input id="input-modal-contactNumber" type="text"
+                                                class="modal-input" style="display:none"
+                                                placeholder="Contact number"></label>
                                         <span id="modal-teacher-contact"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>Address:</label>
+                                        <label>Address: <input id="input-modal-address" type="text" class="modal-input"
+                                                style="display:none" placeholder="Address"></label>
                                         <span id="modal-teacher-address"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>Birth Date:</label>
+                                        <label>Birth Date:<input id="input-modal-birthdate" type="date"
+                                                class="modal-input" style="display:none"></label>
                                         <span id="modal-teacher-birthdate"></span>
                                     </div>
                                 </div>
@@ -905,19 +889,26 @@
                                 <h4><i class="fas fa-graduation-cap"></i> Educational Background</h4>
                                 <div class="info-grid">
                                     <div class="info-item">
-                                        <label>Highest Degree:</label>
+                                        <label>Highest Degree: <input id="input-modal-highestDegree" type="text"
+                                                class="modal-input" style="display:none"
+                                                placeholder="Highest degree"></label>
                                         <span id="modal-teacher-degree"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>Major:</label>
+                                        <label>Major:<input id="input-modal-major" type="text" class="modal-input"
+                                                style="display:none" placeholder="Major"></label>
                                         <span id="modal-teacher-major"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>Institution:</label>
+                                        <label>Institution:<input id="input-modal-institution" type="text"
+                                                class="modal-input" style="display:none"
+                                                placeholder="Institution"></label>
                                         <span id="modal-teacher-institution"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>Year Graduated:</label>
+                                        <label>Year Graduated:<input id="input-modal-gradYear" type="text"
+                                                class="modal-input" style="display:none"
+                                                placeholder="Graduation year"></label>
                                         <span id="modal-teacher-gradyear"></span>
                                     </div>
                                 </div>
@@ -927,33 +918,44 @@
                                 <h4><i class="fas fa-briefcase"></i> Professional Information</h4>
                                 <div class="info-grid">
                                     <div class="info-item">
-                                        <label>Teaching Experience:</label>
+                                        <label>Teaching Experience: <input id="input-modal-experienceYears"
+                                                type="number" class="modal-input" style="display:none"
+                                                placeholder="Years of experience"></label>
                                         <span id="modal-teacher-experience"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>Previous Schools:</label>
+                                        <label>Previous Schools:<input id="input-modal-previousSchools" type="text"
+                                                class="modal-input" style="display:none"
+                                                placeholder="Previous schools (comma separated)"></label>
                                         <span id="modal-teacher-schools"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>License Number:</label>
+                                        <label>License Number:<input id="input-modal-licenseNumber" type="text"
+                                                class="modal-input" style="display:none"
+                                                placeholder="License number"></label>
                                         <span id="modal-teacher-license"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>Preferred Level:</label>
+                                        <label>Preferred Level:<input id="input-modal-preferredLevel" type="text"
+                                                class="modal-input" style="display:none"
+                                                placeholder="Preferred level"></label>
                                         <span id="modal-teacher-level"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>Subjects:</label>
+                                        <label>Subjects: <input id="input-modal-qualifiedSubjects" type="text"
+                                                class="modal-input" style="display:none"
+                                                placeholder="Subjects (comma separated)"></label>
                                         <span id="modal-teacher-subjects"></span>
                                     </div>
                                     <div class="info-item">
-                                        <label>Employment Type:</label>
+                                        <label>Employment Type: <input id="input-modal-employmentType" type="text"
+                                                class="modal-input" style="display:none"
+                                                placeholder="Employment type"></label>
                                         <span id="modal-teacher-employment"></span>
                                     </div>
                                 </div>
                             </div>
                         </div>
-
                         <!-- Right Column - Documents & Actions -->
                         <div class="modal-right-column">
                             <div class="info-section">
@@ -962,7 +964,6 @@
                                     <!-- Documents will be listed here -->
                                 </div>
                             </div>
-
                             <div class="info-section">
                                 <h4><i class="fas fa-tasks"></i> Application Progress</h4>
                                 <div class="progress-tracker">
@@ -1019,13 +1020,21 @@
                                 </div>
                             </div>
                         </div>
+                        <!-- Personal info inputs -->
+
+
+                        <!-- Edit action area (buttons shown only in edit mode) -->
+                        <div id="teacher-edit-controls" style="display:none; margin-top:12px;">
+                            <div id="teacher-edit-error" class="field-error"
+                                style="display:none; color:#b91c1c; margin-bottom:8px;"></div>
+                            <button id="teacher-edit-save" class="btn btn-primary">Save</button>
+                            <button id="teacher-edit-discard" class="btn btn-secondary">Discard changes</button>
+                        </div>
                     </div>
 
                     <div class="modal-footer">
                         <div class="action-buttons">
-                            <button class="btn btn-primary" id="approve-teacher-btn">
-                                <i class="fas fa-check"></i> Approve
-                            </button>
+
                             <button class="btn btn-warning" id="message-teacher-btn">
                                 <i class="fas fa-envelope"></i> Send Message
                             </button>
@@ -1034,6 +1043,9 @@
                             </button>
                             <button class="btn btn-secondary" id="archive-teacher-btn">
                                 <i class="fas fa-archive"></i> Archive
+                            </button>
+                            <button class="btn btn-primary" id="approve-teacher-btn">
+                                <i class="fas fa-check"></i> Approve
                             </button>
                             <button class="btn btn-danger" id="reject-teacher-btn">
                                 <i class="fas fa-times"></i> Reject
@@ -1046,7 +1058,6 @@
             <!-- Schedule Interview Modal -->
             <div id="schedule-interview-modal" class="modal">
                 <div class="modal-content modal-small">
-                    <span class="close" id="close-schedule-modal">&times;</span>
                     <h3>Schedule Interview</h3>
                     <form id="schedule-interview-form">
                         <div class="form-group">
@@ -1080,6 +1091,89 @@
                     </form>
                 </div>
             </div>
+            <!-- HFA Progress Modal (updated — includes static action controls for interview & decision) -->
+            <div class="hfa-progress-modal" id="hfa-progress-modal" role="dialog" aria-labelledby="hfa-progress-title"
+                style="display:none;">
+                <div class="hfa-progress-content" id="hfa-progress-content">
+                    <!-- close -->
+                    <button id="hfa-progress-close" class="hfa-progress-close"
+                        aria-label="Close progress dialog">×</button>
+
+                    <!-- header -->
+                    <div id="hfa-progress-header">
+                        <h3 id="hfa-progress-title" class="hfa-progress-title">Applicant Progress</h3>
+                        <small id="hfa-progress-applicant-id" class="progress-muted">APP-xxxxxx</small>
+                    </div>
+
+                    <!-- applicant summary row -->
+                    <div id="hfa-progress-applicant-info" class="hfa-progress-applicant-info">
+                        <div class="info-left">
+                            <div id="hfa-progress-name" class="hfa-progress-name">Applicant Name</div>
+                            <div id="hfa-progress-status" class="hfa-progress-status">Status: <span>New</span></div>
+                        </div>
+                        <div class="info-right">
+                            <button id="hfa-progress-open-interview-btn" class="btn small">Open Interview</button>
+                        </div>
+                    </div>
+
+                    <!-- steps list (rendered by JS as before) -->
+                    <div id="hfa-progress-steps" class="hfa-progress-steps" aria-live="polite">
+                        <!-- JS will render the step items here -->
+                    </div>
+
+                    <!-- Interview panel -->
+                    <div id="hfa-progress-interview-panel" class="hfa-progress-interview-panel">
+                        <h4>Interview</h4>
+                        <div id="hfa-progress-interview-info" class="hfa-progress-interview-info">
+                            <!-- default no-interview view -->
+                            <div class="hfa-no-interview" id="hfa-progress-no-interview">
+                                <p>No interview scheduled</p>
+                            </div>
+
+                            <!-- scheduled view -->
+                            <div class="hfa-progress-interview-scheduled" id="hfa-progress-interview-scheduled"
+                                style="display:none;">
+                                <div class="hfa-interview-details">
+                                    <div><strong>Date:</strong> <span id="hfa-progress-interview-date">—</span></div>
+                                    <div><strong>Time:</strong> <span id="hfa-progress-interview-time">—</span></div>
+                                    <div><strong>Location:</strong> <span id="hfa-progress-interview-location">—</span>
+                                    </div>
+                                    <div><strong>Notes:</strong> <span id="hfa-progress-interview-notes">—</span></div>
+                                </div>
+
+                                <!-- static action buttons (Reschedule / Cancel) — JS will just show/hide and wire handlers -->
+                                <div class="hfa-interview-actions" id="hfa-progress-interview-actions">
+                                    <button id="hfa-progress-reschedule-btn" class="btn btn-secondary" type="button">
+                                        <i class="fas fa-edit" aria-hidden="true"></i> Reschedule
+                                    </button>
+                                    <button id="hfa-progress-cancel-interview-btn" class="btn btn-danger" type="button">
+                                        <i class="fas fa-times" aria-hidden="true"></i> Cancel Interview
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Decision area (static) — JS will show this when appropriate -->
+                    <div id="hfa-progress-decision" class="hfa-progress-decision" style="display:none;">
+                        <h4>Final Decision</h4>
+                        <div class="decision-actions" id="hfa-progress-decision-actions">
+                            <button id="hfa-progress-approve-btn" class="btn btn-primary" type="button">
+                                <i class="fas fa-check" aria-hidden="true"></i> Approve
+                            </button>
+                            <button id="hfa-progress-reject-btn" class="btn btn-danger" type="button">
+                                <i class="fas fa-times" aria-hidden="true"></i> Reject
+                            </button>
+                        </div>
+                    </div>
+                    <!-- actions -->
+                    <div class="hfa-progress-actions">
+                        <button id="hfa-progress-save-btn" class="btn btn-primary">Save</button>
+                        <button id="hfa-progress-cancel-btn" class="btn btn-secondary">Cancel</button>
+                    </div>
+                </div>
+            </div>
+            <!-- End HFA Progress Modal -->
             <!-- Toast container  -->
             <div id="toast-container" aria-live="polite" class="toast-stack"></div>
 
@@ -1371,70 +1465,18 @@
                         </div>
                     </div>
 
-                    <div class="tab-content" id="news">
-                        <div class="news-editor">
-                            <div class="editor-toolbar">
-                                <button class="format-btn" title="Bold"><i class="fas fa-bold"></i></button>
-                                <button class="format-btn" title="Italic"><i class="fas fa-italic"></i></button>
-                                <!-- More formatting buttons -->
-                                <button class="insert-image" title="Insert Image"><i class="fas fa-image"></i></button>
-                            </div>
 
-                            <div class="news-form">
-                                <div class="form-group">
-                                    <label for="news-title">News Title</label>
-                                    <input type="text" id="news-title" placeholder="Enter news title">
-                                </div>
 
-                                <div class="form-group">
-                                    <label for="news-category">Category</label>
-                                    <select id="news-category">
-                                        <option>Academic</option>
-                                        <option>Events</option>
-                                        <option>Achievements</option>
-                                        <option>General</option>
-                                    </select>
-                                </div>
-
-                                <div class="form-group">
-                                    <label for="news-content">Content</label>
-                                    <textarea id="news-content" rows="10"></textarea>
-                                </div>
-
-                                <div class="form-actions">
-                                    <button class="btn-save-draft">Save Draft</button>
-                                    <button class="btn-preview">Preview</button>
-                                    <button class="btn-publish">Publish</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="tab-content" id="templates">
-                        <div class="templates-grid">
-                            <div class="template-card">
-                                <div class="template-preview">
-                                    <h4>Exam Schedule</h4>
-                                    <p>Standard template for examination schedules</p>
-                                </div>
-                                <button class="btn-use-template">Use Template</button>
-                            </div>
-
-                            <div class="template-card">
-                                <div class="template-preview">
-                                    <h4>Event Announcement</h4>
-                                    <p>Template for school events and activities</p>
-                                </div>
-                                <button class="btn-use-template">Use Template</button>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </section>
 
-            <section id="School Calendar">
+            <section id="school-calendar">
                 <h2>School Calendar</h2>
-                <p>View and manage the school calendar.</p>
+                <div class="Mycalendar">
+                    <div class="calendarcontent">
+                        <div id="calendar"></div>
+                    </div>
+                </div>
 
             </section>
 
@@ -1442,7 +1484,7 @@
                 <h2>Profile Settings</h2>
                 <p>Manage your profile settings.</p>
                 <!-- Profile settings content would go here -->
-
+            </section>
         </main>
 
         <script type="module" src="admin.js"></script>
@@ -1452,7 +1494,7 @@
         <script src="admin-notes.js"></script>
         <script src="admin-announcement.js"></script>
         <script src="admin-interview.js"></script>
-        <script src="admin-schoolcalendar.js"></script>
+        <script type="module" src="admin-schoolcalendar.js"></script>
 
 
 </html>
