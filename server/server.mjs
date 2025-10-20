@@ -12,7 +12,7 @@ import { fileURLToPath } from "url";
 import jwt from "jsonwebtoken";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import { supabaseServer } from "../server-supabase-config.js";
+import cron from "node-cron";
 
 import createDbClient from "./dbClient.js";
 import createAttachApplicantId from "./attachApplicantId.js";
@@ -20,12 +20,23 @@ import createAttachApplicantId from "./attachApplicantId.js";
 //importing the routes
 import createEnrolleesRouter from "./routes/enrollees.js";
 import createAdminMessagesRouter from "./routes/admin-messages.js";
-import createFilesRouter from "./routes/files.js";
 import createApplicantMessagesRouter from './routes/applicant-messages.js';
 import createApplicantsRouter from "./routes/applicants.js";
 import interviewsRouter from "./routes/interview.js";
 import createAdminActionsRouter from "./routes/admin-actions.js";
+import createAdminUsersRouter from "./routes/admin-users.js";
+import createActivityLogsRouter from "./routes/activity-logs.js";
+import createDashboardStatsRouter from "./routes/dashboard-stats.js";
+import { validateAndFormatPhone } from "./utils/phoneValidator.js";
+import createNotesRouter from "./routes/notes.js";
+import createTeacherProfileRouter from "./routes/teacher-profile.js";
+import createAdminProfileRouter from "./routes/admin-profile.js";
+import createEnrollmentRouter from "./routes/enrollment.js";
+import createTeacherMessagesRouter from "./routes/teacher-messages.js";
+import createTeacherNotificationsRouter from "./routes/teacher-notifications.js";
+import createTeacherDecisionRouter from "./routes/teacher-decision.js";
 
+import { deleteExpiredAccounts } from "./utils/teacherDecision.js";
 
 // --- FILE PATH HELPERS ---
 const __filename = fileURLToPath(import.meta.url);
@@ -42,6 +53,7 @@ function revokeToken(token) {
   try {
     const decoded = jwt.decode(token);
     if (!decoded || !decoded.exp) {
+      
       const fallbackExpiry = Date.now() + 60 * 60 * 1000;
       revokedTokens.set(token, fallbackExpiry);
       setTimeout(() => revokedTokens.delete(token), 60 * 60 * 1000);
@@ -83,10 +95,9 @@ app.use(cookieParser());
 // --- INITIALIZE FIREBASE ADMIN ---
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
+  storageBucket: "hfa-database.firebasestorage.app" // Firebase Storage bucket
 });
 const db = admin.firestore();
-// --- SUPABASE SERVER CLIENT (service role) ---
-const supabase = supabaseServer; // from server-supabase-config.js
 // --- SMTP / EMAIL SETUP ---
 // jwt .env secret
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -123,7 +134,7 @@ function cookieOptionsForEnv() {
   const opts = {
     httpOnly: true,
     sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000 // 1 day
+    maxAge: 60 * 60 * 1000 // 1 hour
   };
   opts.secure = (process.env.NODE_ENV === 'production'); // use secure cookie in production
   return opts;
@@ -131,14 +142,7 @@ function cookieOptionsForEnv() {
 
 // ----------------- AUTH ENDPOINTS -----------------
 
-/**
- * POST /auth/login
- * Body: { idToken }
- * - verifies Firebase idToken using admin.auth().verifyIdToken
- * - checks users/{uid}.role and profile.forcePasswordChange
- * - if admin: generate OTP, email it, store in otpStore keyed by uid
- * - if applicant (or other roles): sign JWT immediately and return forcePasswordChange flag
- */
+
 app.post("/auth/login", async (req, res) => {
   try {
     const { idToken } = req.body;
@@ -161,8 +165,8 @@ app.post("/auth/login", async (req, res) => {
     const role = profile?.role || "applicant";
     const forcePasswordChange = profile?.forcePasswordChange ? true : false;
 
-    // OTP only for admins
-    if (role === "admin") {
+    // OTP for both admin and teacher applicants
+    if (role === "admin" || role === "applicant") {
       // require email to send OTP
       const userEmail = (profile && profile.email) || email;
       if (!userEmail) {
@@ -181,12 +185,21 @@ app.post("/auth/login", async (req, res) => {
         firstResendAt: Date.now()
       });
 
-      // send it via your mailTransporter
+      // send it via your mailTransporter - different email based on role
+      let emailSubject, emailBody;
+      if (role === "admin") {
+        emailSubject = "Your login code";
+        emailBody = `<p>Your admin login code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`;
+      } else if (role === "applicant") {
+        emailSubject = "Your login code";
+        emailBody = `<p>Your teacher applicant login code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`;
+      }
+
       const mailOptions = {
         from: `"Holy Family Academy" <${SMTP_USER}>`,
         to: userEmail,
-        subject: "Your login code",
-        html: `<p>Your admin login code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`
+        subject: emailSubject,
+        html: emailBody
       };
       try {
         await mailTransporter.sendMail(mailOptions);
@@ -198,9 +211,9 @@ app.post("/auth/login", async (req, res) => {
       return res.json({ ok: true, needsOtp: true, message: "OTP sent to email" });
     }
 
-    // Applicant and other roles: sign JWT immediately
+    // Other roles (if any): sign JWT immediately
     const tokenPayload = { uid, role, email };
-    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "1d" });
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "1h" });
 
     // set cookie for session
     res.cookie('__session', token, cookieOptionsForEnv());
@@ -266,7 +279,7 @@ app.post("/auth/verify-otp", async (req, res) => {
     const forcePasswordChange = profileSnap && profileSnap.exists ? !!profileSnap.data().forcePasswordChange : false;
 
     const tokenPayload = { uid, role, email: userEmail };
-    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "1d" });
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: "1h" });
 
     // set cookie for session
     res.cookie('__session', token, cookieOptionsForEnv());
@@ -451,20 +464,20 @@ async function requireAdmin(req, res, next) {
     if (!token) return res.status(401).json({ error: 'No token provided', message: 'Missing authentication token. Please sign in.' });
 
     let uid = null;
-    // Try Firebase ID token verification first
+    // Try JWT cookie first (primary auth method)
     try {
-      const decoded = await admin.auth().verifyIdToken(token);
+      if (revokedTokens.has(token)) {
+        return res.status(401).json({ error: "Token revoked", message: "Your session has been revoked. Please sign in again." });
+      }
+      const decoded = jwt.verify(token, JWT_SECRET);
       uid = decoded.uid;
-    } catch (firebaseErr) {
-      // If not a Firebase ID token, try verifying our server-signed JWT
+    } catch (jwtErr) {
+      // If JWT fails, try Firebase ID token (for login endpoints only)
       try {
-        if (revokedTokens.has(token)) {
-          return res.status(401).json({ error: "Token revoked", message: "Your session has been revoked. Please sign in again." });
-        }
-        const decoded2 = jwt.verify(token, JWT_SECRET);
+        const decoded2 = await admin.auth().verifyIdToken(token);
         uid = decoded2.uid;
-      } catch (jwtErr) {
-        console.error('requireAdmin token verification failed', firebaseErr && firebaseErr.message, jwtErr && jwtErr.message);
+      } catch (firebaseErr) {
+        console.error('requireAdmin token verification failed', jwtErr && jwtErr.message, firebaseErr && firebaseErr.message);
         return res.status(401).json({ error: 'Unauthorized', message: 'Invalid or expired token. Please sign in.' });
       }
     }
@@ -504,24 +517,24 @@ async function requireAuth(req, res, next) {
     let email = null;
     let role = null;
 
-    // Try Firebase ID token first
+    // Try JWT cookie first (primary auth method)
     try {
-      const decoded = await admin.auth().verifyIdToken(token);
+      // reject revoked tokens early
+      if (revokedTokens.has(token)) {
+        return res.status(401).json({ error: "Token revoked" });
+      }
+      const decoded = jwt.verify(token, JWT_SECRET);
       uid = decoded.uid;
       email = decoded.email || null;
-    } catch (firebaseErr) {
-      // Not a Firebase token: try server JWT
+      role = decoded.role || null;
+    } catch (jwtErr) {
+      // If JWT fails, try Firebase ID token (for login endpoints only)
       try {
-        // reject revoked tokens early
-        if (revokedTokens.has(token)) {
-          return res.status(401).json({ error: "Token revoked" });
-        }
-        const decoded2 = jwt.verify(token, JWT_SECRET);
+        const decoded2 = await admin.auth().verifyIdToken(token);
         uid = decoded2.uid;
         email = decoded2.email || null;
-        role = decoded2.role || null;
-      } catch (jwtErr) {
-        console.error('requireAuth token verification failed', firebaseErr && firebaseErr.message, jwtErr && jwtErr.message);
+      } catch (firebaseErr) {
+        console.error('requireAuth token verification failed', jwtErr && jwtErr.message, firebaseErr && firebaseErr.message);
         return res.status(401).json({ error: 'Unauthorized' });
       }
     }
@@ -546,12 +559,33 @@ async function requireAuth(req, res, next) {
   }
 }
 
-/* helper to write activity logs */
+
 async function writeActivityLog({ actorUid, actorEmail, targetUid = null, action, detail = '' }) {
   try {
+    // display names in the actvity logs
+    let actorName = 'System'; // Default for system actions
+    
+    if (actorUid) {
+      try {
+        const userDoc = await db.collection('users').doc(actorUid).get();
+        if (userDoc.exists) {
+          const userData = userDoc.data();
+          // Use display name, fallback to email, fallback to 'Unknown User'
+          actorName = userData.displayName || userData.email || 'Unknown User';
+        } else {
+          actorName = actorEmail || 'Unknown User';
+        }
+      } catch (fetchErr) {
+        console.warn('Failed to fetch actor display name:', fetchErr.message);
+        actorName = actorEmail || 'Unknown User';
+      }
+    }
+    
+    // Store the log with the display name included
     await db.collection('activity_logs').add({
       actorUid,
       actorEmail,
+      actorName,      // Store display name here for easy retrieval later
       targetUid,
       action,
       detail,
@@ -688,7 +722,6 @@ const requirementMap = {
   form137: "FORM 137",
   completionCertificate: "Certificate of Completion",
   clearance: "Clearance Certificate",
-  medicalForm: "Medical Form",
 };
 
 const defaultSlots = Object.keys(requirementMap);
@@ -701,44 +734,6 @@ function defaultRequirementsObject() {
 }
 
 // routes
-app.get("/teachers", async (req, res) => {
-  try {
-    const snapshot = await db.collection("teachers").get();
-    const teachers = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
-    res.json(teachers);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Approve applicant and move to teachers
-app.post("/approve-applicant/:id", async (req, res) => {
-  try {
-    const applicantRef = db.collection("applicants").doc(req.params.id);
-    const snap = await applicantRef.get();
-
-    if (!snap.exists) {
-      return res.status(404).json({ error: "Applicant not found" });
-    }
-    const applicantData = snap.data();
-
-    await db.collection("teachers").add({
-      name: applicantData.name,
-      position: applicantData.position,
-      department: applicantData.department,
-      status: "Active",
-      createdAt: new Date(),
-    });
-
-    await applicantRef.delete();
-    res.json({ message: "Applicant approved and moved to teachers" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // FORM SUBMISSION ENDPOINT
 app.post("/api/submit-application", async (req, res) => {
@@ -776,73 +771,6 @@ app.post("/api/submit-application", async (req, res) => {
 });
 
 /* NEW endpoints for applicant create + email confirmation  */
-
-
-app.post('/applicants/:id/attach-files', async (req, res) => {
-  try {
-    const applicationId = req.params.id;
-    const files = Array.isArray(req.body.files) ? req.body.files : [];
-    // Optional: client may provide the email that was confirmed
-    const providedEmail = (req.body.email || "").toString().trim().toLowerCase() || null;
-
-    console.log('/attach-files called', { applicationId, filesLength: files.length, providedEmail });
-
-    if (!applicationId) {
-      return res.status(400).json({ ok: false, error: 'Missing application id' });
-    }
-    if (!Array.isArray(files) || files.length === 0) {
-      return res.status(400).json({ ok: false, error: 'No files provided' });
-    }
-
-    const appRef = db.collection('teacherApplicants').doc(applicationId);
-    const appSnap = await appRef.get();
-    if (!appSnap.exists) {
-      console.warn('/attach-files application not found', applicationId);
-      return res.status(404).json({ ok: false, error: 'Application not found' });
-    }
-    const appData = appSnap.data() || {};
-
-    // Minimal security check: only allow attachments when application has been "submitted"
-    if ((appData.status || '').toLowerCase() !== 'submitted') {
-      return res.status(403).json({
-        ok: false,
-        error: 'Application not ready for attachments',
-        message: 'Application must be submitted (email confirmed) before attaching files.'
-      });
-    }
-
-    // If client provided email, ensure it matches the application record to avoid attaching to wrong applicant
-    if (providedEmail) {
-      const appEmail = (appData.contactEmail || appData.email || "").toString().trim().toLowerCase();
-      if (appEmail && appEmail !== providedEmail) {
-        console.warn('/attach-files email mismatch', { applicationId, appEmail, provided: providedEmail });
-        return res.status(403).json({ ok: false, error: 'Email mismatch' });
-      }
-    }
-
-    // Build sanitized file objects. IMPORTANT: use admin.firestore.Timestamp.now() for timestamps,
-    // not FieldValue.serverTimestamp() (the latter cannot be placed inside array elements).
-    const nowTs = admin.firestore.Timestamp.now();
-    const safeFiles = files.map(f => ({
-      fileName: String(f.fileName || f.name || '').slice(0, 255),
-      fileUrl: String(f.fileUrl || f.publicUrl || f.url || ''),
-      filePath: String(f.filePath || f.path || ''),
-      uploadedAt: nowTs
-    }));
-
-    // Persist to application doc (merge)
-    await appRef.set({
-      documents: safeFiles,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    console.log(`/attach-files success for ${applicationId} attached ${safeFiles.length} files`);
-    return res.json({ ok: true, message: 'Files attached', num: safeFiles.length });
-  } catch (err) {
-    console.error('/applicants/:id/attach-files error', err && (err.stack || err));
-    return res.status(500).json({ ok: false, error: 'Server error', message: err && err.message });
-  }
-});
 
 
 /* Generate 6-digit code, with resend cooldown */
@@ -1104,11 +1032,26 @@ app.post('/applicants/create', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Missing required fields: firstName, lastName, email.' });
     }
 
+    // Validate and format phone number
+    let formattedPhone;
+    try {
+      if (formData.contactNumber) {
+        formattedPhone = validateAndFormatPhone(formData.contactNumber);
+      }
+    } catch (phoneError) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid phone number', 
+        details: phoneError.message 
+      });
+    }
+
     // Prepare document to persist
     const now = admin.firestore.FieldValue.serverTimestamp();
     const toSave = {
       ...formData,
       contactEmail: email,
+      contactNumber: formattedPhone || formData.contactNumber, // Use formatted phone if validated
       status: 'pending',  // pending until email is confirmed
       requirements: defaultRequirementsObject(),
       isNew: true,
@@ -1140,395 +1083,7 @@ app.post('/applicants/create', async (req, res) => {
     return res.status(500).json({ success: false, error: 'Server error' });
   }
 });
-/* GET /admin/users - returns merged list from Auth and Firestore */
-app.get('/admin/users', requireAdmin, async (req, res) => {
-  try {
-    const { role: roleFilter, q, limit = 100 } = req.query;
-    const users = [];
-    let nextPageToken;
-    do {
-      const list = await admin.auth().listUsers(1000, nextPageToken);
-      for (const u of list.users) {
-        users.push(u);
-      }
-      nextPageToken = list.pageToken;
-    } while (nextPageToken);
 
-    const uids = users.map(u => u.uid);
-    const profilePromises = uids.map(uid => db.collection('users').doc(uid).get());
-    const profileSnaps = await Promise.all(profilePromises);
-    const profileMap = {};
-    profileSnaps.forEach((snap) => {
-      if (snap && snap.exists) profileMap[snap.id] = snap.data();
-    });
-
-    let out = users.map((u) => {
-      const profile = profileMap[u.uid] || {};
-      let createdAt = null;
-      if (profile.createdAt) {
-        try {
-          if (profile.createdAt.toDate) createdAt = profile.createdAt.toDate().toISOString();
-          else createdAt = new Date(profile.createdAt).toISOString();
-        } catch (e) {
-          createdAt = String(profile.createdAt);
-        }
-      } else if (u.metadata && u.metadata.creationTime) {
-        try {
-          createdAt = new Date(u.metadata.creationTime).toISOString();
-        } catch (e) {
-          createdAt = u.metadata.creationTime;
-        }
-      } else {
-        createdAt = null;
-      }
-
-      const role = profile.role || 'applicant';
-      const status = profile.status || (u.disabled ? 'inactive' : 'active');
-      const archived = !!profile.archived;
-
-      return {
-        uid: u.uid,
-        customId: profile.customId || null,
-        displayName: u.displayName || profile.displayName || null,
-        email: u.email || profile.email || null,
-        role,
-        status,
-        archived,
-        createdAt,
-      };
-    });
-
-    if (q && q.trim()) {
-      const ql = q.trim().toLowerCase();
-      out = out.filter((it) => {
-        return (it.displayName && it.displayName.toLowerCase().includes(ql)) ||
-               (it.email && it.email.toLowerCase().includes(ql)) ||
-               (it.customId && it.customId.toLowerCase().includes(ql));
-      });
-    }
-    if (roleFilter) {
-      const rf = roleFilter.toLowerCase();
-      out = out.filter(it => (it.role || '').toLowerCase() === rf);
-    }
-
-    const numLimit = Math.max(1, Math.min(1000, Number(limit || 100)));
-    out = out.slice(0, numLimit);
-
-    return res.json({ users: out });
-  } catch (err) {
-    console.error('/admin/users error', err && (err.stack || err));
-    return res.status(500).json({ error: err.message || 'Server error', message: 'Failed to list users.' });
-  }
-});
-
-/* POST /admin/reset-password -> body: { uid, newPassword?, notifyUser? } */
-app.post('/admin/reset-password', requireAdmin, async (req, res) => {
-  try {
-    const { uid, notifyUser = false } = req.body;
-    if (!uid) return res.status(400).json({ error: 'Missing uid', message: 'User id is required.' });
-
-    // Get user email (try Firestore first, fallback to Auth)
-    let email = null;
-    try {
-      const profileSnap = await db.collection('users').doc(uid).get();
-      if (profileSnap.exists) email = profileSnap.data().email || null;
-    } catch (e) {
-      console.warn('/admin/reset-password: failed to read profile', e && e.message);
-    }
-    if (!email) {
-      try {
-        const userRecord = await admin.auth().getUser(uid);
-        email = userRecord.email || null;
-      } catch (e) {
-        console.error('/admin/reset-password failed to get user', e && e.message);
-      }
-    }
-
-    if (!email) {
-      return res.status(400).json({ error: 'No email', message: 'Cannot locate an email address for this user.' });
-    }
-
-    // Generate password reset link using the Admin SDK
-    let resetLink;
-    try {
-      resetLink = await admin.auth().generatePasswordResetLink(email);
-    } catch (e) {
-      console.error('/admin/reset-password generatePasswordResetLink error', e && e.message);
-      return res.status(500).json({ error: 'Failed to generate reset link', message: 'Could not create password reset link.' });
-    }
-
-    if (notifyUser) {
-      const mailOptions = {
-        from: `"Holy Family Academy" <${SMTP_USER}>`,
-        to: email,
-        subject: "Password reset instructions",
-        html: `<p>We received a request to reset your password. You can reset your password using this secure link:</p>
-               <p><a href="${resetLink}">Reset your password</a></p>
-               <p>If you didn't request this, please ignore this email.</p>`
-      };
-      try {
-        await mailTransporter.sendMail(mailOptions);
-      } catch (mailErr) {
-        console.warn('/admin/reset-password: failed to send email', mailErr && mailErr.message);
-        await writeActivityLog({
-          actorUid: req.adminUser.uid,
-          actorEmail: req.adminUser.email,
-          targetUid: uid,
-          action: 'reset-password',
-          detail: 'generated_link_but_email_failed'
-        });
-        return res.status(500).json({ error: 'Email send failed', message: 'Failed to email the reset link. Please try again.' });
-      }
-
-      await writeActivityLog({
-        actorUid: req.adminUser.uid,
-        actorEmail: req.adminUser.email,
-        targetUid: uid,
-        action: 'reset-password',
-        detail: 'reset-link-generated-and-emailed'
-      });
-
-      return res.json({ success: true, emailed: true, message: 'Password reset link emailed to user.' });
-    }
-
-    await writeActivityLog({
-      actorUid: req.adminUser.uid,
-      actorEmail: req.adminUser.email,
-      targetUid: uid,
-      action: 'reset-password',
-      detail: 'reset-link-generated-not-emailed'
-    });
-
-    return res.json({ success: true, emailed: false, message: 'Password reset link generated (not emailed).' });
-
-  } catch (err) {
-    console.error('/admin/reset-password error', err && (err.stack || err));
-    return res.status(500).json({ error: err.message || 'Server error', message: 'Failed to reset password.' });
-  }
-});
-
-// supports updates
-app.put('/admin/users/:uid', requireAdmin, async (req, res) => {
-  try {
-    const targetUid = req.params.uid;
-    if (!targetUid) return res.status(400).json({ error: 'Missing uid' });
-
-    const { displayName, role, status } = req.body || {};
-    const updates = {};
-    const authUpdates = {};
-
-    if (displayName !== undefined) {
-      const dn = String(displayName).trim();
-      if (dn.length === 0) return res.status(400).json({ error: 'Invalid displayName' });
-      updates.displayName = dn;
-      authUpdates.displayName = dn;
-    }
-
-    if (role !== undefined) {
-      const r = String(role).toLowerCase();
-      if (r !== 'admin' && r !== 'applicant') {
-        return res.status(400).json({ error: 'Invalid role', message: 'Role must be "admin" or "applicant".' });
-      }
-      updates.role = r;
-    }
-
-    if (status !== undefined) {
-      const s = String(status).toLowerCase();
-      if (s !== 'active' && s !== 'inactive') {
-        return res.status(400).json({ error: 'Invalid status', message: 'Status must be "active" or "inactive".' });
-      }
-      updates.status = s;
-    }
-
-    if (Object.keys(updates).length === 0 && Object.keys(authUpdates).length === 0) {
-      return res.status(400).json({ error: 'No updates provided' });
-    }
-
-    if (Object.keys(authUpdates).length > 0) {
-      try {
-        await admin.auth().updateUser(targetUid, authUpdates);
-      } catch (e) {
-        console.warn('PUT /admin/users: failed to update Auth user', targetUid, e && e.message);
-      }
-    }
-
-    if (updates.status !== undefined) {
-      try {
-        const disabled = updates.status === 'inactive';
-        await admin.auth().updateUser(targetUid, { disabled });
-      } catch (e) {
-        console.warn('PUT /admin/users: failed to update Auth disabled flag for', targetUid, e && e.message);
-      }
-    }
-
-    await db.collection('users').doc(targetUid).set({
-      ...updates,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    await writeActivityLog({
-      actorUid: req.adminUser.uid,
-      actorEmail: req.adminUser.email,
-      targetUid,
-      action: 'update-user',
-      detail: JSON.stringify({ updates })
-    });
-
-    return res.json({ success: true, updates });
-  } catch (err) {
-    console.error('PUT /admin/users/:uid error', err && (err.stack || err));
-    return res.status(500).json({ error: err.message || 'Server error' });
-  }
-});
-
-// archive
-app.post('/admin/users/:uid/archive', requireAdmin, async (req, res) => {
-  try {
-    const targetUid = req.params.uid;
-    if (!targetUid) return res.status(400).json({ error: 'Missing uid' });
-
-    await db.collection('users').doc(targetUid).set({
-      archived: true,
-      archivedAt: admin.firestore.FieldValue.serverTimestamp(),
-      status: 'inactive',
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    try {
-      await admin.auth().updateUser(targetUid, { disabled: true });
-    } catch (e) {
-      console.warn('Failed to disable auth for archived user', targetUid, e && e.message);
-    }
-
-    await writeActivityLog({
-      actorUid: req.adminUser.uid,
-      actorEmail: req.adminUser.email,
-      targetUid,
-      action: 'archive-user',
-      detail: 'archived user'
-    });
-
-    return res.json({ success: true, message: 'User archived' });
-  } catch (err) {
-    console.error('POST /admin/users/:uid/archive error', err);
-    return res.status(500).json({ error: err.message || 'Server error' });
-  }
-});
-
-// unarchive
-app.post('/admin/users/:uid/unarchive', requireAdmin, async (req, res) => {
-  try {
-    const targetUid = req.params.uid;
-    if (!targetUid) return res.status(400).json({ error: 'Missing uid' });
-
-    await db.collection('users').doc(targetUid).set({
-      archived: false,
-      archivedAt: null,
-      status: 'active',
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    }, { merge: true });
-
-    try {
-      await admin.auth().updateUser(targetUid, { disabled: false });
-    } catch (e) {
-      console.warn('Failed to enable auth for unarchived user', targetUid, e && e.message);
-    }
-
-    await writeActivityLog({
-      actorUid: req.adminUser.uid,
-      actorEmail: req.adminUser.email,
-      targetUid,
-      action: 'unarchive-user',
-      detail: 'unarchived user'
-    });
-
-    return res.json({ success: true, message: 'User unarchived' });
-  } catch (err) {
-    console.error('POST /admin/users/:uid/unarchive error', err);
-    return res.status(500).json({ error: err.message || 'Server error' });
-  }
-});
-
-// delete - allowed when archived
-app.delete('/admin/users/:uid', requireAdmin, async (req, res) => {
-  try {
-    const targetUid = req.params.uid;
-    if (!targetUid) return res.status(400).json({ error: 'Missing uid' });
-
-    const userDoc = await db.collection('users').doc(targetUid).get();
-    if (userDoc.exists) {
-      const data = userDoc.data();
-      if (!data.archived) {
-        return res.status(400).json({ error: 'Must be archived', message: 'User must be archived before permanent deletion.' });
-      }
-    }
-
-    try {
-      await db.collection('users').doc(targetUid).delete();
-    } catch (e) {
-      console.warn('Failed to delete users doc for', targetUid, e && e.message);
-    }
-
-    try {
-      await admin.auth().deleteUser(targetUid);
-    } catch (e) {
-      if (e && e.code !== 'auth/user-not-found') {
-        console.error('Failed to delete auth user', targetUid, e && e.message);
-        return res.status(500).json({ error: 'Failed to delete auth user', message: e.message || String(e) });
-      }
-    }
-
-    await writeActivityLog({
-      actorUid: req.adminUser.uid,
-      actorEmail: req.adminUser.email,
-      targetUid,
-      action: 'delete-user',
-      detail: 'hard delete executed'
-    });
-
-    return res.json({ success: true, message: 'User permanently deleted' });
-  } catch (err) {
-    console.error('DELETE /admin/users/:uid error', err);
-    return res.status(500).json({ error: err.message || 'Server error' });
-  }
-});
-
-/* POST /admin/set-role -> body: { uid, role } */
-app.post('/admin/set-role', requireAdmin, async (req, res) => {
-  try {
-    const { uid, role } = req.body;
-    if (!uid || !role) return res.status(400).json({ error: 'Missing uid or role' });
-    await db.collection('users').doc(uid).set({ role }, { merge: true });
-
-    await writeActivityLog({
-      actorUid: req.adminUser.uid,
-      actorEmail: req.adminUser.email,
-      targetUid: uid,
-      action: 'set-role',
-      detail: `role:${role}`
-    });
-
-    return res.json({ success: true });
-  } catch (err) {
-    console.error('/admin/set-role error', err);
-    return res.status(500).json({ error: err.message });
-  }
-});
-
-/* GET /admin/activity-logs?targetUid=...&limit=25 */
-app.get('/admin/activity-logs', requireAdmin, async (req, res) => {
-  try {
-    const { targetUid, limit = 50 } = req.query;
-    let q = db.collection('activity_logs').orderBy('timestamp', 'desc').limit(Number(limit));
-    if (targetUid) q = q.where('targetUid', '==', targetUid);
-    const snap = await q.get();
-    const items = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    return res.json({ items });
-  } catch (err) {
-    console.error('/admin/activity-logs error', err);
-    return res.status(500).json({ error: err.message });
-  }
-});
 // -------------calling the routes---------------------
 const dbClient = createDbClient({ db, admin });
 const attachApplicantId = createAttachApplicantId({ dbClient });
@@ -1536,12 +1091,8 @@ const applicantMessagesRouter = createApplicantMessagesRouter({ dbClient, requir
 //routes for the enrollees (both shs and jhs)
 app.use("/api", createEnrolleesRouter({
   db,
-  supabase,
   admin,
-  mailTransporter,
-  defaultRequirementsObject,
-  writeActivityLog,
-  UPLOAD_BUCKET: "uploads" // make sure this matches your bucket name
+  writeActivityLog
 }));
 
 // admin message
@@ -1551,22 +1102,19 @@ app.use("/api", createAdminMessagesRouter({
   writeActivityLog,
   requireAdmin
 }));
-//file uploads
-app.use("/api", createFilesRouter({
-  supabaseServer,
-  requireAdmin,
-  requireAuth,
-  dbClient,
-  BUCKET: "uploads",
-  MAX_TTL: 300
-}));
 
 // for applicants message
 app.use('/api/applicant-messages', requireAuth, attachApplicantId, applicantMessagesRouter);
 
-// applicants router under /api/applicants
+// enrollment period settings
+app.use('/api/enrollment', createEnrollmentRouter({ db, writeActivityLog ,requireAdmin }));
+
+// applicants router under /api/applicants (with admin for file uploads)
 app.use('/api/applicants', createApplicantsRouter({ 
-  db, requireAuth, requireAdmin 
+  db, 
+  requireAuth, 
+  requireAdmin,
+  admin // PHASE 1: Add admin SDK for Firebase Storage uploads
 }));
 // for interview schedule
 app.use("/api", interviewsRouter({
@@ -1583,6 +1131,75 @@ app.use("/api", createAdminActionsRouter({
    writeActivityLog
  }));
 
+app.use("/", createAdminUsersRouter({
+  db,
+  admin,
+  requireAdmin,
+  writeActivityLog,
+  mailTransporter
+}));
+
+// Activity logs router - handles activity log endpoints
+app.use("/", createActivityLogsRouter({
+  db,
+  admin,
+  requireAdmin,
+  writeActivityLog
+}));
+
+// Dashboard statistics router
+app.use("/api", createDashboardStatsRouter({
+  db,
+  admin,
+  requireAdmin
+}));
+
+// Notes router - handles quick notes CRUD operations
+app.use("/", createNotesRouter({
+  db,
+  requireAdmin
+}));
+
+// Teacher profile routes - handles teacher self-profile management
+app.use("/", createTeacherProfileRouter({
+  db,
+  admin,
+  requireAuth,
+  writeActivityLog
+}));
+
+// Admin profile routes - handles admin self-profile management
+app.use("/", createAdminProfileRouter({
+  db,
+  admin,
+  requireAdmin,
+  writeActivityLog
+}));
+
+// Teacher messages routes - handles sending messages to teacher applicants
+app.use("/api/teacher-applicants", createTeacherMessagesRouter({
+  db,
+  mailTransporter,
+  requireAdmin,
+  writeActivityLog
+}));
+
+// Teacher notifications routes - handles notification operations
+app.use("/api/teacher-applicants", createTeacherNotificationsRouter({
+  db,
+  mailTransporter,
+  requireAdmin,
+  requireAuth
+}));
+
+// Teacher Final Decision Routes - Mounted from separate route file
+app.use("/api/teacher-applicants", createTeacherDecisionRouter({ 
+  db, 
+  mailTransporter, 
+  requireAdmin,
+  writeActivityLog 
+}));
+
 // HELPERS
 
 function generateRandomPassword() {
@@ -1591,6 +1208,22 @@ function generateRandomPassword() {
     chars.charAt(Math.floor(Math.random() * Math.random() * chars.length))
   ).join("");
 }
+
+// --- CRON JOB: AUTO-DELETE EXPIRED ACCOUNTS ---
+// Runs every day at 2:00 AM
+cron.schedule('0 2 * * *', async () => {
+  console.log('🕒 Running auto-delete job for expired teacher accounts...');
+  try {
+    const result = await deleteExpiredAccounts({ db, writeActivityLog });
+    if (result.success && result.deletedCount > 0) {
+      console.log(`✅ Auto-delete completed: ${result.deletedCount} account(s) deleted`);
+    }
+  } catch (error) {
+    console.error('❌ Auto-delete job failed:', error);
+  }
+});
+
+console.log('✅ Cron job scheduled: Teacher account auto-deletion (daily at 2:00 AM)');
 
 // --- START SERVER ---
 const PORT = process.env.PORT || 3000;

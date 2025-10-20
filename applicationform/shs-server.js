@@ -1,4 +1,6 @@
 // shs-server.js (updated client-side)
+import { API_BASE_URL } from './api-config.js';
+
 document.addEventListener("DOMContentLoaded", () => {
   const submitTrigger = document.getElementById("submit-btn");
   const confirmationModal = document.getElementById("confirmation-modal");
@@ -8,12 +10,132 @@ document.addEventListener("DOMContentLoaded", () => {
   const successModal = document.getElementById("success-modal");
   const modalOkBtn = document.getElementById("modal-ok-btn");
 
+  // Phone number input validation - restrict to numeric only, max 10 digits
+  const phoneInput = document.getElementById("contact-number");
+  if (phoneInput) {
+    phoneInput.addEventListener("input", function() {
+      this.value = this.value.replace(/[^0-9]/g, '');
+      if (this.value.length > 10) {
+        this.value = this.value.slice(0, 10);
+      }
+    });
+  }
+
+  // File type definitions for new and returning students
+  const FILE_TYPES = {
+    new: [
+      { id: "reportcard-new", type: "reportcard", label: "Report Card (Form 138)" },
+      { id: "psa-upload", type: "psa", label: "PSA Birth Certificate" }
+    ],
+    returning: [
+      { id: "clearance-upload", type: "clearance", label: "Clearance Certificate" },
+      { id: "reportcard-returning", type: "reportcard", label: "Report Card (Form 138)" }
+    ]
+  };
+
+  // Add visual feedback for file selection
+  function setupFileInputFeedback() {
+    const allFileInputs = [
+      "reportcard-new",
+      "psa-upload",
+      "clearance-upload",
+      "reportcard-returning"
+    ];
+
+    allFileInputs.forEach(inputId => {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+
+      input.addEventListener("change", function() {
+        const labelSpan = document.querySelector(`label[for="${inputId}"] .file-input-text`);
+        if (!labelSpan) return;
+
+        if (this.files && this.files.length > 0) {
+          const file = this.files[0];
+          const fileSizeKB = (file.size / 1024).toFixed(1);
+          labelSpan.textContent = `Selected: ${file.name} (${fileSizeKB} KB)`;
+          labelSpan.style.color = "#2e8b57";
+          labelSpan.style.fontWeight = "500";
+        } else {
+          labelSpan.textContent = "Choose file";
+          labelSpan.style.color = "";
+          labelSpan.style.fontWeight = "";
+        }
+      });
+    });
+  }
+
+  // Initialize file input feedback
+  setupFileInputFeedback();
+
+  // Validate all required fields before submission
+  function validateRequiredFields() {
+    const requiredFields = [
+      { id: "first-name", label: "First Name" },
+      { id: "last-name", label: "Last Name" },
+      { id: "birth-date", label: "Birth Date" },
+      { id: "gender", label: "Gender" },
+      { id: "strand", label: "Strand" },
+      { id: "track", label: "Track" },
+      { id: "street-address", label: "Street Address" },
+      { id: "barangay", label: "Barangay" },
+      { id: "city", label: "City" },
+      { id: "province", label: "Province" },
+      { id: "contact-number", label: "Contact Number" },
+      { id: "email-address", label: " Email"}
+    ];
+
+    const missingFields = [];
+
+    // Check basic required fields
+    for (const field of requiredFields) {
+      const element = document.getElementById(field.id);
+      const value = element?.value?.trim();
+      if (!value) {
+        missingFields.push(field.label);
+      }
+    }
+
+    // Check student type is selected
+    const studentType = document.querySelector('input[name="student-type"]:checked')?.value;
+    if (!studentType) {
+      missingFields.push("Student Type");
+    }
+
+    // Check conditional required fields based on student type
+    if (studentType === "new") {
+      const previousSchool = document.getElementById("previous-school")?.value?.trim();
+      if (!previousSchool) {
+        missingFields.push("Previous School");
+      }
+    } else if (studentType === "old") {
+      const studentNumber = document.getElementById("student-number")?.value?.trim();
+      if (!studentNumber) {
+        missingFields.push("Student Number");
+      }
+    }
+
+    // Note: File uploads are now OPTIONAL - students can submit without documents
+
+    // Show alert if there are missing fields
+    if (missingFields.length > 0) {
+      const fieldsList = missingFields.map((field, index) => `${index + 1}. ${field}`).join('\n');
+      alert(`⚠️ Please fill in all required fields:\n\n${fieldsList}`);
+      
+      // Focus on first missing field
+      const firstMissingId = requiredFields.find(f => missingFields.includes(f.label))?.id;
+      if (firstMissingId) {
+        document.getElementById(firstMissingId)?.focus();
+      }
+      return false;
+    }
+
+    return true;
+  }
+
   const slotToInputId = {
     reportcard: "reportcard-upload",
     psa: "psa-upload",
-    goodMoral: "good-moral-upload",
-    form137: "form-137",
-    completionCertificate: "completion-certificate",
     clearance: "clearance-upload"
   };
 
@@ -71,33 +193,69 @@ document.addEventListener("DOMContentLoaded", () => {
   function collectFormDataAndFiles() {
     const getVal = (id) => document.getElementById(id)?.value?.trim() || "";
 
+    // Validate and format phone number
+    const phoneInput = getVal("contact-number");
+    if (!phoneInput) {
+      alert('Please enter contact number.');
+      document.getElementById("contact-number")?.focus();
+      return null;
+    }
+    if (phoneInput.length !== 10) {
+      alert('Contact number must be exactly 10 digits.');
+      document.getElementById("contact-number")?.focus();
+      return null;
+    }
+    if (!phoneInput.startsWith('9')) {
+      alert('Contact number must start with 9.');
+      document.getElementById("contact-number")?.focus();
+      return null;
+    }
+    const contactNumber = '+63' + phoneInput;
+
+    // Combine address fields into single string
+    const street = getVal("street-address");
+    const barangay = getVal("barangay");
+    const city = getVal("city");
+    const province = getVal("province");
+    const fullAddress = `${street}, ${barangay}, ${city}, ${province}`;
+
     const metadata = {
       formType: "shs",
       firstName: getVal("first-name"),
       lastName: getVal("last-name"),
       middleName: getVal("middle-name"),
+      suffix: getVal("suffix"),
       birthdate: getVal("birth-date"),
       email: getVal("email-address"),
       gender: getVal("gender"),
       gradeLevel: getVal("grade-level"),
       academicTrack: getVal("academic-track"),
-      address: getVal("address"),
-      contactNumber: getVal("contact-number"),
+      address: fullAddress,
+      contactNumber: contactNumber,
+      guardianName: getVal("guardian"),
       completionYear: getVal("completion-year"),
       studentType: document.querySelector('input[name="student-type"]:checked')?.value || "",
       previousSchool: getVal("previous-school"),
       studentNumber: getVal("student-number")
     };
 
-    const files = {};
-    const requestedFiles = [];
-    for (const slot of Object.keys(slotToInputId)) {
-      const el = fileInputFor(slot);
-      const f = el?.files?.[0] || null;
-      files[slot] = f;
-      if (f) requestedFiles.push({ slot, name: f.name });
+    // Get files based on student type
+    const studentType = metadata.studentType;
+    const fileTypes = (studentType === "new") ? FILE_TYPES.new : FILE_TYPES.returning;
+    
+    const files = [];
+    for (const fileType of fileTypes) {
+      const input = document.getElementById(fileType.id);
+      const file = input?.files?.[0];
+      if (file) {
+        files.push({
+          file: file,
+          type: fileType.type,
+          label: fileType.label
+        });
+      }
     }
-    metadata.requestedFiles = requestedFiles;
+    
     return { metadata, files };
   }
 
@@ -112,10 +270,20 @@ document.addEventListener("DOMContentLoaded", () => {
     if (confirmBtn) confirmBtn.textContent = "Submitting...";
 
     try {
-      const { metadata, files } = collectFormDataAndFiles();
+      const result = collectFormDataAndFiles();
+      if (!result) {
+        // Validation failed (phone number error)
+        if (confirmBtn) {
+          confirmBtn.disabled = false;
+          confirmBtn.textContent = origConfirmText;
+        }
+        return;
+      }
+      const { metadata, files } = result;
 
-      // 1) Create enrollee server-side
-      const createResp = await fetch("/api/enrollees", {
+
+      // Create enrollee server-side
+      const createResp = await fetch(`${API_BASE_URL}/api/enrollees`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(metadata)
@@ -127,60 +295,33 @@ document.addEventListener("DOMContentLoaded", () => {
       }
       const createResult = await createResp.json();
       const studentId = createResult.studentId;
-      const uploadTokens = createResult.uploadTokens || {}; // { slot: { path, fileName } }
 
-      // 2) For each requested slot that has a file, upload to server endpoint (server will push to Supabase)
-      const uploadedFilesMeta = [];
-      for (const slot of Object.keys(uploadTokens)) {
-        const info = uploadTokens[slot];
-        if (!info) continue;
-        const fileObj = files[slot];
-        if (!fileObj) {
-          // no file selected for slot (server will still have a planned path, but nothing uploaded)
-          continue;
-        }
 
-        renderStatus(slot, { state: "uploading", file: fileObj });
+      // 2) Upload each file with its type
+      for (const fileItem of files) {
+        console.log(`📤 SHS: Uploading ${fileItem.label} (${fileItem.type})...`);
+        const formData = new FormData();
+        formData.append("file", fileItem.file);
+        formData.append("fileType", fileItem.type);
+        formData.append("label", fileItem.label);
 
-        const form = new FormData();
-        form.append("slot", slot);
-        form.append("file", fileObj, fileObj.name);
-
-        const upResp = await fetch(`/api/enrollees/${encodeURIComponent(studentId)}/upload`, {
+        const uploadUrl = `${API_BASE_URL}/api/enrollees/${encodeURIComponent(studentId)}/upload-file`;
+        console.log('📍 SHS: Upload URL:', uploadUrl);
+        
+        const uploadResp = await fetch(uploadUrl, {
           method: "POST",
-          body: form
+          body: formData
         });
-
-        if (!upResp.ok) {
-          const b = await upResp.json().catch(() => ({}));
-          renderStatus(slot, { state: "error", file: fileObj, message: b && b.error ? b.error : `Upload failed ${upResp.status}` });
-          throw new Error(b && b.error ? b.error : `Upload failed ${upResp.status}`);
+     
+        if (!uploadResp.ok) {
+          const body = await uploadResp.json().catch(() => ({}));
+          console.error(`❌ SHS: Failed to upload ${fileItem.label}:`, body);
+          throw new Error(body.error || `Upload failed for ${fileItem.label}`);
         }
 
-        const upResult = await upResp.json();
-        renderStatus(slot, { state: "success", file: fileObj });
-        uploadedFilesMeta.push({
-          slot,
-          name: upResult.fileName || (fileObj && fileObj.name) || "",
-          size: upResult.size || (fileObj && fileObj.size) || 0,
-          path: upResult.path,
-          publicUrl: upResult.publicUrl || null
-        });
+        const uploadResult = await uploadResp.json();
+        console.log(`✅ SHS: Uploaded ${fileItem.label} successfully:`, uploadResult);
       }
-
-      // 3) Finalize
-      const finalizeResp = await fetch(`/api/enrollees/${encodeURIComponent(studentId)}/finalize`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ files: uploadedFilesMeta })
-      });
-
-      if (!finalizeResp.ok) {
-        const body = await finalizeResp.json().catch(() => ({}));
-        throw new Error(body.error || `Finalize failed ${finalizeResp.status}`);
-      }
-
-      const finalizeResult = await finalizeResp.json();
 
       // show success UI
       if (confirmationModal) confirmationModal.style.display = "none";
@@ -195,7 +336,8 @@ document.addEventListener("DOMContentLoaded", () => {
           if (el) el.textContent = "";
         }
         if (typeof window.handleStudentTypeChange === "function") window.handleStudentTypeChange();
-      }, 800);
+      }, 500);
+      
     } catch (err) {
       console.error("Submit error:", err);
       alert("Submission failed: " + (err.message || "check console"));
@@ -204,13 +346,18 @@ document.addEventListener("DOMContentLoaded", () => {
         confirmBtn.disabled = false;
         confirmBtn.textContent = origConfirmText;
       }
+      
     }
   }
 
   if (submitTrigger) {
     submitTrigger.addEventListener("click", (e) => {
       e.preventDefault();
+      // Validate all required fields first
+      if (!validateRequiredFields()) return;
+      // Validate age
       if (typeof window.validateAge === "function" && !window.validateAge()) return;
+      // Show confirmation modal
       if (confirmationModal) confirmationModal.style.display = "block";
     });
   }

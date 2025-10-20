@@ -11,14 +11,26 @@ import {
   query,
   where
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { apiFetch } from '../api-fetch.js';
 
-import { getAuth } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+/* ------------------ Required Documents Definition ------------------ */
+
+const REQUIRED_DOCUMENTS = {
+  new: [
+    { key: 'reportcard', label: 'Report Card (Form 138)' },
+    { key: 'psa', label: 'PSA Birth Certificate' }
+  ],
+  returning: [
+    { key: 'clearance', label: 'Clearance Certificate' },
+    { key: 'reportcard', label: 'Report Card (Form 138)' }
+  ]
+};
 
 /* ------------------ App state & DOM references ------------------ */
 
 const applicantsMap = new Map();
 const studentsBody = document.getElementById('students-body');
-const cardsView = document.getElementById('cards-view');
+
 const tableView = document.getElementById('table-view');
 const tableBtn = document.querySelector('[data-view="table"]');
 const searchInput = document.getElementById('search-input');
@@ -37,15 +49,13 @@ const stuModal = document.getElementById('hfa-stu-modal');
 const stuClose2 = document.getElementById('hfa-stu-close-2');
 
 const stuTitle = document.getElementById('hfa-stu-title');
-const stuSubtitle = document.getElementById('hfa-stu-subtitle');
 
 const stuTypeEl = document.getElementById('hfa-stu-type');
 const stuGradeEl = document.getElementById('hfa-stu-grade');
-const stuStatusEl = document.getElementById('hfa-stu-status');
+const systemID = document.getElementById('systemID');
 
 const stuEditBtn = document.getElementById('hfa-stu-edit-btn');
 const stuArchiveBtn = document.getElementById('hfa-stu-archive-btn');
-const stuApproveBtn = document.getElementById('hfa-stu-approve-btn');
 
 const stuReqList = document.getElementById('hfa-stu-requirements-list');
 const stuDocsList = document.getElementById('hfa-stu-documents');
@@ -69,7 +79,7 @@ const stuConfirmNo = document.getElementById('hfa-stu-confirm-no');
 /* Enrollment confirmation modal elements (your HTML) */
 const enrollModal = document.getElementById('enroll-modal');
 const enrollCloseBtn = document.getElementById('enroll-close-btn');
-const enrollSendBtn = document.getElementById('enroll-send-message');
+const enrollCancelBtn = document.getElementById('enroll-cancel-btn');
 const enrollConfirmBtn = document.getElementById('confirm-enroll-btn');
 let _enrollState = { app: null };
 
@@ -96,6 +106,20 @@ let currentModalApp = null;
 
 let _messageModalState = { app: null, afterEnroll: false };
 
+/* Pagination state */
+let currentPage = 1;
+const rowsPerPage = 10;
+const paginationControls = document.getElementById('pagination-controls');
+const prevPageBtn = document.getElementById('prev-page');
+const nextPageBtn = document.getElementById('next-page');
+const currentPageNum = document.getElementById('current-page-num');
+const totalPagesNum = document.getElementById('total-pages-num');
+const showingCount = document.getElementById('showing-count');
+const totalCountEl = document.getElementById('total-count');
+
+/* Edit mode state (conditional approach) */
+let isEditingStudent = false;
+
 /* ------------------ Helper: Signed URL cache & request ------------------ */
 
 // caches signed urls: key = path, value = { url, expiresAt (ms) }
@@ -103,23 +127,7 @@ const signedUrlCache = new Map();
 // TTL default (seconds)
 const DEFAULT_SIGNED_URL_TTL = 300; // 5 minutes
 
-async function getIdTokenIfAvailable() {
-  try {
-    const auth = getAuth();
-    if (auth && auth.currentUser) {
-      return await auth.currentUser.getIdToken(false);
-    }
-    // fallback to local storage tokens if you store them
-    return localStorage.getItem('serverToken') || localStorage.getItem('idToken') || null;
-  } catch (e) {
-    console.warn("getIdTokenIfAvailable failed", e);
-    return null;
-  }
-}
-/**
- * Request signed URL from server route /api/files/signed-url
- * Returns signed URL string or throws.
- */
+
 async function getSignedUrlForPath(path, ttlSeconds = DEFAULT_SIGNED_URL_TTL) {
   if (!path) throw new Error("Missing path");
   // if path already is a full URL, return as-is
@@ -132,19 +140,15 @@ async function getSignedUrlForPath(path, ttlSeconds = DEFAULT_SIGNED_URL_TTL) {
     return cached.url;
   }
 
-  // Request from server
-  const token = await getIdTokenIfAvailable();
+  // Request from server (cookie handles auth)
   const url = `/api/files/signed-url?path=${encodeURIComponent(path)}&ttl=${Math.min(ttlSeconds, DEFAULT_SIGNED_URL_TTL)}`;
 
-  const headers = {};
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  // try fetch
-  let resp = await fetch(url, { headers, cache: 'no-store' });
+  // try fetch with credentials to send cookie
+  let resp = await fetch(url, { credentials: 'include', cache: 'no-store' });
   if (!resp.ok) {
     // try once more (some transient server issues)
     console.warn("[getSignedUrlForPath] first attempt failed", resp.status);
-    resp = await fetch(url, { headers, cache: 'no-store' });
+    resp = await fetch(url, { credentials: 'include', cache: 'no-store' });
   }
 
   if (!resp.ok) {
@@ -160,6 +164,7 @@ async function getSignedUrlForPath(path, ttlSeconds = DEFAULT_SIGNED_URL_TTL) {
   signedUrlCache.set(path, { url: body.url, expiresAt: body.expiresAt || (Date.now() + (ttlSeconds*1000)) });
   return body.url;
 }
+
 function cleanPathForRequest(path) {
   if (!path) return '';
   let p = ('' + path).trim();
@@ -202,18 +207,6 @@ function prettifyKey(k) {
           .replace(/\b\w/g, ch => ch.toUpperCase());
 }
 
-function computeReqProgress(requirements) {
-  if (!requirements) return 0;
-  const keys = Object.keys(requirements);
-  if (!keys.length) return 0;
-  const done = keys.filter(k => {
-    const v = requirements[k];
-    if (typeof v === 'boolean') return !!v;
-    if (typeof v === 'object') return !!v.checked;
-    return false;
-  }).length;
-  return Math.round((done / keys.length) * 100);
-}
 function formatDateTime(d) {
   if (!d) return '-';
   try {
@@ -263,17 +256,6 @@ function createIcon(iClass) {
   i.setAttribute('aria-hidden', 'true');
   return i;
 }
-function createProgressBar(percent = 0) {
-  const val = Math.max(0, Math.min(100, Number(percent) || 0));
-  const wrapper = document.createElement('div');
-  wrapper.className = 'progress';
-  const fill = document.createElement('div');
-  fill.className = 'progress-bar';
-  fill.style.width = val + '%';
-  wrapper.appendChild(fill);
-  return wrapper;
-}
-
 /* ------------------ File extraction/normalization ------------------ */
 
 function extractFilesFromApp(raw) {
@@ -341,7 +323,7 @@ function updateCounts() {
   const list = Array.from(applicantsMap.values()).filter(a => !a.archived);
   if (counts.total) counts.total.textContent = list.length;
   if (counts.enrolled) counts.enrolled.textContent = list.filter(a => a.enrolled).length;
-  if (counts.complete) counts.complete.textContent = list.filter(a => computeReqProgress(a.requirements) === 100).length;
+  if (counts.complete) counts.complete.textContent = '—';
 }
 
 function renderTableRows(list) {
@@ -375,12 +357,10 @@ function renderTableRows(list) {
       const formCell = tr.querySelector('.cell-form'); if (formCell) formCell.textContent = (app.formType || '').toUpperCase();
       const oldNewCell = tr.querySelector('.cell-oldnew'); if (oldNewCell) oldNewCell.textContent = app.isNew ? 'New' : 'Old';
 
-      // Progress
+      // Progress - removed
       const progressCell = tr.querySelector('.cell-progress');
       if (progressCell) {
-        progressCell.innerHTML = '';
-        const percent = computeReqProgress(app.requirements);
-        progressCell.appendChild(createProgressBar(percent));
+        progressCell.textContent = '—';
       }
 
       // Status
@@ -393,27 +373,57 @@ function renderTableRows(list) {
       const existingDelete = tr.querySelector('.student-delete');
       if (existingDelete) existingDelete.remove();
 
-      // wire action buttons
-      const viewBtn = tr.querySelector('.student-view'); if (viewBtn) viewBtn.addEventListener('click', () => openStudentModal(app));
-      const archiveBtn = tr.querySelector('.student-archive'); if (archiveBtn) archiveBtn.addEventListener('click', () => openArchiveConfirm(app));
-      const enrollBtn = tr.querySelector('.student-enroll');
-      if (enrollBtn) {
-        enrollBtn.disabled = !!app.enrolled;
-        enrollBtn.addEventListener('click', () => {
-          if (!app.enrolled) openEnrollConfirm(app);
-        });
-        enrollBtn.textContent = app.enrolled ? 'Enrolled' : 'Enroll';
-      }
-
-      // add message button (left-most)
+      // Conditional rendering: Different actions based on archived status
       const actionsCell = tr.querySelector('.student-actions');
       if (actionsCell) {
-        const msgBtn = document.createElement('button');
-        msgBtn.className = 'student-btn student-message';
-        msgBtn.title = 'Message';
-        msgBtn.appendChild(createIcon('fas fa-envelope'));
-        msgBtn.addEventListener('click', () => openMessageModal(app, { afterEnroll: false }));
-        actionsCell.insertBefore(msgBtn, actionsCell.firstChild);
+        actionsCell.innerHTML = ''; // Clear existing buttons
+        
+        if (app.archived) {
+          // ARCHIVED: Only show View button
+          const viewBtn = document.createElement('button');
+          viewBtn.className = 'student-btn student-view';
+          viewBtn.title = 'View';
+          viewBtn.appendChild(createIcon('fas fa-eye'));
+          viewBtn.addEventListener('click', () => openStudentModal(app));
+          actionsCell.appendChild(viewBtn);
+          
+        } else {
+          // NOT ARCHIVED: Show all action buttons
+          // Message button
+          const msgBtn = document.createElement('button');
+          msgBtn.className = 'student-btn student-message';
+          msgBtn.title = 'Message';
+          msgBtn.appendChild(createIcon('fas fa-envelope'));
+          msgBtn.addEventListener('click', () => openMessageModal(app, { afterEnroll: false }));
+          actionsCell.appendChild(msgBtn);
+          
+          // View button
+          const viewBtn = document.createElement('button');
+          viewBtn.className = 'student-btn student-view';
+          viewBtn.title = 'View';
+          viewBtn.appendChild(createIcon('fas fa-eye'));
+          viewBtn.addEventListener('click', () => openStudentModal(app));
+          actionsCell.appendChild(viewBtn);
+          
+          // Archive button
+          const archiveBtn = document.createElement('button');
+          archiveBtn.className = 'student-btn student-archive';
+          archiveBtn.title = 'Archive';
+          archiveBtn.appendChild(createIcon('fas fa-archive'));
+          archiveBtn.addEventListener('click', () => openArchiveConfirm(app));
+          actionsCell.appendChild(archiveBtn);
+          
+          // Enroll button
+          const enrollBtn = document.createElement('button');
+          enrollBtn.className = 'student-btn student-enroll';
+          enrollBtn.title = app.enrolled ? 'Enrolled' : 'Enroll';
+          enrollBtn.textContent = app.enrolled ? 'Enrolled' : 'Enroll';
+          enrollBtn.disabled = !!app.enrolled;
+          enrollBtn.addEventListener('click', () => {
+            if (!app.enrolled) openEnrollConfirm(app);
+          });
+          actionsCell.appendChild(enrollBtn);
+        }
       }
 
       frag.appendChild(clone);
@@ -444,15 +454,13 @@ function openStudentModal(app) {
   // make sure any leftover inline edit UI cleared before rendering
   if (stuModal.dataset.editing === 'true') delete stuModal.dataset.editing;
 
-  console.log('[HFA] opening student modal, app.raw:', app && app.raw);
-
   // title
   if (stuTitle) stuTitle.textContent = app.fullName || '-';
 
   // subtitle pieces
   if (stuTypeEl) stuTypeEl.textContent = (app.formType || '').toUpperCase() || 'SHS';
   if (stuGradeEl) stuGradeEl.textContent = `Grade ${app.gradeLevel || '-'}`;
-  if (stuStatusEl) stuStatusEl.textContent = app.section || '-';
+  if (systemID) systemID.textContent = `STD-${String(app.id).slice(0, 5).toUpperCase()}` || '-';
 
   // Fill info fields
   // studentId: show custom field (studentId, studentID) not Firestore doc id
@@ -471,36 +479,56 @@ function openStudentModal(app) {
   if (stuTrackEl) stuTrackEl.textContent = (app.track || (app.raw && (app.raw.academictrack || app.raw.strand || app.raw.program || app.raw.academicTrack))) || '-';
   if (stuUpdatedEl) stuUpdatedEl.textContent = app.raw && app.raw.updatedAt ? formatDateTime(app.raw.updatedAt) : '-';
 
-  // Requirements: build list using normalized shape (label, checked)
+  // Requirements: Show ALL required documents based on student type
   if (stuReqList) {
     stuReqList.innerHTML = '';
-    // find uploaded slots (documents)
+    
+    // Determine student type (new or returning)
+    const studentType = (app.raw && (app.raw.studentType || app.raw.isNew)) || 'new';
+    const isNewStudent = studentType === 'new' || studentType === true;
+    
+    // Get appropriate requirements list
+    const requiredDocs = isNewStudent ? REQUIRED_DOCUMENTS.new : REQUIRED_DOCUMENTS.returning;
+    
+    // Find uploaded files
     const uploadedFiles = extractFilesFromApp(app.raw) || [];
-    const uploadedSlots = new Set((uploadedFiles||[]).map(f => f.slot).filter(Boolean));
-
-    Object.entries(app.requirements || {}).forEach(([key, val]) => {
-      const label = (val && val.label) ? val.label : prettifyKey(key);
-      // checked only when explicitly checked OR file uploaded for slot
-      const checked = (val && typeof val.checked !== 'undefined') ? !!val.checked : !!val;
-      const effectiveChecked = checked || uploadedSlots.has(key);
+    
+    // Display ALL requirements
+    requiredDocs.forEach(reqDoc => {
+      const uploadedFile = uploadedFiles.find(f => f.slot === reqDoc.key || f.type === reqDoc.key);
+      const isChecked = !!uploadedFile || (app.requirements && app.requirements[reqDoc.key] && app.requirements[reqDoc.key].checked);
+      
+      // Build display label with filename if uploaded
+      let displayLabel = reqDoc.label;
+      if (uploadedFile && uploadedFile.name) {
+        displayLabel += ` → ${uploadedFile.name}`;
+      }
+      
       const li = document.createElement('li');
-      const id = `hfa-stu-req-${escapeId(key)}-${app.id}`;
-      // checkbox checked only when effectiveChecked === true
-      li.innerHTML = `<label style="cursor:pointer;"><input type="checkbox" id="${id}" ${effectiveChecked ? 'checked' : ''} /> <span style="margin-left:8px">${label}</span></label>`;
+      const checkboxId = `hfa-stu-req-${escapeId(reqDoc.key)}-${app.id}`;
+      
+      li.innerHTML = `<label style="cursor:pointer;">
+        <input type="checkbox" id="${checkboxId}" ${isChecked ? 'checked' : ''} />
+        <span style="margin-left:8px">${displayLabel}</span>
+      </label>`;
+      
       stuReqList.appendChild(li);
-
-      const cb = li.querySelector('input[type="checkbox"]');
-      if (cb) {
-        // When admin toggles requirement, write nested field requirements.<key>.checked
-        cb.addEventListener('change', async (e) => {
+      
+      // Allow admin to manually check/uncheck
+      const checkbox = li.querySelector('input[type="checkbox"]');
+      if (checkbox) {
+        checkbox.addEventListener('change', async (e) => {
           try {
             const collectionName = app.formType === 'jhs' ? 'jhsApplicants' : 'shsApplicants';
             const docRef = doc(db, collectionName, app.id);
-            // update checked property (create object if needed)
-            const fieldPath = `requirements.${key}.checked`;
-            await updateDoc(docRef, { [fieldPath]: e.target.checked, updatedAt: serverTimestamp() });
-            // UI will update via onSnapshot; optionally update local state
-            if (app.requirements && app.requirements[key]) app.requirements[key].checked = e.target.checked;
+            const fieldPath = `requirements.${reqDoc.key}.checked`;
+            await updateDoc(docRef, { 
+              [fieldPath]: e.target.checked, 
+              updatedAt: serverTimestamp() 
+            });
+            if (app.requirements && app.requirements[reqDoc.key]) {
+              app.requirements[reqDoc.key].checked = e.target.checked;
+            }
           } catch (err) {
             console.error('Failed updating requirement', err);
             e.target.checked = !e.target.checked;
@@ -608,10 +636,32 @@ function openStudentModal(app) {
     }
   }
 
-  // Wire action buttons
-  if (stuEditBtn) stuEditBtn.onclick = () => startInlineEdit(app);
-  if (stuArchiveBtn) stuArchiveBtn.onclick = () => openArchiveConfirm(app);
-  if (stuApproveBtn) stuApproveBtn.onclick = () => openEnrollConfirm(app);
+  // Conditional rendering: Show/hide buttons based on archived status
+  if (app.archived) {
+    // ARCHIVED: Hide Edit and Approve, show Unarchive
+    if (stuEditBtn) stuEditBtn.style.display = 'none';
+    if (stuArchiveBtn) {
+      stuArchiveBtn.textContent = 'Unarchive';
+      stuArchiveBtn.className = 'btn success small';
+      stuArchiveBtn.style.display = 'inline-block';
+      stuArchiveBtn.onclick = () => unarchiveStudent(app);
+    }
+  } else {
+    // NOT ARCHIVED: Show normal buttons
+    if (stuEditBtn) {
+      stuEditBtn.style.display = 'inline-block';
+      stuEditBtn.textContent = 'Edit';
+      stuEditBtn.className = 'btn small';
+      stuEditBtn.onclick = () => startInlineEdit(app);
+    }
+    if (stuArchiveBtn) {
+      stuArchiveBtn.textContent = 'Archive';
+      stuArchiveBtn.className = 'btn danger small';
+      stuArchiveBtn.style.display = 'inline-block';
+      stuArchiveBtn.onclick = () => openArchiveConfirm(app);
+    }
+
+  }
 
   // Ensure right pane visible (defensive)
   const rightPane = stuModal ? stuModal.querySelector('.hfa-stu-right') : null;
@@ -627,32 +677,22 @@ function escapeId(s) { return (''+s).replace(/[^a-z0-9\-_]/gi, '_').slice(0,64);
 
 /* ------------------ Student edit flow (in-place inputs) ------------------ */
 
-/*
-  startInlineEdit(app)
-  - swaps display elements for inputs in-place (no external HTML)
-  - replaces Edit button with Save + Cancel (inline)
-  - validates studentId uniqueness across both collections
-*/
 function startInlineEdit(app) {
   currentModalApp = app;
   if (!stuModal || !stuOverlay) return;
-  // ensure modal open
-  openStudentModal(app);
-
-  // if already editing, ignore
-  if (stuModal.dataset.editing === 'true') return;
-  stuModal.dataset.editing = 'true';
-
-  // ---------- NEW: capture original button markup + onclick for reliable restore ----------
-  if (stuEditBtn && !stuEditBtn._hfa_original) {
-    stuEditBtn._hfa_original = {
-      innerHTML: stuEditBtn.innerHTML,
-      onclick: stuEditBtn.onclick
-    };
+  
+  // If already editing, ignore
+  if (isEditingStudent) return;
+  
+  // Prevent editing archived students
+  if (app.archived) {
+    showToast('Cannot edit archived students');
+    return;
   }
-  // ----------------------------------------------------------------------------------------
+  
+  isEditingStudent = true;
 
-  // store original texts so cancel can restore
+  // Store original texts so cancel can restore
   const originals = {};
 
   // mapping of display elements to field names and input types
@@ -700,17 +740,15 @@ function startInlineEdit(app) {
     inputs[f.name] = input;
   });
 
-  // swap edit button to Save + Cancel next to it
+  // Change Edit button to Save, add Cancel button
   const parentActions = stuEditBtn && stuEditBtn.parentElement ? stuEditBtn.parentElement : null;
-  const originalEditBtnContent = stuEditBtn ? stuEditBtn.innerHTML : 'Edit';
   let cancelBtn = null;
-  let saveBtn = null;
+  
   if (stuEditBtn) {
-    // set Save behavior on the existing button
     stuEditBtn.textContent = 'Save';
-    stuEditBtn.classList.add('saving-ready');
-    saveBtn = stuEditBtn;
-    // create cancel
+    stuEditBtn.className = 'btn primary small';
+    
+    // Create cancel button
     cancelBtn = document.createElement('button');
     cancelBtn.id = 'hfa-stu-cancel-edit';
     cancelBtn.className = 'btn small';
@@ -728,30 +766,33 @@ function startInlineEdit(app) {
 
   // cancel handler
   if (cancelBtn) cancelBtn.onclick = () => {
-    // restore originals
+    // Restore originals
     fields.forEach(f => {
       const el = f.el;
       if (!el) return;
       el.innerHTML = originals[f.name] || '';
     });
-    // remove error
+    
+    // Remove error
     if (sidErr && sidErr.parentNode) sidErr.parentNode.removeChild(sidErr);
-    // restore edit button label + onclick using captured original if present
-    if (stuEditBtn && stuEditBtn._hfa_original) {
-      stuEditBtn.innerHTML = stuEditBtn._hfa_original.innerHTML;
-      stuEditBtn.onclick = stuEditBtn._hfa_original.onclick;
-    } else if (stuEditBtn) {
-      stuEditBtn.innerHTML = originalEditBtnContent;
-      stuEditBtn.onclick = () => startInlineEdit(app);
+    
+    // Restore Edit button (conditional approach)
+    if (stuEditBtn) {
+      stuEditBtn.textContent = 'Edit';
+      stuEditBtn.className = 'btn small';
     }
+    
+    // Remove Cancel button
     if (cancelBtn && cancelBtn.parentNode) cancelBtn.parentNode.removeChild(cancelBtn);
-    if (stuModal) delete stuModal.dataset.editing;
+    
+    // Reset edit state
+    isEditingStudent = false;
   };
 
   // save handler
-  if (saveBtn) saveBtn.onclick = async () => {
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving...';
+  if (stuEditBtn) stuEditBtn.onclick = async () => {
+    stuEditBtn.disabled = true;
+    stuEditBtn.textContent = 'Saving...';
     sidErr.style.display = 'none';
     try {
       const payload = {};
@@ -800,29 +841,38 @@ function startInlineEdit(app) {
       const docRef = doc(db, collectionName, app.id);
       await updateDoc(docRef, payload);
 
-      // success: remove edit mode and refresh modal (onSnapshot will trigger, but reflect immediate)
+      // Success: restore Edit button and remove Cancel button
       if (cancelBtn && cancelBtn.parentNode) cancelBtn.parentNode.removeChild(cancelBtn);
-      if (stuEditBtn && stuEditBtn._hfa_original) {
-        stuEditBtn.innerHTML = stuEditBtn._hfa_original.innerHTML;
-        stuEditBtn.onclick = stuEditBtn._hfa_original.onclick;
-      } else if (stuEditBtn) {
-        stuEditBtn.innerHTML = 'Edit';
-        stuEditBtn.onclick = () => startInlineEdit(app); // fallback
+      
+      if (stuEditBtn) {
+        stuEditBtn.textContent = 'Edit';
+        stuEditBtn.className = 'btn small';
+        stuEditBtn.disabled = false;
       }
-      if (stuModal) delete stuModal.dataset.editing;
+      
+      // Reset edit state
+      isEditingStudent = false;
 
       showToast('Student updated');
-      // update local map so UI refresh quickly
+      
+      // Update local map so UI refresh quickly
       const mergedRaw = { ...(app.raw || {}), ...payload };
       applicantsMap.set(app.id, normalizeApplicant(app.id, mergedRaw));
       applyFiltersAndRender();
       openStudentModal(applicantsMap.get(app.id));
+      
     } catch (err) {
       console.error('Save edit failed', err);
       sidErr.style.display = 'block';
       sidErr.textContent = 'Save failed. See console.';
     } finally {
-      if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = 'Save'; }
+      if (stuEditBtn) { 
+        stuEditBtn.disabled = false; 
+        if (!isEditingStudent) {
+          // Only set to Save if still in edit mode (error occurred)
+          stuEditBtn.textContent = isEditingStudent ? 'Save' : 'Edit';
+        }
+      }
     }
   };
 }
@@ -855,10 +905,8 @@ if (enrollModal) {
     if (e.target === enrollModal) closeEnrollConfirm();
   });
 }
-if (enrollSendBtn) enrollSendBtn.addEventListener('click', () => {
-  const app = _enrollState.app || currentModalApp;
+if (enrollCancelBtn) enrollCancelBtn.addEventListener('click', () => {
   closeEnrollConfirm();
-  if (app) openMessageModal(app, { afterEnroll: true });
 });
 if (enrollConfirmBtn) enrollConfirmBtn.addEventListener('click', async () => {
   const app = _enrollState.app || currentModalApp;
@@ -866,12 +914,56 @@ if (enrollConfirmBtn) enrollConfirmBtn.addEventListener('click', async () => {
   if (!app) return;
   try {
     await enrollApplicant(app);
-    showToast('Student enrolled');
+    
+    // Auto-send enrollment email
+    const emailSent = await sendEnrollmentEmail(app);
+    if (emailSent) {
+      showToast('✅ Student enrolled and email sent');
+    } else {
+      showToast('⚠️ Student enrolled, but email notification failed');
+    }
   } catch (e) {
     console.error('Enroll confirm failed', e);
     showToast('Enroll failed (see console).');
   }
 });
+
+/* ------------------ Auto-send enrollment email ------------------ */
+
+async function sendEnrollmentEmail(app) {
+  try {
+    const emailAddress = (app.raw && (app.raw.email || app.raw.contactEmail || app.raw.emailaddress)) || '';
+    if (!emailAddress) {
+      console.warn('No email address found for student');
+      return false;
+    }
+    
+    const studentName = app.fullName || `${app.firstName} ${app.lastName}` || 'Student';
+    
+    const emailPayload = {
+      studentId: app.id,
+      email: emailAddress,
+      subject: 'Welcome to Holy Family Academy',
+      message: `Good day ${studentName},\n\nCongratulations! You are now enrolled and part of the FAMILIANS at Holy Family Academy. We are excited to welcome you.\n\nWarm regards,\nHoly Family Academy Admissions`
+    };
+    
+    const response = await apiFetch('/api/admin/send-message', {
+      method: 'POST',
+      body: JSON.stringify(emailPayload)
+    });
+    
+    if (!response.ok) {
+      console.error('Email send failed:', response);
+      return false;
+    }
+    
+    console.log('Enrollment email sent successfully to:', emailAddress);
+    return true;
+  } catch (err) {
+    console.error('Email send error:', err);
+    return false;
+  }
+}
 
 /* ------------------ Enroll / other small flows ------------------ */
 
@@ -917,7 +1009,6 @@ function openMessageModal(app, { afterEnroll = false } = {}) {
   if (messageBody) {
     const template = `Good day ${studentName},\n\n` +
       `Congratulations! You are now enrolled and part of the FAMILIANS at Holy Family Academy. We are excited to welcome you.\n\n` +
-      `Please log in to your account to complete any remaining steps.\n\n` +
       `Warm regards,\nHoly Family Academy Admissions`;
     messageBody.value = template;
   }
@@ -944,13 +1035,6 @@ function closeMessageModal() {
   _messageModalState = { app: null, afterEnroll: false };
 }
 
-function readAuthToken() {
-  if (typeof window === 'undefined') return null;
-  if (window.__AUTH_TOKEN__) return window.__AUTH_TOKEN__;
-  const local = localStorage.getItem('serverToken') || localStorage.getItem('idToken') || localStorage.getItem('authToken');
-  return local || null;
-}
-
 async function handleSendMessage() {
   const app = _messageModalState.app;
   if (!app) { if (messageError) messageError.textContent = "Missing student data."; return; }
@@ -971,29 +1055,11 @@ async function handleSendMessage() {
     }
     if (messageError) messageError.textContent = "";
 
-    let token = null;
-    try {
-      const auth = getAuth();
-      if (auth && auth.currentUser) {
-        token = await auth.currentUser.getIdToken(false);
-        console.log("[HFA] obtained Firebase ID token (truncated):", token ? token.substring(0,60) + "..." : null);
-      }
-    } catch (tokErr) {
-      console.warn("[HFA] getIdToken failed:", tokErr);
-    }
-    if (!token) token = readAuthToken();
-
-    if (!token) {
-      if (messageError) messageError.textContent = "Authentication token not available. Please sign in again.";
-      if (messageSendBtn) { messageSendBtn.disabled = false; messageSendBtn.textContent = "Send"; }
-      return;
-    }
-
-    const headers = { "Content-Type": "application/json", "Authorization": `Bearer ${token}` };
-
+    // Use JWT cookie for auth (no token needed)
     const resp = await fetch("/api/admin/send-message", {
       method: "POST",
-      headers,
+      credentials: 'include',
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ studentId, email, subject, message })
     });
 
@@ -1027,10 +1093,32 @@ function closeStudentModal() {
   stuOverlay.style.display = 'none';
   stuOverlay.setAttribute('aria-hidden', 'true');
   currentModalApp = null;
-  // also clear editing flag if any
-  if (stuModal) delete stuModal.dataset.editing;
+  isEditingStudent = false; // Reset edit state
 }
 window.closeStudentModal = closeStudentModal; // expose globally as requested
+
+/* ------------------ Archive/Unarchive flows ------------------ */
+async function unarchiveStudent(app) {
+  if (!app || !app.archived) return;
+  
+  try {
+    const collectionName = app.formType === 'jhs' ? 'jhsApplicants' : 'shsApplicants';
+    const docRef = doc(db, collectionName, app.id);
+    await updateDoc(docRef, { 
+      archived: false, 
+      archivedAt: null, 
+      updatedAt: serverTimestamp() 
+    });
+    
+    showToast('Student unarchived successfully');
+    closeStudentModal();
+    applyFiltersAndRender();
+    
+  } catch (err) {
+    console.error('Unarchive failed', err);
+    showToast('Failed to unarchive student');
+  }
+}
 
 /* ------------------ Archive/Delete flows ------------------ */
 function openArchiveConfirm(app) {
@@ -1108,6 +1196,42 @@ function showToast(message, actionText, actionCallback) {
   setTimeout(() => { if (t.parentNode === toastContainer) t.parentNode.removeChild(t); }, 8000);
 }
 
+/* ------------------ Pagination helpers ------------------ */
+
+function updatePaginationControls(totalItems, totalPages, startIdx, endIdx) {
+  if (!paginationControls) return;
+  
+  // Show/hide pagination controls
+  if (totalItems <= rowsPerPage) {
+    paginationControls.style.display = 'none';
+    return;
+  }
+  
+  paginationControls.style.display = 'flex';
+  
+  // Update page numbers
+  if (currentPageNum) currentPageNum.textContent = currentPage;
+  if (totalPagesNum) totalPagesNum.textContent = totalPages || 1;
+  if (totalCountEl) totalCountEl.textContent = totalItems;
+  if (showingCount) {
+    const showing = Math.min(endIdx, totalItems);
+    showingCount.textContent = showing;
+  }
+  
+  // Enable/disable buttons
+  if (prevPageBtn) {
+    prevPageBtn.disabled = currentPage <= 1;
+  }
+  if (nextPageBtn) {
+    nextPageBtn.disabled = currentPage >= totalPages;
+  }
+}
+
+function goToPage(page) {
+  currentPage = page;
+  applyFiltersAndRender();
+}
+
 /* ------------------ Filters / Render pipeline ------------------ */
 
 function applyFiltersAndRender() {
@@ -1125,8 +1249,7 @@ function applyFiltersAndRender() {
   const statusVal = filterStatus ? filterStatus.value : '';
   if (statusVal === 'new') list = list.filter(a => a.isNew);
   else if (statusVal === 'old') list = list.filter(a => !a.isNew);
-  else if (statusVal === 'incomplete') list = list.filter(a => computeReqProgress(a.requirements) < 100);
-  else if (statusVal === 'complete') list = list.filter(a => computeReqProgress(a.requirements) === 100);
+  // Note: incomplete/complete filters removed as progress tracking is no longer used
 
   const q = (searchInput && searchInput.value || '').trim().toLowerCase();
   if (q) {
@@ -1143,11 +1266,26 @@ function applyFiltersAndRender() {
 
   updateCounts();
 
- 
-    if (tableView) tableView.style.display = 'block';
-    //if (cardsView) cardsView.style.display = 'none';
-    renderTableRows(list);
+  // Pagination logic
+  const totalItems = list.length;
+  const totalPages = Math.ceil(totalItems / rowsPerPage);
   
+  // Reset to page 1 if current page exceeds total pages
+  if (currentPage > totalPages && totalPages > 0) {
+    currentPage = 1;
+  }
+  
+  // Calculate pagination slice
+  const startIdx = (currentPage - 1) * rowsPerPage;
+  const endIdx = startIdx + rowsPerPage;
+  const paginatedList = list.slice(startIdx, endIdx);
+  
+  // Render table
+  if (tableView) tableView.style.display = 'block';
+  renderTableRows(paginatedList);
+  
+  // Update pagination controls
+  updatePaginationControls(totalItems, totalPages, startIdx, endIdx);
 }
 
 /* ------------------ UI listeners ------------------ */
@@ -1158,6 +1296,7 @@ function attachUIListeners() {
     tabButtons.forEach(b => b.classList.remove('active'));
     e.currentTarget.classList.add('active');
     activeTab = e.currentTarget.dataset.tab;
+    currentPage = 1; // Reset to page 1 when switching tabs
     applyFiltersAndRender();
   }));
 
@@ -1166,20 +1305,36 @@ function attachUIListeners() {
     tableBtn.classList.add('active');
     applyFiltersAndRender();
   });
-  // if (cardsBtn) cardsBtn.addEventListener('click', () => {
-  //   activeView = 'cards';
-  //   cardsBtn.classList.add('active');
-  //   if (tableBtn) tableBtn.classList.remove('active');
-  //   applyFiltersAndRender();
-  // });
 
   if (searchInput) searchInput.addEventListener('input', () => {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => applyFiltersAndRender(), 250);
+    debounceTimer = setTimeout(() => {
+      currentPage = 1; // Reset to page 1 on search
+      applyFiltersAndRender();
+    }, 250);
   });
 
-  if (filterStatus) filterStatus.addEventListener('change', applyFiltersAndRender);
+  if (filterStatus) filterStatus.addEventListener('change', () => {
+    currentPage = 1; // Reset to page 1 on filter change
+    applyFiltersAndRender();
+  });
+  
   if (sortBy) sortBy.addEventListener('change', applyFiltersAndRender);
+
+  // Pagination event listeners
+  if (prevPageBtn) {
+    prevPageBtn.addEventListener('click', () => {
+      if (currentPage > 1) {
+        goToPage(currentPage - 1);
+      }
+    });
+  }
+  
+  if (nextPageBtn) {
+    nextPageBtn.addEventListener('click', () => {
+      goToPage(currentPage + 1);
+    });
+  }
 
   if (stuClose2) stuClose2.addEventListener('click', () => closeStudentModal());
 
@@ -1194,7 +1349,6 @@ function attachUIListeners() {
 }
 
 /* ------------------ Firestore realtime listeners ------------------ */
-
 function setupRealtimeListeners() {
   const jhsCol = collection(db, 'jhsApplicants');
   onSnapshot(jhsCol, snapshot => {
@@ -1218,9 +1372,7 @@ function setupRealtimeListeners() {
     applyFiltersAndRender();
   }, err => { console.error('SHS onSnapshot error', err); });
 }
-
 /* ------------------ Initialization ------------------ */
-
 function init() {
   attachUIListeners();
   setupRealtimeListeners();

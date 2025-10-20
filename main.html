@@ -72,7 +72,8 @@
                     <p class="subtitle">Your future begins here at Holy Family Academy of Sta. Maria, Bulacan.</p>
                     <p class="description">
                         We are committed to providing quality Catholic education that nurtures academic excellence,
-                        character formation, and spiritual growth. Be part of Familians, where faith and learning come together.
+                        character formation, and spiritual growth. Be part of Familians, where faith and learning come
+                        together.
                     </p>
                     <a href="#admission" class="cta-btn">Get Started</a>
                 </div>
@@ -95,7 +96,12 @@
                         <i class="fas fa-school fa-3x icon-green"></i>
                         <h3>Junior High School</h3>
                         <p>Grade 7 to 10 program focusing on foundational learning and character development.</p>
-                        <a href="applicationform/jhsform.html" class="enroll-btn" id="enroll-jhs">Enroll Now</a>
+                        <div class="enrollment-action">
+                            <a href="applicationform/jhsform.html" class="enroll-btn" id="enroll-jhs">Enroll Now</a>
+                            <span class="enrollment-status-badge" id="jhs-status-badge">
+                                <i class="fas fa-spinner fa-spin"></i> Loading...
+                            </span>
+                        </div>
                     </div>
 
                     <!-- Senior High School Card -->
@@ -103,7 +109,12 @@
                         <i class="fas fa-graduation-cap fa-3x icon-green"></i>
                         <h3>Senior High School</h3>
                         <p>Choose from academic tracks with industry-ready skills training and college preparation.</p>
-                        <a href="applicationform/shsform.html" class="enroll-btn" id="enroll-shs">Enroll Now</a>
+                        <div class="enrollment-action">
+                            <a href="applicationform/shsform.html" class="enroll-btn" id="enroll-shs">Enroll Now</a>
+                            <span class="enrollment-status-badge" id="shs-status-badge">
+                                <i class="fas fa-spinner fa-spin"></i> Loading...
+                            </span>
+                        </div>
                     </div>
 
                     <!-- Teacher Application Card -->
@@ -188,75 +199,100 @@
         <!-- announcement and news content -->
         <section id="announcement-and-news">
             <div class="section-container">
+                <!-- Main Section Header -->
                 <div class="section-header">
-                    <h2>News & Updates</h2>
-                    <a href="#all-news" class="view-all">View all news →</a>
+                    <h2>Announcements & News</h2>
+                    <p>Stay updated with the latest from Holy Family Academy</p>
                 </div>
 
-                <div class="news-grid">
-                    <!-- Feature 1: Visual Hierarchy -->
-                    <article class="news-card featured" data-category="event">
-                        <!-- Feature 3: Quick Facts -->
-                        <div class="news-date">
-                            <span>📅 Mar 13, 2025</span>
-
+                <!-- Two-Column Layout -->
+                <div class="ann-news-two-column">
+                    
+                    <!-- LEFT COLUMN: Announcements -->
+                    <div class="ann-column">
+                        <div class="ann-column-header">
+                            <div class="ann-header-left">
+                                <i class="fas fa-bullhorn ann-icon"></i>
+                                <h3>Announcements</h3>
+                            </div>
+                            <a href="#all-announcements" class="view-all-link">View All →</a>
                         </div>
 
-                        <div class="news-image">
-                            <img src="../assets/retreat.jpg" alt="Retreat Day">
-                        </div>
-
-                        <div class="news-content">
-                            <span class="news-category">SPIRITUAL DEVELOPMENT</span>
-                            <h3 class="news-title"> Grade 10 and Grade 12 Two-Day Spiritual Retreat</h3>
-
-                            <!-- short description -->
-                            <div class="news-basic">
-                                <p>Annual character-building program</p>
+                        <!-- Announcements List -->
+                        <div class="ann-posts-list" id="announcements-list">
+                            <!-- Empty State (shown when no announcements) -->
+                            <div class="ann-empty-state" id="announcements-empty">
+                                <i class="fas fa-inbox"></i>
+                                <p>No announcements at the moment</p>
                             </div>
 
-                            <!-- Expandable description-->
-                            <div class="news-full">
-                                <p>Activities include meditation sessions, group workshops...</p>
+                            <!-- Loading State -->
+                            <div class="ann-loading-state" id="announcements-loading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Loading announcements...</p>
                             </div>
 
-                            <button class="read-more">Read More</button>
+                            <!-- Announcements will be dynamically inserted here -->
                         </div>
-                    </article>
+                    </div>
 
-                    <article class="news-card featured" data-category="event">
-
-                        <div class="news-date">
-                            <span>📅 Mar 13, 2025 </span>
-
+                    <!-- RIGHT COLUMN: News -->
+                    <div class="ann-column">
+                        <div class="ann-column-header">
+                            <div class="ann-header-left">
+                                <i class="fas fa-newspaper ann-icon"></i>
+                                <h3>News</h3>
+                            </div>
+                            <a href="#all-news" class="view-all-link">View All →</a>
                         </div>
 
-                        <div class="news-image">
-                            <img src="../assets/retreat.jpg" alt="Retreat Day">
-                        </div>
-
-                        <div class="news-content">
-                            <span class="news-category">SPIRITUAL DEVELOPMENT</span>
-                            <h3 class="news-title"> Grade 10 and Grade 12 Two-Day Spiritual Retreat</h3>
-
-                            <!-- Feature 2: Basic Info -->
-                            <div class="news-basic">
-                                <p>Annual character-building program</p>
+                        <!-- News List -->
+                        <div class="ann-posts-list" id="news-list">
+                            <!-- Empty State (shown when no news) -->
+                            <div class="ann-empty-state" id="news-empty">
+                                <i class="fas fa-inbox"></i>
+                                <p>No news at the moment</p>
                             </div>
 
-                            <!-- Expandable Content -->
-                            <div class="news-full">
-                                <p>Activities include meditation sessions, group workshops...</p>
+                            <!-- Loading State -->
+                            <div class="ann-loading-state" id="news-loading">
+                                <i class="fas fa-spinner fa-spin"></i>
+                                <p>Loading news...</p>
                             </div>
 
-                            <button class="read-more">Read More</button>
+                            <!-- News will be dynamically inserted here -->
                         </div>
-                    </article>
-                    <!-- Repeat for other cards -->
+                    </div>
+
                 </div>
             </div>
         </section>
 
+        <!-- Hidden Template for Post Cards (used by JavaScript) -->
+        <template id="ann-post-template">
+            <article class="ann-post-card">
+                <!-- Image (optional) -->
+                <div class="ann-post-image">
+                    <img src="" alt="Post image">
+                </div>
+                
+                <!-- Content -->
+                <div class="ann-post-content">
+                    <div class="ann-post-meta">
+                        <span class="ann-post-category"></span>
+                        <span class="ann-post-date"></span>
+                    </div>
+                    
+                    <h4 class="ann-post-title"></h4>
+                    <p class="ann-post-body"></p>
+                    
+                    <div class="ann-post-footer">
+                        <span class="ann-post-author"></span>
+                        <button class="ann-read-more">Read More →</button>
+                    </div>
+                </div>
+            </article>
+        </template>
 
         <section id="about">
             <div class="section-container">
@@ -305,7 +341,12 @@
                                     <i class="fas fa-bullseye"></i>
                                 </div>
                                 <h3>Our Mission</h3>
-                                <p>To be announce</p>
+                                <p>Holy Family Academy of Sta. Maria Bulacan Inc, is committed to provide a high quality
+                                    education that prepares students to excel academically, culturally, and
+                                    athletically. We strive to develop effective communicators and productive citizens
+                                    who integrate faith and love of family into their daily lives. Our holistic approach
+                                    ensures that each student is well-rounded, capable, and ready to contribute
+                                    positively to society.</p>
                             </div>
 
                             <!-- Vision -->
@@ -314,7 +355,11 @@
                                     <i class="fas fa-binoculars"></i>
                                 </div>
                                 <h3>Our Vision</h3>
-                                <p>To be announce</p>
+                                <p>Holy Family Academy of Sta. Maria Bulacan Inc. aspires to graduates who possess the
+                                    ability to understand and perform effectively, think and analyze critically, and
+                                    evaluate situations with clarity. Our graduates will be well-prepared to excel in
+                                    all aspects of life, equipped with the knowledge, practical skills, and strong
+                                    values necessary to thrive in any situation</p>
                             </div>
                         </div>
                     </div>
@@ -361,6 +406,9 @@
         <!-- Js script link -->
         <script type="module" src="/script.js"></script>
         <script type="module" src="/server/server.mjs"></script>
+
+        <script src="/landing-announcements.js"></script>
+        <script src="/landing-enrollment.js"></script>
     </body>
 
 </html>

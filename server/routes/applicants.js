@@ -1,5 +1,7 @@
 // server/routes/applicants.js
 import express from "express";
+import multer from "multer";
+import crypto from "crypto";
 
 /**
  * createApplicantsRouter({ db, dbClient, requireAuth, requireAdmin })
@@ -11,10 +13,22 @@ import express from "express";
  *
  * This router will prefer dbClient methods if provided; otherwise it will query Firestore directly.
  */
-export default function createApplicantsRouter({ db, dbClient, requireAuth, requireAdmin } = {}) {
+// Multer configuration for file uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB limit for teacher applicant files
+});
+
+export default function createApplicantsRouter({ db, dbClient, requireAuth, requireAdmin, admin } = {}) {
   if (!db && !dbClient) throw new Error("Either Firestore `db` or `dbClient` must be provided to applicants router");
+  if (!admin) throw new Error("`admin` (Firebase Admin SDK) must be provided to applicants router for file uploads");
 
   const router = express.Router();
+
+  // Helper: random suffix for filenames
+  function randStr(len = 6) {
+    return crypto.randomBytes(Math.ceil(len / 2)).toString("hex").slice(0, len);
+  }
 
   // Helper: convert Firestore doc snapshot to sanitized applicant shape (same keys returned in both codepaths)
   function sanitizeApplicantDocFromSnapshot(docSnapshot) {
@@ -194,6 +208,137 @@ export default function createApplicantsRouter({ db, dbClient, requireAuth, requ
     } catch (err) {
       console.error("[applicants/:id] unexpected", err && (err.stack || err));
       return res.status(500).json({ ok: false, error: "Server error", details: err && err.message });
+    }
+  });
+
+  /**
+   * POST /:applicantId/upload-file
+   * Upload a file for teacher applicant (resume, certificate, transcript, etc.)
+   * Uploads to Firebase Storage and adds to applicant's documents array
+   * Accepts multipart form-data: file, fileType, label
+   */
+  router.post("/:applicantId/upload-file", upload.single("file"), async (req, res) => {
+    console.log('📥 /api/applicants/:applicantId/upload-file - Request received');
+    console.log('   Applicant ID:', req.params.applicantId);
+    console.log('   Body:', req.body);
+    console.log('   File:', req.file ? `${req.file.originalname} (${req.file.size} bytes)` : 'NO FILE');
+    
+    try {
+      const applicantId = req.params.applicantId;
+      const fileType = String(req.body.fileType || "").trim();
+      const label = String(req.body.label || "").trim();
+      
+      if (!applicantId) {
+        console.log('❌ Missing applicantId');
+        return res.status(400).json({ ok: false, error: "Missing applicantId" });
+      }
+      if (!fileType) {
+        console.log('❌ Missing fileType');
+        return res.status(400).json({ ok: false, error: "Missing fileType" });
+      }
+      if (!req.file || !req.file.buffer) {
+        console.log('❌ No file provided');
+        return res.status(400).json({ ok: false, error: "No file provided" });
+      }
+
+      // Validate fileType (resume, certificate, transcript, portfolio, etc.)
+      const validTypes = ["resume", "certificate", "transcript", "portfolio", "license", "clearance"];
+      if (!validTypes.includes(fileType)) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: `Invalid fileType. Must be one of: ${validTypes.join(", ")}` 
+        });
+      }
+
+      // Validate file extension (PDF, PNG, JPG only)
+      const originalName = req.file.originalname || "file";
+      const ext = originalName.includes(".") ? originalName.slice(originalName.lastIndexOf(".")).toLowerCase() : "";
+      const validExtensions = [".pdf", ".png", ".jpg", ".jpeg"];
+      if (!validExtensions.includes(ext)) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: `Invalid file type. Only PDF, PNG, and JPG files are allowed.` 
+        });
+      }
+
+      // Generate unique filename
+      const timestamp = Date.now();
+      const random = randStr(6);
+      const filename = `${fileType}_${timestamp}_${random}${ext}`;
+      const path = `uploads/teacherApplicants/${applicantId}/${filename}`;
+
+      const fileBuffer = req.file.buffer;
+      const contentType = req.file.mimetype || "application/octet-stream";
+
+      console.log(`/api/applicants/${applicantId}/upload-file: type=${fileType} path=${path} size=${fileBuffer.length}`);
+
+      // Upload to Firebase Storage
+      const bucket = admin.storage().bucket();
+      const file = bucket.file(path);
+      let publicUrl;
+
+      try {
+        await file.save(fileBuffer, {
+          metadata: {
+            contentType: contentType,
+            cacheControl: "public, max-age=3600"
+          }
+        });
+
+        await file.makePublic();
+        const bucketName = bucket.name;
+        publicUrl = `https://storage.googleapis.com/${bucketName}/${path}`;
+
+        console.log(`✅ Firebase Storage upload success: ${publicUrl}`);
+      } catch (uploadError) {
+        console.error("❌ Firebase Storage upload failed", uploadError);
+        return res.status(500).json({ 
+          ok: false, 
+          error: "Upload failed", 
+          detail: uploadError.message || String(uploadError) 
+        });
+      }
+
+      // Find the teacher applicant document
+      const appRef = db.collection("teacherApplicants").doc(applicantId);
+      const appSnap = await appRef.get();
+
+      if (!appSnap.exists) {
+        console.log('❌ Teacher applicant not found:', applicantId);
+        return res.status(404).json({ ok: false, error: "Teacher applicant not found" });
+      }
+
+      // Add to documents array
+      const docToAdd = {
+        type: fileType,
+        label: label || fileType,
+        fileName: originalName,
+        fileUrl: publicUrl,
+        filePath: path,
+        uploadedAt: admin.firestore.Timestamp.now()
+      };
+
+      await appRef.update({
+        documents: admin.firestore.FieldValue.arrayUnion(docToAdd),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+
+      console.log(`✅ /api/applicants/${applicantId}/upload-file success: type=${fileType}`);
+
+      return res.json({ 
+        ok: true, 
+        fileType, 
+        fileUrl: publicUrl, 
+        fileName: originalName,
+        filePath: path
+      });
+    } catch (err) {
+      console.error("❌ /api/applicants/:applicantId/upload-file error", err && (err.stack || err));
+      return res.status(500).json({ 
+        ok: false, 
+        error: "Server error", 
+        message: err && err.message 
+      });
     }
   });
 

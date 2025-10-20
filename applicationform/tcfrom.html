@@ -86,7 +86,11 @@
                             </div>
                             <div class="form-group">
                                 <label>Contact Number <span class="required">*</span></label>
-                                <input type="tel" id="contact-number" placeholder="09123456789" required>
+                                <div class="phone-input-wrapper">
+                                    <span class="country-code">+63</span>
+                                    <input type="tel" id="contact-number" placeholder="9123456789" maxlength="10" pattern="[0-9]*" inputmode="numeric" required>
+                                </div>
+                                <small class="phone-hint">Enter 10 digits starting with 9 (e.g., 9123456789)</small>
                             </div>
                             <div class="form-group">
                                 <label>Email Address <span class="required">*</span></label>
@@ -151,20 +155,6 @@
                             </div>
                         </div>
 
-                        <!-- Certifications -->
-                        <div class="sub-section">
-                            <h3>Certifications</h3>
-                            <div class="form-grid">
-                                <div class="form-group">
-                                    <label>Teaching License Number</label>
-                                    <input type="text" id="license-number" placeholder="If applicable">
-                                </div>
-                                <div class="form-group">
-                                    <label>License Expiry Date</label>
-                                    <input type="date" id="license-expiry" placeholder="YYYY-MM-DD">
-                                </div>
-                            </div>
-                        </div>
                     </fieldset>
 
                     <!-- Position Preferences -->
@@ -198,28 +188,7 @@
                     <!-- Documents Upload -->
                     <fieldset class="form-section">
                         <legend><i class="fas fa-file-alt"></i> Document Uploads</legend>
-                        <div class="form-grid">
-                            <div class="form-group full-width">
-                                <label>Teaching Certificate/License (PDF/Image) </label>
-                                <div class="file-input-container">
-                                    <label for="license-upload" class="file-input-label">
-                                        <i class="fas fa-file-alt"></i>
-                                        <span class="file-input-text">Choose file or drag & drop here</span>
-                                    </label>
-                                    <input type="file" id="license-upload" class="file-input" accept=".pdf,.jpg,.png"
-                                        required>
-                                </div>
-                            </div>
-                            <div class="form-group full-width">
-                                <label>Transcript of Records (PDF) </label>
-                                <div class="file-input-container">
-                                    <label for="transcript-upload" class="file-input-label">
-                                        <i class="fas fa-file-pdf"></i>
-                                        <span class="file-input-text">Choose file or drag & drop here</span>
-                                    </label>
-                                    <input type="file" id="transcript-upload" class="file-input" accept=".pdf" required>
-                                </div>
-                            </div>
+                        <div class="form-grid">    
                             <div class="form-group full-width">
                                 <label>Curriculum Vitae (CV) / Resume (PDF/Image) </label>
                                 <div class="file-input-container">
@@ -241,8 +210,6 @@
                         <button type="submit" id="submit-btn" class="submit-btn">
                             Submit Application <i class="fas fa-paper-plane"></i>
                         </button>
-                        <p class="form-notice">By submitting this form, you agree to our <a href="#">Terms of
-                                Service</a> and <a href="#">Privacy Policy</a>.</p>
                     </div>
                 </div>
             </div>

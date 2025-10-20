@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', function () {
       if (newStdRequirements) newStdRequirements.style.display = 'block';
       if (returningStdRequirements) returningStdRequirements.style.display = 'none';
     }
-    else if (selectedValue === 'returning') {
+    else if (selectedValue === 'old') {
       if (studentNumberGroup) studentNumberGroup.style.display = 'block';
       if (previousSchoolGroup) previousSchoolGroup.style.display = 'none';
 
@@ -46,12 +46,12 @@ document.addEventListener('DOMContentLoaded', function () {
     } 
   }
 
-//student type change event listeners
+  //student type change event listeners
   studentTypeRadios.forEach(radio => radio.addEventListener('change', handleStudentTypeChange));
   handleStudentTypeChange();
 
       // age validation
-      const birthDateInput = document.getElementById("birth-date");
+  const birthDateInput = document.getElementById("birth-date");
   const birthDateError = document.getElementById("birth-date-error");
   const gradeLevelSelect = document.getElementById("grade-level");
   const submitBtn = document.querySelector('button[type="submit"]'); // the form submit button
@@ -88,9 +88,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // extract numeric grade (e.g., "Grade 11" -> 11)
     const match = gradeLevelValue.match(/\d+/);
     const gradeNum = match ? match[0] : null;
-
     const gradeMinAges = { "7": 11, "8": 12, "9": 13, "10": 14 };
-
     const minAge = gradeNum ? gradeMinAges[gradeNum] : undefined;
 
     if (!minAge) {
@@ -112,6 +110,50 @@ document.addEventListener('DOMContentLoaded', function () {
       return true;
     }
   }
+ 
+  const firstName = document.getElementById("first-name");
+  const lastName = document.getElementById("last-name");
+  const middleName = document.getElementById("middle-name");
+  const birthDate = document.getElementById("birth-date");
+  const gradeLevel = document.getElementById("grade-level");
+  const studentType = document.getElementById("student-type");
+
+  //validate all fields
+  function validateFields(){
+    if(firstName.value.trim() === ""){
+      firstNameError.style.display = "block";
+      firstNameError.textContent = "First name is required.";
+      return false;
+    }
+    if(lastName.value.trim() === ""){
+      lastNameError.style.display = "block";
+      lastNameError.textContent = "Last name is required.";
+      return false;
+    }
+    if(middleName.value.trim() === ""){
+      middleNameError.style.display = "block";
+      middleNameError.textContent = "Middle name is required.";
+      return false;
+    }
+    if(birthDate.value.trim() === ""){
+      birthDateError.style.display = "block";
+      birthDateError.textContent = "Birthdate is required.";
+      return false;
+    }
+    if(gradeLevel.value.trim() === ""){
+      gradeLevelError.style.display = "block";
+      gradeLevelError.textContent = "Grade level is required.";
+      return false;
+    }
+    if(studentType.value.trim() === ""){
+      studentTypeError.style.display = "block";
+      studentTypeError.textContent = "Student type is required.";
+      return false;
+    }
+    return true;
+  }
+
+
    // attach instant validation listeners
   if (birthDateInput) birthDateInput.addEventListener("input", validateAge);
   if (gradeLevelSelect) gradeLevelSelect.addEventListener("change", validateAge);
@@ -121,5 +163,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
   // Expose for other scripts (server) to call before submission
   window.validateAge = validateAge;
-    window.handleStudentTypeChange = handleStudentTypeChange;
+  window.handleStudentTypeChange = handleStudentTypeChange;
+
+
 });

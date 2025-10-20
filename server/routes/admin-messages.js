@@ -11,9 +11,7 @@ export default function createAdminMessagesRouter(deps = {}) {
 
   const router = express.Router();
 
-  // POST /api/admin/send-message
-  // Body: { studentId, email, subject, message }
-  // Requires requireAdmin middleware
+  // sends a message
   router.post("/admin/send-message", requireAdmin, async (req, res) => {
     try {
       const { studentId, email, subject, message } = req.body || {};

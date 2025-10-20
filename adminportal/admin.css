@@ -1,8 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Josefin+Sans:ital,wght@0,100..700;1,100..700&family=PT+Serif:ital,wght@0,400;0,700;1,400;1,700&family=Zen+Antique+Soft&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
 
 *{
-  font-family: 'Josefin Sans', sans-serif;
+font-family: 'Poppins', sans-serif;
   margin: 0;
   padding: 0;
   box-sizing: border-box;
@@ -315,4 +315,98 @@ header .schoolname {
     main {
         margin-right: 0; /* Full width content in mobile */
     }
+}
+
+/* Tablet and small desktop */
+@media (max-width: 768px) {
+  .navbar .schoolname {
+    font-size: 1.2rem; /* Slightly smaller */
+  }
+  
+  .logo img {
+    width: 60px; /* Smaller logo */
+  }
+  
+  .nav-icons {
+    gap: 12px;
+    padding-right: 15px;
+  }
+  
+  #open-sidebar {
+    padding: 10px 15px;
+  }
+}
+
+/* Large phones */
+@media (max-width: 600px) {
+  .navbar .schoolname {
+    font-size: 1rem; /* Even smaller */
+    padding-left: 20px;
+  }
+  
+  .logo img {
+    width: 50px;
+  }
+}
+
+/* Standard phones - Hide school name */
+@media (max-width: 480px) {
+  .navbar .schoolname {
+    display: none; /* Hide school name completely */
+  }
+  
+  header .navbar {
+    padding: 8px 12px; /* Tighter padding */
+  }
+  
+  .logo {
+    margin: 0 auto; /* Center logo */
+  }
+  
+  .logo img {
+    width: 45px; /* Compact logo */
+    padding: 5px;
+  }
+  
+  .nav-icons {
+    gap: 10px;
+    padding-right: 10px;
+  }
+  
+  .nav-icon {
+    font-size: 1.1rem; /* Slightly smaller icon */
+    padding: 6px;
+  }
+  
+  #open-sidebar {
+    padding: 8px 12px;
+    font-size: 1.3rem;
+  }
+}
+
+/* Extra small phones */
+@media (max-width: 400px) {
+  header .navbar {
+    padding: 6px 10px; /* Even tighter */
+  }
+  
+  .logo img {
+    width: 40px; /* Smaller logo */
+    padding: 3px;
+  }
+  
+  .nav-icons {
+    gap: 8px;
+    padding-right: 8px;
+  }
+  
+  .nav-icon {
+    font-size: 1rem;
+    padding: 5px;
+  }
+  
+  #open-sidebar {
+    padding: 6px 10px;
+    font-size: 1.2rem;
+  }
 }

@@ -1,34 +1,26 @@
 // api-fetch.js (project root)
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-const auth = getAuth();
-
-
-export async function getIdTokenOrReject() {
-  if (auth.currentUser) return auth.currentUser.getIdToken();
-  return new Promise((resolve, reject) => {
-    const unsub = onAuthStateChanged(auth, async (user) => {
-      unsub();
-      if (!user) return reject(new Error("Not signed in"));
-      try {
-        const t = await user.getIdToken();
-        resolve(t);
-      } catch (e) {
-        reject(e);
-      }
-    });
-  });
-}
+// JWT Cookie-based API helper - no Firebase tokens needed!
 
 export async function apiFetch(path, opts = {}) {
-  const token = await getIdTokenOrReject();
+  // Set headers (don't add Authorization - cookie handles auth automatically)
   const headers = opts.headers ? { ...opts.headers } : {};
-  headers["Authorization"] = `Bearer ${token}`;
   if (!headers["Content-Type"] && !(opts.body instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
+  
+  // Make request with credentials to send cookie
   const res = await fetch(path, { credentials: "include", ...opts, headers });
   const text = await res.text().catch(() => "");
+  
   if (!res.ok) {
+    // Handle session expiry
+    if (res.status === 401 || res.status === 403) {
+      // Session expired or unauthorized
+      alert('⏰ Your session has expired. Please log in again.');
+      window.location.href = '/login/login.html';
+      return;
+    }
+    
     let parsed = null;
     try { parsed = JSON.parse(text); } catch (e) { parsed = null; }
     const msg = parsed && (parsed.error || parsed.message) ? (parsed.error || parsed.message) : (text || res.statusText);
@@ -37,5 +29,6 @@ export async function apiFetch(path, opts = {}) {
     err.body = parsed || text;
     throw err;
   }
+  
   try { return JSON.parse(text); } catch (e) { return text; }
 }

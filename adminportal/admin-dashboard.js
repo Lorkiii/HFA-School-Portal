@@ -1,159 +1,286 @@
+// Import Firebase auth and API helper
+import { auth } from '../firebase-config.js';
+import { onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+import { apiFetch } from '../api-fetch.js';
+
 (function(){
-  // fetch fallback stats (no server call here)
-  const statsFallback = {
-    totalStudents: 0,
-    teacherApplicants: 0,
-    totalClasses: 0,
-    enrollmentTarget: 200
-  };
-  // try to read pre-provided stats stored in window (optional)
-  const stats = window.__ADMIN_STATS__ || statsFallback;
- 
-  // fill quick stats
-  document.getElementById('stat-total-students').textContent = (stats.totalStudents || 0).toLocaleString();
-  document.getElementById('stat-students-meta').textContent = `as of ${new Date().toLocaleDateString()}`;
-  document.getElementById('stat-total-teachers').textContent = (stats.teacherApplicants || 0).toLocaleString();
+  // DASHBOARD DATA FETCHER
+  // Fetches real-time data from server endpoint
 
-  // enrollment numbers stored in localStorage or fallback
-  const enrolKey = 'admin_enrollment_status';
-  let enrollmentStatus = (() => {
+  let dashboardData = null;
+  let isLoading = false;
+
+  // Fetch dashboard data from server using centralized apiFetch
+  async function fetchDashboardData() {
+    if (isLoading) return;
+    
+    isLoading = true;
+    showLoadingState();
+
     try {
-      return JSON.parse(localStorage.getItem(enrolKey)) || { total: 0, completed: 0, pending: 0, missing: 0 };
-    } catch(e){ return { total:0, completed:0, pending:0, missing:0 }; }
-  })();
+      console.log('[Dashboard] Fetching dashboard data...');
+      
+      // Use apiFetch - handles auth automatically
+      dashboardData = await apiFetch('/api/admin/dashboard-stats');
+      
+      console.log('[Dashboard] Data fetched successfully:', dashboardData);
+      
+      renderDashboard();
+      hideLoadingState();
+      hideErrorState();
+      
+    } catch (error) {
+      console.error('[Dashboard] Fetch error:', error);
+      showErrorState(error.message);
+      hideLoadingState();
+      renderFallbackData();
+    } finally {
+      isLoading = false;
+    }
+  }
 
-  // render enrollment overview
-  function renderEnrollment() {
-    const total = enrollmentStatus.total || 0;
-    const completed = enrollmentStatus.completed || 0;
-    const target = stats.enrollmentTarget || Math.max(total, 1);
-    const percent = Math.round((completed / target) * 100);
-    document.getElementById('stat-enrollment-percent').textContent = `${percent}%`;
-    document.getElementById('enrollment-bar').style.width = `${Math.min(100, percent)}%`;
-    document.getElementById('stat-enrollment-meta').textContent = `${completed} / ${target}`;
+  // ============================================
+  // UI STATE MANAGEMENT
+  // ============================================
 
-    document.getElementById('completed-count').textContent = completed;
-    document.getElementById('pending-count').textContent = enrollmentStatus.pending || 0;
-    document.getElementById('missing-count').textContent = enrollmentStatus.missing || 0;
+  function showLoadingState() {
+    // Update quick stats to show loading
+    const statStudent = document.getElementById('stat-total-students');
+    const statTeacher = document.getElementById('stat-teacher-apps');
+    const statEnroll = document.getElementById('stat-enroll-percent');
+    
+    if (statStudent) statStudent.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    if (statTeacher) statTeacher.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    if (statEnroll) statEnroll.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+  }
 
+  function hideLoadingState() {
+    // Loading indicators will be replaced by actual data
+  }
+
+  function showErrorState(message) {
+    console.warn('[Dashboard] Error state:', message);
+    
+    // Show error in the dashboard header
+    const dashboardHeader = document.querySelector('.dashboard-header');
+    if (!dashboardHeader) return;
+    
+    // Remove existing error if present
+    const existingError = document.getElementById('dashboard-error');
+    if (existingError) existingError.remove();
+    
+    // Create error banner
+    const errorBanner = document.createElement('div');
+    errorBanner.id = 'dashboard-error';
+    errorBanner.style.cssText = 'background: #fee; border: 1px solid #fcc; color: #c33; padding: 10px; border-radius: 6px; margin-bottom: 10px; font-size: 0.9rem;';
+    errorBanner.innerHTML = `<strong>⚠️ Error loading dashboard:</strong> ${message}. <a href="#" onclick="location.reload()" style="color: #c33; text-decoration: underline;">Reload page</a>`;
+    
+    dashboardHeader.insertAdjacentElement('afterend', errorBanner);
+  }
+
+  function hideErrorState() {
+    // Hide any error messages if they exist
+  }
+
+  // ============================================
+  // RENDER DASHBOARD WITH REAL DATA
+  // ============================================
+
+  function renderDashboard() {
+    if (!dashboardData) return;
+
+    renderQuickStats();
+    renderEnrollmentStatus();
+    renderRecentSubmissions();
+    renderRecentActivity();
+  }
+
+  // Render Quick Stats Cards (only Total Students and Teacher Applicants)
+  function renderQuickStats() {
+    const stats = dashboardData.quickStats || {};
+    
+    // Total Students
+    const statStudent = document.getElementById('stat-total-students');
+    if (statStudent) {
+      statStudent.textContent = (stats.totalStudents || 0).toLocaleString();
+    }
+
+    // Teacher Applicants
+    const statTeacher = document.getElementById('stat-teacher-apps');
+    if (statTeacher) {
+      statTeacher.textContent = (stats.teacherApplicants || 0).toLocaleString();
+    }
+
+    // Note: Enrollment card removed as per user request
+  }
+
+  // Render Enrollment Status (Completed, Pending)
+  function renderEnrollmentStatus() {
+    const enrollment = dashboardData.enrollmentStatus || {};
+    const total = enrollment.total || 0;
+    const completed = enrollment.completed || 0;
+    const pending = enrollment.pending || 0;
+
+    // Update counts
+    const completedEl = document.getElementById('enroll-completed');
+    if (completedEl) completedEl.textContent = completed;
+
+    const pendingEl = document.getElementById('enroll-pending');
+    if (pendingEl) pendingEl.textContent = pending;
+
+    // Update progress bars
     const denom = Math.max(1, total);
-    document.getElementById('completed-bar').style.width = `${Math.round((completed/denom)*100)}%`;
-    document.getElementById('pending-bar').style.width = `${Math.round(((enrollmentStatus.pending||0)/denom)*100)}%`;
-    document.getElementById('missing-bar').style.width = `${Math.round(((enrollmentStatus.missing||0)/denom)*100)}%`;
-  }
-  renderEnrollment();
+    
+    const completedBar = document.getElementById('bar-completed');
+    if (completedBar) {
+      completedBar.style.width = `${Math.round((completed / denom) * 100)}%`;
+    }
 
-  // Recent Activity: simple sample -> replace with server data later
-  (function renderRecentActivity(){
-    const table = document.getElementById('recent-activity-table');
-    if (!table) return;
-    const tbody = table.querySelector('tbody');
-    tbody.innerHTML = '';
-    const sample = [
-      { date: new Date().toISOString().slice(0,10), activity:'System initialized', user:'System' }
-    ];
-    sample.forEach(s => {
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td>${s.date}</td><td>${s.activity}</td><td>${s.user}</td>`;
-      tbody.appendChild(tr);
-    });
-  })();
-
-  // ---------------- Quick Notes ----------------
-  const noteKey = 'admin_quick_notes';
-  function loadNotes(){
-    try { return JSON.parse(localStorage.getItem(noteKey) || '[]'); }
-    catch(e){ return []; }
+    const pendingBar = document.getElementById('bar-pending');
+    if (pendingBar) {
+      pendingBar.style.width = `${Math.round((pending / denom) * 100)}%`;
+    }
   }
-  function saveNotes(notes){ localStorage.setItem(noteKey, JSON.stringify(notes || [])); }
-  function renderNotes(){
-    const list = document.getElementById('note-list');
-    if (!list) return;
-    const notes = loadNotes();
-    list.innerHTML = '';
-    if (notes.length === 0){
-      const li = document.createElement('li');
-      li.innerHTML = `<div class="txt">No notes yet</div><div class="meta">—</div>`;
-      list.appendChild(li);
+
+  // Render Recent Submissions
+  function renderRecentSubmissions() {
+    const submissions = dashboardData.recentSubmissions || [];
+    const listEl = document.getElementById('recent-submissions-list');
+    
+    if (!listEl) return;
+
+    if (submissions.length === 0) {
+      listEl.innerHTML = '<li class="submission-item empty"><p>No recent submissions</p></li>';
       return;
     }
-    notes.slice().reverse().forEach(n => {
-      const li = document.createElement('li');
-      li.innerHTML = `<div><div class="txt">${escapeHtml(n.text)}</div><div class="meta">${new Date(n.ts).toLocaleString()}</div></div>
-                      <div><button class="del-note" data-id="${n.ts}">Delete</button></div>`;
-      list.appendChild(li);
+
+    listEl.innerHTML = submissions.map(sub => {
+      const date = new Date(sub.submittedAt);
+      const formattedDate = date.toLocaleDateString();
+      const formattedTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      
+      return `
+        <li class="submission-item">
+          <div class="submission-left">
+            <div class="submission-info">
+              <strong>${sub.name}</strong>
+              <small>${sub.email}</small>
+            </div>
+          </div>
+          <div class="submission-right">
+            <span class="badge badge-${sub.formType.toLowerCase()}">${sub.formType}</span>
+            <small class="submission-date">${formattedDate} ${formattedTime}</small>
+          </div>
+        </li>
+      `;
+    }).join('');
+  }
+
+  // Render Recent Activity (with user column)
+  function renderRecentActivity() {
+    const activities = dashboardData.recentActivity || [];
+    const tbody = document.getElementById('recent-activity-body');
+    
+    if (!tbody) return;
+
+    if (activities.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="3">No recent activity</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = activities.map(activity => {
+      const date = new Date(activity.date);
+      const formattedDate = date.toLocaleDateString();
+      const formattedTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      
+      return `
+        <tr>
+          <td>${formattedDate} ${formattedTime}</td>
+          <td>${activity.activity}</td>
+          <td>${activity.user}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+
+  // FALLBACK DATA (when fetch fails)
+
+  function renderFallbackData() {
+    const statStudent = document.getElementById('stat-total-students');
+    if (statStudent) statStudent.textContent = '0';
+
+    const statTeacher = document.getElementById('stat-teacher-apps');
+    if (statTeacher) statTeacher.textContent = '0';
+
+    const statEnroll = document.getElementById('stat-enroll-percent');
+    if (statEnroll) statEnroll.textContent = '0%';
+
+    const enrollCount = document.getElementById('enroll-count');
+    if (enrollCount) enrollCount.textContent = '0 / 200';
+  }
+
+  // REFRESH FUNCTIONALITY
+  function setupRefreshButton() {
+    // Check if refresh button already exists
+    let refreshBtn = document.getElementById('dashboard-refresh-btn');
+    if (refreshBtn) return; // Already created
+
+    // Create refresh button container above quick stats
+    const quickStats = document.querySelector('.quick-stats');
+    if (!quickStats) return;
+
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = 'display: flex; justify-content: flex-end; margin-bottom: 12px;';
+    
+    refreshBtn = document.createElement('button');
+    refreshBtn.id = 'dashboard-refresh-btn';
+    refreshBtn.className = 'refresh-btn';
+    refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh Data';
+    refreshBtn.title = 'Refresh dashboard data';
+    
+    buttonContainer.appendChild(refreshBtn);
+    quickStats.parentNode.insertBefore(buttonContainer, quickStats);
+
+    // Add click handler
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.disabled = true;
+      refreshBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Refreshing...';
+      
+      await fetchDashboardData();
+      
+      refreshBtn.disabled = false;
+      refreshBtn.innerHTML = '<i class="fas fa-sync-alt"></i> Refresh';
     });
-    list.querySelectorAll('button.del-note').forEach(b => {
-      b.addEventListener('click', e => {
-        const id = e.currentTarget.dataset.id;
-        let arr = loadNotes();
-        arr = arr.filter(x => String(x.ts) !== String(id));
-        saveNotes(arr); renderNotes();
+  }
+
+//init
+
+  // Wait for Firebase auth to be ready before fetching data
+  function initDashboard() {
+    // Setup refresh button
+    setupRefreshButton();
+
+    // Wait for auth to be ready
+    if (auth.currentUser) {
+      console.log('[Dashboard] Initializing...');
+      fetchDashboardData();
+    } else {
+      // Wait for auth state to be determined
+      const unsubscribe = onAuthStateChanged(auth, (user) => {
+        unsubscribe(); // Unsubscribe after first call
+        if (user) {
+          fetchDashboardData();
+        } else {
+          console.error('[Dashboard] Authentication required');
+          showErrorState('Please log in to view dashboard');
+        }
       });
-    });
+    }
   }
-  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
-  document.getElementById('add-note')?.addEventListener('click', () => {
-    const input = document.getElementById('note-input');
-    if (!input) return;
-    const text = input.value.trim();
-    if (!text) return;
-    const notes = loadNotes();
-    notes.push({ text, ts: Date.now() });
-    saveNotes(notes);
-    input.value = '';
-    renderNotes();
-  });
-  document.getElementById('note-input')?.addEventListener('keypress', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); document.getElementById('add-note').click(); }
-  });
+  // Start initialization
+  initDashboard();
 
-  renderNotes();
-
-  // ---------------- Quick action confirm modal ----------------
-  const confirmModal = document.getElementById('confirm-modal');
-  const confirmTitle = document.getElementById('confirm-title');
-  const confirmBody = document.getElementById('confirm-body');
-  const confirmOk = document.getElementById('confirm-ok');
-  const confirmCancel = document.getElementById('confirm-cancel');
-
-  let confirmResolve = null;
-  function showConfirm(title, body){
-    confirmTitle.textContent = title;
-    confirmBody.textContent = body || '';
-    confirmModal.style.display = 'block';
-    document.getElementById('ui-modals').setAttribute('aria-hidden','false');
-    return new Promise((resolve) => {
-      confirmResolve = resolve;
-    });
-  }
-  function hideConfirm(){ confirmModal.style.display='none'; document.getElementById('ui-modals').setAttribute('aria-hidden','true'); }
-
-  confirmOk.addEventListener('click', () => { hideConfirm(); if (confirmResolve) confirmResolve(true); });
-  confirmCancel.addEventListener('click', () => { hideConfirm(); if (confirmResolve) confirmResolve(false); });
-
-  // wire quick action buttons
-  document.querySelectorAll('.quick-action').forEach(btn => {
-    btn.addEventListener('click', async (ev) => {
-      const action = btn.dataset.action;
-      const map = {
-        'verify-application': { title:'Verify Application', body:'Mark selected application as verified (UI-only).' },
-        'verify-enrollment': { title:'Verify Enrollment', body:'Mark selected enrollment as verified (UI-only).' },
-        'schedule-interview': { title:'Schedule Interview', body:'Open the schedule form (use the Schedule Interview quick task).' },
-        'edit-account': { title:'Edit Account', body:'Open the edit account modal (UI-only).' },
-        'reset-password': { title:'Reset Password', body:'Reset password for a user (UI-only).' }
-      };
-      const info = map[action] || { title: 'Confirm', body: action };
-      const ok = await showConfirm(info.title, info.body);
-      if (ok) {
-        // simple toast effect: reuse confirm modal to show success then hide
-        confirmTitle.textContent = 'Done';
-        confirmBody.textContent = `${info.title} performed (demo UI).`;
-        confirmOk.style.display = 'none';
-        setTimeout(()=>{ confirmOk.style.display = 'inline-block'; hideConfirm(); }, 900);
-      }
-    });
-  });
 
 })();

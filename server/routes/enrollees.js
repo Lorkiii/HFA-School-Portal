@@ -2,6 +2,7 @@
 import express from "express";
 import multer from "multer";
 import crypto from "crypto";
+import { validateAndFormatPhone } from "../utils/phoneValidator.js";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -11,13 +12,8 @@ const upload = multer({
 export default function createEnrolleesRouter(deps = {}) {
   const {
     db,
-    supabase,
     admin,
-    mailTransporter,
-    defaultRequirementsObject,
-    writeActivityLog,
-    UPLOAD_BUCKET = "uploads",
-    UPLOAD_SESSION_TTL_MS = (1000 * 60 * 60) // 1 hour default
+    writeActivityLog
   } = deps;
 
   const router = express.Router();
@@ -28,7 +24,7 @@ export default function createEnrolleesRouter(deps = {}) {
   }
 
   // POST /api/enrollees
-  // Body: metadata (form fields) + metadata.requestedFiles = [{ slot, name }, ...]
+  // Body: metadata (form fields - no requestedFiles needed)
   router.post("/enrollees", async (req, res) => {
     try {
       const formData = req.body || {};
@@ -38,17 +34,28 @@ export default function createEnrolleesRouter(deps = {}) {
         return res.status(400).json({ ok: false, error: "Missing or invalid formType (shs|jhs)" });
       }
 
-      // requestedFiles can be an array of { slot, name }
-      const requestedFiles = Array.isArray(formData.requestedFiles) ? formData.requestedFiles : [];
+      // Validate and format phone number
+      let formattedPhone;
+      try {
+        if (formData.contactNumber) {
+          formattedPhone = validateAndFormatPhone(formData.contactNumber);
+        }
+      } catch (phoneError) {
+        return res.status(400).json({ 
+          ok: false, 
+          error: 'Invalid phone number', 
+          details: phoneError.message 
+        });
+      }
 
-      // Prepare initial document
+      // Prepare initial document (simple - no upload session)
       const now = admin.firestore.FieldValue.serverTimestamp();
       const collection = (formType === "shs") ? "shsApplicants" : "jhsApplicants";
       const toSave = {
         ...formData,
-        requestedFiles,
+        contactNumber: formattedPhone || formData.contactNumber,
+        documents: [], // Initialize empty documents array
         status: "pending",
-        requirements: defaultRequirementsObject ? defaultRequirementsObject() : {},
         isNew: true,
         createdAt: now,
         updatedAt: now
@@ -57,35 +64,11 @@ export default function createEnrolleesRouter(deps = {}) {
       const docRef = await db.collection(collection).add(toSave);
       const studentId = docRef.id;
 
-      // Build upload session doc that tracks allowed paths for this enrollee
-      const allowedPaths = {};
-      for (const rf of requestedFiles) {
-        const slot = String(rf.slot || "").trim();
-        const origName = String(rf.name || "").replace(/\s+/g, "_").slice(0, 200);
-        if (!slot) continue;
-        const ext = (origName.includes(".") ? origName.slice(origName.lastIndexOf(".") + 1) : "").slice(0, 10);
-        const stamp = Date.now();
-        const rand = randStr(6);
-        const filename = ext ? `${slot}_${stamp}_${rand}.${ext}` : `${slot}_${stamp}_${rand}`;
-        const path = `studentFiles/${studentId}/${filename}`;
-        allowedPaths[slot] = { path, fileName: origName };
-      }
-
-      // Persist upload session so upload route can validate
-      const expiresAt = Date.now() + UPLOAD_SESSION_TTL_MS;
-      await db.collection("enrollee_upload_sessions").doc(studentId).set({
-        studentId,
-        allowedPaths,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        expiresAt // store as number (ms since epoch) for easy server-side check
-      });
-
-      console.log("/api/enrollees created", { studentId, formType, requestedCount: requestedFiles.length });
+      console.log("/api/enrollees created", { studentId, formType });
 
       return res.json({
         ok: true,
-        studentId,
-        uploadTokens: allowedPaths // client will use server upload endpoint; tokens are server-trusted paths
+        studentId
       });
     } catch (err) {
       console.error("/api/enrollees error", err && (err.stack || err));
@@ -93,198 +76,120 @@ export default function createEnrolleesRouter(deps = {}) {
     }
   });
 
-  // POST /api/enrollees/:id/upload
-  // Accepts multipart form-data: fields: slot (string). File: 'file'
-  // Server validates that slot is allowed and uploads file to Supabase (server role)
-  router.post("/enrollees/:id/upload", upload.single("file"), async (req, res) => {
+  // POST /api/enrollees/:id/upload-file
+  // Simple file upload with type label
+  // Accepts multipart form-data: file, fileType (reportcard|psa|clearance), label
+  router.post("/enrollees/:id/upload-file", upload.single("file"), async (req, res) => {
+    console.log('📥 /api/enrollees/:id/upload-file - Request received');
+    console.log('   Student ID:', req.params.id);
+    console.log('   Body:', req.body);
+    console.log('   File:', req.file ? `${req.file.originalname} (${req.file.size} bytes)` : 'NO FILE');
+    
     try {
       const studentId = req.params.id;
-      const slot = String(req.body.slot || "").trim();
-      if (!studentId || !slot) return res.status(400).json({ ok: false, error: "Missing studentId or slot" });
-
-      const sessionRef = db.collection("enrollee_upload_sessions").doc(studentId);
-      const sessionSnap = await sessionRef.get();
-      if (!sessionSnap.exists) return res.status(404).json({ ok: false, error: "Upload session not found" });
-      const session = sessionSnap.data() || {};
-      const allowed = (session.allowedPaths || {})[slot];
-      if (!allowed || !allowed.path) {
-        return res.status(403).json({ ok: false, error: "Slot not allowed for upload" });
+      const fileType = String(req.body.fileType || "").trim();
+      const label = String(req.body.label || "").trim();
+      
+      if (!studentId) {
+        console.log('❌ Missing studentId');
+        return res.status(400).json({ ok: false, error: "Missing studentId" });
+      }
+      if (!fileType) {
+        console.log('❌ Missing fileType');
+        return res.status(400).json({ ok: false, error: "Missing fileType" });
+      }
+      if (!req.file || !req.file.buffer) {
+        console.log('❌ No file provided');
+        return res.status(400).json({ ok: false, error: "No file provided" });
       }
 
-      // --- EXPIRY CHECK (added) ---
-      if (session.expiresAt && typeof session.expiresAt === "number") {
-        if (Date.now() > session.expiresAt) {
-          return res.status(403).json({ ok: false, error: "Upload session expired" });
-        }
+      // Validate fileType
+      const validTypes = ["reportcard", "psa", "clearance"];
+      if (!validTypes.includes(fileType)) {
+        return res.status(400).json({ ok: false, error: `Invalid fileType. Must be one of: ${validTypes.join(", ")}` });
       }
-      // --- end expiry check ---
 
-      if (!req.file || !req.file.buffer) return res.status(400).json({ ok: false, error: "No file provided" });
+      // Generate unique filename
+      const originalName = req.file.originalname || "file";
+      const ext = originalName.includes(".") ? originalName.slice(originalName.lastIndexOf(".")) : "";
+      const timestamp = Date.now();
+      const random = randStr(6);
+      const filename = `${fileType}_${timestamp}_${random}${ext}`;
+      const path = `uploads/studentFiles/${studentId}/${filename}`;
 
-      // Upload to Supabase storage bucket using server client (service role)
-      const bucket = UPLOAD_BUCKET;
-      const path = allowed.path;
       const fileBuffer = req.file.buffer;
       const contentType = req.file.mimetype || "application/octet-stream";
 
-      console.log(`/api/enrollees/${studentId}/upload: uploading slot=${slot} path=${path} size=${fileBuffer.length}`);
+      console.log(`/api/enrollees/${studentId}/upload-file: type=${fileType} path=${path} size=${fileBuffer.length}`);
 
-      // Use supabase server client to upload
-      // supabase.storage.from(bucket).upload(path, fileBuffer, { upsert: true, contentType })
-      const { error: uploadError } = await supabase.storage.from(bucket).upload(path, fileBuffer, {
-        cacheControl: "3600",
-        upsert: true,
-        contentType
-      });
+      // Upload to Firebase Storage
+      const bucket = admin.storage().bucket();
+      const file = bucket.file(path);
+      let publicUrl;
 
-      if (uploadError) {
-        console.error("Supabase upload failed", uploadError);
-        return res.status(500).json({ ok: false, error: "Upload failed", detail: uploadError.message || uploadError });
+      try {
+        await file.save(fileBuffer, {
+          metadata: {
+            contentType: contentType,
+            cacheControl: "public, max-age=3600"
+          }
+        });
+
+        await file.makePublic();
+        const bucketName = bucket.name;
+        publicUrl = `https://storage.googleapis.com/${bucketName}/${path}`;
+
+        console.log(`Firebase Storage upload success: ${publicUrl}`);
+      } catch (uploadError) {
+        console.error("Firebase Storage upload failed", uploadError);
+        return res.status(500).json({ ok: false, error: "Upload failed", detail: uploadError.message || String(uploadError) });
       }
 
-      // get public url (server side)
-      const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(path);
-      const publicUrl = publicData ? (publicData.publicUrl || null) : null;
-
-      // record upload entry in upload session (append)
-      const docToAppend = {
-        slot,
-        fileName: allowed.fileName || (req.file.originalname || ""),
-        size: req.file.size || fileBuffer.length,
-        path,
-        publicUrl,
-        uploadedAt: admin.firestore.Timestamp.now()
-      };
-
-      await db.collection("enrollee_upload_sessions").doc(studentId).set({
-        uploadedFiles: admin.firestore.FieldValue.arrayUnion(docToAppend),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-
-      console.log(`/api/enrollees/${studentId}/upload success for slot=${slot}`);
-
-      return res.json({ ok: true, slot, path, publicUrl, fileName: docToAppend.fileName, size: docToAppend.size });
-    } catch (err) {
-      console.error("/api/enrollees/:id/upload error", err && (err.stack || err));
-      return res.status(500).json({ ok: false, error: "Server error", message: err && err.message });
-    }
-  });
-
-  // POST /api/enrollees/:id/finalize
-  // Body: { files: [ { slot, fileName, size, path, publicUrl } ] }
-  // This will update the applicant doc: mark only uploaded slots as checked and save documents array
-  router.post("/enrollees/:id/finalize", async (req, res) => {
-    try {
-      const studentId = req.params.id;
-      const files = Array.isArray(req.body.files) ? req.body.files : [];
-      if (!studentId) return res.status(400).json({ ok: false, error: "Missing studentId" });
-
-      // Determine collection by checking document existence
+      // Find the student document
       const shsRef = db.collection("shsApplicants").doc(studentId);
       const shsSnap = await shsRef.get();
       const jhsRef = db.collection("jhsApplicants").doc(studentId);
       const jhsSnap = await jhsRef.get();
 
       let appRef = null;
-      let appSnap = null;
-      let collectionName = null;
-      if (shsSnap.exists) { appRef = shsRef; appSnap = shsSnap; collectionName = "shsApplicants"; }
-      else if (jhsSnap.exists) { appRef = jhsRef; appSnap = jhsSnap; collectionName = "jhsApplicants"; }
-      else {
-        return res.status(404).json({ ok: false, error: "Enrollee application not found" });
-      }
+      if (shsSnap.exists) appRef = shsRef;
+      else if (jhsSnap.exists) appRef = jhsRef;
+      else return res.status(404).json({ ok: false, error: "Student not found" });
 
-      const appData = appSnap.data() || {};
-      // Only allow finalize when status is pending
-      if ((appData.status || "").toLowerCase() !== "pending") {
-        return res.status(403).json({ ok: false, error: "Application not pending or already processed" });
-      }
+      // Add to documents array
+      const docToAdd = {
+        type: fileType,
+        label: label || fileType,
+        fileName: originalName,
+        fileUrl: publicUrl,
+        uploadedAt: admin.firestore.Timestamp.now()
+      };
 
-      // Fetch the upload session to verify uploaded files
-      const sessionRef = db.collection("enrollee_upload_sessions").doc(studentId);
-      const sessionSnap = await sessionRef.get();
-      const session = sessionSnap.exists ? sessionSnap.data() : null;
-      const uploadedArray = session && Array.isArray(session.uploadedFiles) ? session.uploadedFiles : [];
-
-      // If upload session expired, still allow finalize only if uploadedFiles recorded
-      if (session && session.expiresAt && Date.now() > session.expiresAt && (!uploadedArray || !uploadedArray.length)) {
-        return res.status(403).json({ ok: false, error: "Upload session expired and no uploaded files found" });
-      }
-
-      // Build map of uploaded slots (merge with provided files but prefer server recorded uploadedFiles)
-      const uploadedBySlot = {};
-      for (const u of uploadedArray) {
-        if (u && u.slot) uploadedBySlot[u.slot] = u;
-      }
-      // override/augment with client-provided files (if any)
-      for (const f of files) {
-        if (f && f.slot) {
-          uploadedBySlot[f.slot] = {
-            slot: f.slot,
-            fileName: f.fileName || f.name || "",
-            path: f.path || (uploadedBySlot[f.slot] && uploadedBySlot[f.slot].path) || "",
-            publicUrl: f.publicUrl || (uploadedBySlot[f.slot] && uploadedBySlot[f.slot].publicUrl) || "",
-            size: f.size || (uploadedBySlot[f.slot] && uploadedBySlot[f.slot].size) || 0,
-            uploadedAt: admin.firestore.Timestamp.now()
-          };
-        }
-      }
-
-      const uploadedSlots = Object.keys(uploadedBySlot);
-      // Build documents array to persist
-      const documents = uploadedSlots.map(s => {
-        const u = uploadedBySlot[s];
-        return {
-          slot: s,
-          fileName: u.fileName || "",
-          filePath: u.path || "",
-          fileUrl: u.publicUrl || "",
-          size: u.size || 0,
-          uploadedAt: u.uploadedAt || admin.firestore.Timestamp.now()
-        };
-      });
-
-      // Update requirements: set checked=true only for uploaded slots
-      const currentRequirements = appData.requirements || (defaultRequirementsObject ? defaultRequirementsObject() : {});
-      const updatedRequirements = { ...currentRequirements };
-      for (const slot of uploadedSlots) {
-        if (!updatedRequirements[slot]) {
-          // create a minimal requirement entry if missing
-          updatedRequirements[slot] = { label: slot, checked: true };
-        } else {
-          updatedRequirements[slot] = { ...updatedRequirements[slot], checked: true };
-        }
-      }
-
-      // Persist documents and updated requirements and mark status submitted
-      await appRef.set({
-        documents,
-        requirements: updatedRequirements,
+      await appRef.update({
+        documents: admin.firestore.FieldValue.arrayUnion(docToAdd),
         status: "submitted",
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
+      });
 
-      // Optionally delete upload session (clean up)
-      await sessionRef.delete().catch(() => {});
-
-      console.log(`/api/enrollees/${studentId}/finalize success: uploadedSlots=${uploadedSlots.join(",")}`);
+      console.log(`/api/enrollees/${studentId}/upload-file success: type=${fileType}`);
 
       // Write activity log
       try {
+        const appData = shsSnap.exists ? shsSnap.data() : jhsSnap.data();
         await writeActivityLog && writeActivityLog({
           actorUid: null,
           actorEmail: appData.email || appData.contactEmail || null,
           targetUid: null,
-          action: "enrollee-submitted",
-          detail: `studentId:${studentId} uploaded:${uploadedSlots.join(",")}`
+          action: "file-uploaded",
+          detail: `studentId:${studentId} fileType:${fileType}`
         });
       } catch (e) {
-        console.warn("writeActivityLog (enrollees finalize) failed", e && e.message);
+        console.warn("writeActivityLog failed", e && e.message);
       }
 
-      return res.json({ ok: true, studentId, uploadedSlots, numFiles: documents.length });
+      return res.json({ ok: true, fileType, fileUrl: publicUrl, fileName: originalName });
     } catch (err) {
-      console.error("/api/enrollees/:id/finalize error", err && (err.stack || err));
+      console.error("/api/enrollees/:id/upload-file error", err && (err.stack || err));
       return res.status(500).json({ ok: false, error: "Server error", message: err && err.message });
     }
   });

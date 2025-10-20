@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AlpHFAbet: Teacher Applicant</title>
+    <link rel="stylesheet" href="teacher.css" />
+    <link rel="stylesheet" href="teacher-content.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" />
+    <script type="module" src="../check-auth.js"></script>
+  </head>
+
+  <body>
+    <!-- Top Navigation Bar -->
+    <header>
+      <nav class="navbar">
+        <button id="open-sidebar" title="open-sidebar"><i class="fas fa-bars"></i></button>
+        <a href="#" class="logo">
+          <img src="../assets/transparent_logo.png" alt="school_logo" />
+        </a>
+        <h3 class="schoolname">Holy Family Academy of Sta Maria Bulacan Inc.</h3>
+        <div class="nav-icons">
+          <a href="#notifications" title="Notifications" class="nav-icon">
+            <i class="fas fa-bell"></i>
+          </a>
+          <a href="#messages" title="Messages" class="nav-icon">
+            <i class="fas fa-envelope"></i>
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+      <button id="close-sidebar" title="Close Menu"><i class="fas fa-times"></i></button>
+
+      <div class="user-info">
+        <div class="avatar">
+          <i class="fas fa-user-circle"></i>
+        </div>
+        <h3 class="Teacher-name">Teacher Name</h3>
+        <p class="teacher-id">ID: TEACH-12345</p>
+      </div>
+
+      <nav class="sidebar-nav">
+        <ul class="sidebar-links">
+          <li>
+            <a href="#dashboard">
+              <i class="fa-solid fa-house"></i>
+              <span>Dashboard</span>
+            </a>
+          </li>
+          <li>
+            <a href="#application-status">
+              <i class="fas fa-file-alt"></i>
+              <span>Application Status</span>
+            </a>
+          </li>
+
+        </ul>
+
+        <nav class="secondary-sidebar">
+          <ul class="sidebar-links">
+            <li>
+              <a href="#announcement-and-news">
+                <i class="fas fa-newspaper"></i>
+                <span>News</span>
+              </a>
+            </li>
+
+          </ul>
+        </nav>
+
+        <nav class="profile-links">
+          <ul class="sidebar-links">
+            <li>
+              <a href="#profile-settings">
+                <i class="fas fa-user"></i>
+                <span>Profile Settings</span>
+              </a>
+            </li>
+            <li class="logout-link">
+              <a href="#" id="logout-btn">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Sign Out</span>
+              </a>
+            </li>
+          </ul>
+        </nav>
+      </nav>
+    </aside>
+
+    <main class="applicant-content">
+      <!-- Main Content -->
+      <section id="dashboard">
+        <!-- Application Status Section -->
+        <div class="main-content">
+          <div class="section-container">
+            <div class="dashboard-header">
+              <h1>Applicant's Dashboard</h1>
+              <div class="header-actions">
+                <div class="datetime-widget">
+                  <div class="current-date" id="current-date">September 5, 2023</div>
+                  <div class="current-time" id="current-time">10:15 AM</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- NEW: Overview cards -->
+            <div class="dashboard-overview">
+              <div class="overview-cards">
+
+                <div class="card card-id">
+                  <div class="card-title">Application</div>
+                  <div class="card-value">ID: <strong id="app-id">TEACH-12345</strong></div>
+                  <div class="card-sub">Submitted: <span id="app-submitted-date">Jan 15, 2024</span></div>
+                </div>
+
+                <div class="card card-status">
+                  <div class="card-title">Status</div>
+                  <div class="card-value"><span id="app-status" class="status-badge status-reviewing">Reviewing</span>
+                  </div>
+                  <div class="card-sub" id="next-step">Next: Initial screening</div>
+                </div>
+
+                <div class="card card-next">
+                  <div class="card-title">Next Step</div>
+                  <div class="card-value" id="next-action">No interview scheduled</div>
+
+                </div>
+
+                <div class="card card-contact">
+                  <div class="card-title">Contact</div>
+                  <div class="card-value" id="assigned-reviewer">—</div>
+                  <div class="card-sub">Message: <button id="btn-message-admin" class="btn small">Message</button></div>
+                </div>
+
+              </div>
+            </div>
+
+            <!-- Attachments & Messages Row -->
+            <div class="attachments-messages-row">
+              <div class="attachments-panel">
+                <div class="panel-header">
+                  <h4>Attachments</h4>
+                  <div class="panel-actions">
+                    <button id="btn-upload" class="btn small"><i class="fas fa-upload"></i> Upload</button>
+                  </div>
+                </div>
+                <ul id="attachments-list" class="attachments-list">
+                  <!-- items injected by JS -->
+                </ul>
+              </div>
+
+              <div class="messages-panel">
+                <div class="panel-header">
+                  <h4>Messages</h4>
+                  <div class="panel-actions">
+                    <button id="btn-compose" class="btn small"><i class="fas fa-edit"></i> Compose</button>
+                  </div>
+                </div>
+                <div id="note-list" class="note-list">
+                  <!-- messages injected by JS -->
+                </div>
+              </div>
+            </div>
+
+            <!-- Timeline (your existing timeline kept, with data-step attributes) -->
+            <div class="status-timeline" id="status-timeline">
+
+              <div class="timeline-item" data-step="submitted">
+                <div class="timeline-marker"></div>
+                <div class="timeline-content">
+                  <h3>Application Submitted</h3>
+                  <p class="time">January 15, 2024</p>
+                  <p>Your application documents have been received.</p>
+                </div>
+              </div>
+
+              <div class="timeline-item" data-step="screening">
+                <div class="timeline-marker"></div>
+                <div class="timeline-content">
+                  <h3>Initial Screening</h3>
+                  <p class="time">January 22, 2024</p>
+                  <p>Your qualifications have been reviewed.</p>
+                </div>
+              </div>
+
+              <div class="timeline-item" data-step="interview">
+                <div class="timeline-marker"></div>
+                <div class="timeline-content">
+                  <h3>Interview Scheduled</h3>
+                  <p class="time" id="interview-date">—</p>
+                  <p id="interview-details">No interview scheduled.</p>
+                </div>
+              </div>
+
+              <div class="timeline-item" data-step="demo">
+                <div class="timeline-marker"></div>
+                <div class="timeline-content">
+                  <h3>Demo Teaching</h3>
+                  <p>Pending</p>
+                  <p>Will be scheduled after successful interview.</p>
+                </div>
+              </div>
+
+              <div class="timeline-item" data-step="decision">
+                <div class="timeline-marker"></div>
+                <div class="timeline-content">
+                  <h3>Final Decision</h3>
+                  <p>Pending</p>
+                  <p>Administration will review all evaluation results.</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Hidden file input for uploads -->
+        <input type="file" id="file-input" multiple style="display:none" />
+
+        <!-- Small modals (simple, UI-only) -->
+        <div id="modal-root" aria-live="polite"></div>
+
+        <!-- send message modal -->
+        <div id="hfaMsgModalOverlay" class="hfa-msg-overlay" style="display: none;" aria-hidden="true">
+          <div id="hfaMsgModal" class="hfa-msg-modal" role="dialog" aria-modal="true" aria-labelledby="hfaMsgTitle">
+
+            <!-- top-right close -->
+            <button id="hfaMsgClose" class="hfa-msg-close" aria-label="Close message modal">
+              <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+
+            <header class="hfa-msg-header">
+              <div class="hfa-msg-title-wrap">
+                <h3 id="hfaMsgTitle" class="hfa-msg-title">Send Message</h3>
+                <div class="hfa-msg-sub">Send email </div>
+              </div>
+
+              <div class="hfa-msg-actions">
+                <button id="hfaMsgSendBtn" class="hfa-msg-btn hfa-msg-btn-primary small">Send</button>
+                <button id="hfaMsgCancelBtn" class="hfa-msg-btn small">Cancel</button>
+              </div>
+            </header>
+
+            <div class="hfa-msg-body">
+              <div class="hfa-msg-grid">
+                <div class="hfa-msg-row">
+                  <label class="hfa-msg-label" for="hfaMsgRecipient">Recipient Email</label>
+                  <input id="hfaMsgRecipient" class="hfa-msg-input" type="email" placeholder="email@example.com" />
+                </div>
+                <div class="hfa-msg-row full">
+                  <label class="hfa-msg-label" for="hfaMsgSubject">Subject</label>
+                  <input id="hfaMsgSubject" class="hfa-msg-input" type="text" placeholder="Subject" />
+                </div>
+
+                <div class="hfa-msg-row full">
+                  <label class="hfa-msg-label" for="hfaMsgBody">Message</label>
+                  <textarea id="hfaMsgBody" class="hfa-msg-textarea" rows="8" placeholder="Type message..."></textarea>
+                </div>
+
+                <div class="hfa-msg-row full">
+                  <div id="hfaMsgError" class="hfa-msg-error" aria-live="polite"></div>
+                </div>
+              </div>
+            </div>
+
+            <footer class="hfa-msg-footer">
+              <small class="hfa-msg-tip">Tip: personalize the message before sending.</small>
+            </footer>
+
+          </div>
+        </div>
+        <!-- Toast container -->
+        <template id="toast-template">
+          <div class="applicant-toast">
+            <div class="toast-message" aria-atomic="true"></div>
+            <button type="button" class="toast-action"></button>
+          </div>
+        </template>
+      </section>
+
+      <!-- application status content -->
+      <section id="application-status">
+        <!-- application-status-content -->
+        <div class="app-status-card">
+
+          <!-- Paste this inside #status-content (teacher.html) -->
+          <div class="status-card">
+            <div class="status-card-header">
+              <h3>Application Details</h3>
+              <button id="status-refresh-btn" class="btn small">Refresh</button>
+            </div>
+
+            <div class="status-card-body two-column">
+              <div class="status-col left">
+                <div class="field"><label>Full name</label>
+                  <div class="value"><span id="status-fullname">—</span></div>
+                </div>
+                <div class="field"><label>Email</label>
+                  <div class="value"><span id="status-email">—</span></div>
+                </div>
+                <div class="field"><label>Phone</label>
+                  <div class="value"><span id="status-phone">—</span></div>
+                </div>
+                <div class="field"><label>Address</label>
+                  <div class="value"><span id="status-address">—</span></div>
+                </div>
+                <div class="field"><label>Birthdate</label>
+                  <div class="value"><span id="status-birthdate">—</span></div>
+                </div>
+
+                <div class="field"><label>Preferred level</label>
+                  <div class="value"><span id="status-preferred-level">—</span></div>
+                </div>
+                <div class="field"><label>Degree</label>
+                  <div class="value"><span id="status-degree">—</span></div>
+                </div>
+                <div class="field"><label>Major</label>
+                  <div class="value"><span id="status-major">—</span></div>
+                </div>
+              </div>
+
+              <div class="status-col right">
+                <div class="field"><label>Institution</label>
+                  <div class="value"><span id="status-institution">—</span></div>
+                </div>
+                <div class="field"><label>Graduation Year</label>
+                  <div class="value"><span id="status-gradyear">—</span></div>
+                </div>
+                <div class="field"><label>Experience (years)</label>
+                  <div class="value"><span id="status-experience">—</span></div>
+                </div>
+                <div class="field"><label>Previous Schools</label>
+                  <div class="value"><span id="status-previous-schools">—</span></div>
+                </div>
+                <div class="field"><label>License No.</label>
+                  <div class="value"><span id="status-license">—</span></div>
+                </div>
+                <div class="field"><label>Subjects</label>
+                  <div class="value"><span id="status-subjects">—</span></div>
+                </div>
+                <div class="field"><label>Employment</label>
+                  <div class="value"><span id="status-employment">—</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="status-card-footer">
+              <small id="status-submitted-at">Submitted: —</small>
+            </div>
+          </div>
+
+
+          <aside class="app-status-right">
+            <div class="progress-card">
+              <div class="progress-header">
+                <div>
+                  <div class="progress-title">Application progress</div>
+                  <div id="submitted-at-timeline" class="progress-sub">Submitted: —</div>
+                </div>
+              </div>
+
+              <div id="app-status-timeline" class="progress-steps">
+                <div class="timeline-item" data-step="submitted">
+                  <div class="marker"></div>
+                  <div class="step-content">
+                    <div class="step-title">Application Submitted</div>
+                    <div class="step-desc">Your application documents have been received.</div>
+                  </div>
+                </div>
+
+                <div class="timeline-item" data-step="reviewing">
+                  <div class="marker"></div>
+                  <div class="step-content">
+                    <div class="step-title">Under Review</div>
+                    <div class="step-desc">Your qualifications are being reviewed.</div>
+                  </div>
+                </div>
+
+                <div class="timeline-item" data-step="interview_scheduled">
+                  <div class="marker"></div>
+                  <div class="step-content">
+                    <div class="step-title">Interview Scheduled</div>
+                    <div class="step-desc">Interview will be scheduled by Admissions.</div>
+                    <div id="status-interview-info" class="step-meta" style="display:none;">
+                      <div><strong>Date:</strong> <span id="status-interview-date">—</span></div>
+                      <div><strong>Location:</strong> <span id="status-interview-details">—</span></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="timeline-item" data-step="demo">
+                  <div class="marker"></div>
+                  <div class="step-content">
+                    <div class="step-title">Demo Teaching</div>
+                    <div class="step-desc">Demo teaching (if applicable).</div>
+                  </div>
+                </div>
+
+                <div class="timeline-item" data-step="decision">
+                  <div class="marker"></div>
+                  <div class="step-content">
+                    <div class="step-title">Final Decision</div>
+                    <div class="step-desc">Administration will review all evaluation results.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+        </div>
+      </section>
+    </main>
+    <script type="module" src="teacher.js"></script>
+  </body>
+
+</html>

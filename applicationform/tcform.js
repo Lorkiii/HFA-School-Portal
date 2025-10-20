@@ -6,10 +6,9 @@
    - Success OK clears form and hides modal
 */
 
-/*  Firebase & Supabase  */
+/*  Firebase (Client-side)  */
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import { firebaseConfig } from "../firebase-config.js";
-import { supabase } from "../supabase-config.js";
 
 // init firebase (client-only)
 const app = initializeApp(firebaseConfig);
@@ -19,13 +18,6 @@ const app = initializeApp(firebaseConfig);
 function randStr(len = 6) {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   return Array.from({ length: len }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-}
-function safePart(s = "") {
-  return s.toLowerCase()
-    .replace(/@/g, "-at-")
-    .replace(/[^a-z0-9._-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/(^-|-$)/g, "");
 }
 
 // ---------- OCR / PDF helpers ----------
@@ -227,19 +219,6 @@ function autoFillFromText(text) {
     }
   }
 
-  // License number & expiry
-  const licMatch = raw.match(/\b(?:License|Licence|Lic\.)\s*(?:No\.?|Number|#)?\s*[:\-]?\s*([A-Z0-9\-]{4,20})\b/i);
-  if (licMatch) {
-    const licEl = document.getElementById("license-number");
-    if (licEl && licEl.dataset.userEdited !== 'true' && !licEl.value) licEl.value = licMatch[1].trim();
-  }
-  const licExpMatch = raw.match(/\b(?:Expiry|Expiration|Exp|EXP|Expires)\s*(?:Date|:)?\s*[:\-]?\s*(\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}|\d{4}[-\/]\d{1,2}[-\/]\d{1,2}|[A-Za-z]+\s+\d{1,2},?\s*\d{4})\b/);
-  if (licExpMatch) {
-    const val = birthdate(licExpMatch[1]);
-    const el = document.getElementById("license-expiry");
-    if (el && el.dataset.userEdited !== 'true' && !el.value) el.value = val;
-  }
-
   // Degree / Institution / Major
   const degreeMatch = raw.match(/\b(Bachelor(?:'s)?|Bachelor of|B\.?A\.?|B\.?S\.?|Master(?:'s)?|M\.?A\.?|M\.?S\.?|Doctor|Ph\.?D\.?)\b/i);
   if (degreeMatch) {
@@ -259,7 +238,7 @@ function autoFillFromText(text) {
 }
 
 // ---------- in-memory upload state ----------
-const uploads = {}; // e.g. { resume: { file, name }, license: {...} }
+const uploads = {}; // e.g. { resume: { file, name }
 
 /* ---------------- DOM wiring and submit handling ---------------- */
 document.addEventListener("DOMContentLoaded", () => {
@@ -272,8 +251,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const progText = document.getElementById("progress-text");
   const submitBtn = document.getElementById("submit-btn");
 
-  const licenseIn = document.getElementById("license-upload");
-  const transcriptIn = document.getElementById("transcript-upload");
+
   const cvIn = document.getElementById("cv-upload");
 
   // inputs protect from overwrite
@@ -285,6 +263,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!el) return;
     el.addEventListener("input", () => { el.dataset.userEdited = 'true'; });
   });
+
+  // Phone number input validation - restrict to numeric only, max 10 digits
+  const phoneInput = document.getElementById("contact-number");
+  if (phoneInput) {
+    phoneInput.addEventListener("input", function(e) {
+      // Only allow numeric characters
+      this.value = this.value.replace(/[^0-9]/g, '');
+      // Limit to 10 digits
+      if (this.value.length > 10) {
+        this.value = this.value.slice(0, 10);
+      }
+    });
+  }
 
   async function handleFileSelect(el, key) {
     if (!el || !el.files || el.files.length === 0) return;
@@ -329,8 +320,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
-  if (licenseIn) licenseIn.addEventListener("change", () => handleFileSelect(licenseIn, "license"));
-  if (transcriptIn) transcriptIn.addEventListener("change", () => handleFileSelect(transcriptIn, "transcript"));
   if (cvIn) cvIn.addEventListener("change", () => handleFileSelect(cvIn, "cv"));
 
   if (resumeBtn && resumeIn) resumeBtn.addEventListener("click", () => resumeIn.click());
@@ -367,7 +356,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const successCard = document.getElementById('success-message');
   const successOkay = successCard ? successCard.querySelector('.okay-btn') : null;
 
-  function showModal() { if (confirmationModal) confirmationModal.style.display = 'block'; }
+  function showModal() { if (confirmationModal) confirmationModal.style.display = 'flex'; }
   function hideModal() { if (confirmationModal) confirmationModal.style.display = 'none'; }
 
   confirmationClose?.addEventListener('click', hideModal);
@@ -485,55 +474,64 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // At this point server created the user and updated teacherApplicants/{id}.status='submitted'
-      // Now upload files to Supabase and call attach-files
+      // Now upload files to Firebase Storage via backend API
       try {
-        // build safe folder
-        const ln = (document.getElementById("last-name").value || "unknown").trim();
-        const safeLast = safePart(ln || "unknown");
-        const folder = `${safeLast}-${applicationId}`;
-        const bucket = "uploads";
-        const uploadedFiles = [];
+        let uploadedCount = 0;
+        let failedCount = 0;
 
-        // helper upload
-        async function uploadFinal(fileObj, name) {
+        // Helper: upload single file to backend
+        async function uploadToBackend(fileObj, fileName, fileType = "resume") {
           if (!fileObj) return null;
-          const stamp = `${Date.now()}_${name.replace(/\s+/g, "_")}`;
-          const path = `teacherApplicants/${folder}/${stamp}`;
-          const { error: uErr } = await supabase.storage.from(bucket).upload(path, fileObj, { cacheControl: "3600", upsert: true });
-          if (uErr) {
-            console.error("Upload failed:", path, uErr);
+          
+          const formData = new FormData();
+          formData.append("file", fileObj);
+          formData.append("fileType", fileType);
+          formData.append("label", fileName || fileType);
+
+          try {
+            const uploadResp = await fetch(`/api/applicants/${encodeURIComponent(applicationId)}/upload-file`, {
+              method: "POST",
+              body: formData // Note: No Content-Type header - browser sets it automatically with boundary
+            });
+
+            const result = await uploadResp.json().catch(() => ({}));
+            if (!uploadResp.ok || !result.ok) {
+              console.error("Upload failed:", result.error || "Unknown error");
+              return null;
+            }
+
+            console.log("✅ File uploaded:", result.fileName);
+            return result;
+          } catch (err) {
+            console.error("Upload request failed:", err);
             return null;
           }
-          const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
-          return { fileName: name, fileUrl: pub.publicUrl, filePath: path };
         }
 
-        // iterate over in-memory uploads
+        // Iterate over in-memory uploads and upload to backend
         for (const k of Object.keys(uploads)) {
           const entry = uploads[k];
           if (!entry || !entry.file) continue;
-          const up = await uploadFinal(entry.file, entry.name || `${k}.dat`);
-          if (up) uploadedFiles.push(up);
+          
+          // Determine file type based on key (cv -> resume, certificate -> certificate, etc.)
+          let fileType = "resume"; // default
+          if (k.toLowerCase().includes("certificate")) fileType = "certificate";
+          else if (k.toLowerCase().includes("transcript")) fileType = "transcript";
+          else if (k.toLowerCase().includes("license")) fileType = "license";
+          else if (k.toLowerCase().includes("cv") || k.toLowerCase().includes("resume")) fileType = "resume";
+          
+          const result = await uploadToBackend(entry.file, entry.name || `${k}.dat`, fileType);
+          if (result) uploadedCount++;
+          else failedCount++;
         }
 
-        // POST attach-files with email for server-side verification
-        try {
-          const attachResp = await fetch(`/applicants/${encodeURIComponent(applicationId)}/attach-files`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ files: uploadedFiles, email })
-          });
-          const attachJson = await attachResp.json().catch(() => ({}));
-          if (!attachResp.ok || !(attachJson && attachJson.ok)) {
-            // attach failed, still show the success card but indicate attach issue
-            console.warn("attach-files failed", attachJson);
-            const noteEl = successCard ? successCard.querySelector('.email-note') : null;
-            if (noteEl) noteEl.textContent = 'Files uploaded but attaching to application failed. Contact support.';
-          }
-        } catch (e) {
-          console.warn("attach-files call error", e);
+        // Show warning if some uploads failed
+        if (failedCount > 0) {
+          console.warn(`⚠️ ${failedCount} file(s) failed to upload`);
           const noteEl = successCard ? successCard.querySelector('.email-note') : null;
-          if (noteEl) noteEl.textContent = 'Files uploaded but attaching to application failed. Contact support.';
+          if (noteEl) noteEl.textContent = `${uploadedCount} file(s) uploaded successfully. ${failedCount} failed. Contact support if needed.`;
+        } else if (uploadedCount > 0) {
+          console.log(`✅ All ${uploadedCount} file(s) uploaded successfully`);
         }
 
       } catch (uploadErr) {
@@ -690,7 +688,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const fn = document.getElementById("first-name").value.trim();
     const mn = document.getElementById("middle-name").value.trim();
     const ext = document.getElementById("name-extension").value;
-    const phone = document.getElementById("contact-number").value.trim();
+    const phoneInput = document.getElementById("contact-number").value.trim();
     const userEmail = document.getElementById("email").value.trim();
     const bd = document.getElementById("birthdate").value;
     const addr = document.getElementById("address").value.trim();
@@ -700,8 +698,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const inst = document.getElementById("institution").value.trim();
     const exp = document.getElementById("experience-years").value;
     const prev = document.getElementById("previous-schools").value.trim();
-    const licNo = document.getElementById("license-number").value.trim();
-    const licExp = document.getElementById("license-expiry").value;
+
     const pref = document.getElementById("preferred-level").value;
     const subjects = document.getElementById("qualified-subjects").value.trim();
     const empType = document.getElementById("employment-type").value;
@@ -711,6 +708,25 @@ document.addEventListener("DOMContentLoaded", () => {
       alert('Please fill required fields (first name, last name, email).');
       return;
     }
+
+    // Validate and format phone number
+    if (!phoneInput) {
+      alert('Please enter your contact number.');
+      document.getElementById("contact-number").focus();
+      return;
+    }
+    if (phoneInput.length !== 10) {
+      alert('Contact number must be exactly 10 digits.');
+      document.getElementById("contact-number").focus();
+      return;
+    }
+    if (!phoneInput.startsWith('9')) {
+      alert('Contact number must start with 9.');
+      document.getElementById("contact-number").focus();
+      return;
+    }
+    // Format with +63 prefix
+    const phone = '+63' + phoneInput;
 
     const payload = {
       formType: "teacher",
@@ -728,8 +744,6 @@ document.addEventListener("DOMContentLoaded", () => {
       institution: inst,
       experienceYears: exp,
       previousSchools: prev,
-      licenseNumber: licNo,
-      licenseExpiry: licExp,
       preferredLevel: pref,
       qualifiedSubjects: subjects,
       employmentType: empType

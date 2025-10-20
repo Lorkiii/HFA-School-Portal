@@ -729,3 +729,44 @@ h3.schoolname {
     max-width: 100%;
   }
 }
+
+/* Phone Input with +63 Prefix */
+.phone-input-wrapper {
+  display: flex;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: white;
+}
+
+.country-code {
+  background: #f3f4f6;
+  color: #374151;
+  padding: 12px 14px;
+  font-weight: 500;
+  border-right: 1px solid #e5e7eb;
+  -webkit-user-select: none;
+  user-select: none;
+  font-size: 15px;
+}
+
+.phone-input-wrapper input {
+  border: none;
+  outline: none;
+  padding: 12px 14px;
+  flex: 1;
+  font-size: 15px;
+}
+
+.phone-input-wrapper:focus-within {
+  border-color: #2e8b57;
+  box-shadow: 0 0 0 3px rgba(46, 139, 87, 0.1);
+}
+
+.phone-hint {
+  display: block;
+  margin-top: 6px;
+  color: #6b7280;
+  font-size: 13px;
+}

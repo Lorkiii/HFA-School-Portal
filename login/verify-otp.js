@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
           return;
         }
 
-        // success: server returns { ok:true, token?, role }
+        // success: server returns { ok:true, token?, role, forcePasswordChange? }
         // Clear temporary sessionStorage keys used for verification
         try { sessionStorage.removeItem('idToken'); sessionStorage.removeItem('verifyEmail'); } catch (e) {}
 
@@ -157,6 +157,17 @@ document.addEventListener('DOMContentLoaded', () => {
         // The main auth mechanism is the HttpOnly __session cookie the server set.
         if (body && body.token) {
           try { sessionStorage.setItem('serverToken', body.token); } catch (e) { /* ignore */ }
+        }
+
+        // Check if user must change password on first login (security measure)
+        if (body && body.forcePasswordChange) {
+          // Extract uid from URL params
+          const urlParams = new URLSearchParams(window.location.search);
+          const uid = urlParams.get('uid');
+          if (uid) {
+            window.location.replace(`/login/changepass.html?uid=${encodeURIComponent(uid)}`);
+            return;
+          }
         }
 
         // Redirect: role-aware. If the server provided role, use it; else default to admin redirect.

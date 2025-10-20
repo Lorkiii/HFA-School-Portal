@@ -40,9 +40,9 @@
                                 New Student
                             </label>
                             <label class="radio-option">
-                                <input type="radio" name="student-type" value="returning">
+                                <input type="radio" name="student-type" value="old">
                                 <span class="radio-custom"></span>
-                                Returning Student
+                                Old Student
                             </label>
 
                         </div>
@@ -67,6 +67,17 @@
                             <div class="form-group">
                                 <label>Middle Name </label>
                                 <input type="text" id="middle-name" placeholder="Full Name">
+                            </div>
+                             <div class="form-group">
+                                <label>Name Extension</label>
+                                <select id="name-extension" aria-label="Name Extension">
+                                    <option value="">None</option>
+                                    <option>Jr.</option>
+                                    <option>Sr.</option>
+                                    <option>II</option>
+                                    <option>III</option>
+                                    <option>IV</option>
+                                </select>
                             </div>
                         </div>
                         <!-- Student Information -->
@@ -117,7 +128,7 @@
                             </div>
                             <div class="form-group" style="display: none;" id="completion-year-group">
                                 <label>Year of Completion <span class="required">*</span></label>
-                                <input type="month" id="completion-year" placeholder="YYYY-MM" required>
+                                <input type="date" id="completion-year" placeholder="YYYY-MM" required>
                             </div>
 
                         </div>
@@ -126,21 +137,40 @@
                         <h3 style="margin: 1.5rem 0 1rem;">Contact Information</h3>
                         <div class="form-grid">
                             <div class="form-group full-width">
-                                <label>Complete Address <span class="required">*</span></label>
-                                <input type="text" placeholder="Street, Barangay, Municipality, Province" id="address"
-                                    required>
+                                <label>House/ Street No. </label>
+                                <input type="text" placeholder="Street, House No., Subdivision"
+                                    id="street-address" >
+                            </div>
+
+                            <div class="form-group">
+                                <label> Barangay <span class="required">*</span></label>
+                                <input type="text" placeholder="Barangay" id="barangay" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label>City / Municipality <span class="required">*</span></label>
+                                <input type="text" placeholder="City / Municipality" id="city" required>
+ 
                             </div>
                             <div class="form-group">
-                                <label>Guardian's Name <span class="required">*</span></label>
-                                <input type="text" placeholder="Full Name" id="guardian-name" required>
+                                <label>Province<span class="required">*</span></label>
+                                <input type="text" placeholder="Province" id="province" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Parent/ Guardian Name <span class="required">*</span></label>
+                                <input type="text" placeholder="Parent/ Guardian Full Name" id="guardian" required>
                             </div>
                             <div class="form-group">
                                 <label> Contact Number <span class="required">*</span></label>
-                                <input type="tel" placeholder="Contact Number" id="contact-number" required>
+                                <div class="phone-input-wrapper">
+                                    <span class="country-code">+63</span>
+                                    <input type="tel" placeholder="9123456789" id="contact-number" maxlength="10" pattern="[0-9]*" inputmode="numeric" required>
+                                </div>
+                                <small class="phone-hint">Enter 10 digits starting with 9 (e.g., 9123456789)</small>
                             </div>
                             <div class="form-group">
-                                <label>Email Address</label>
-                                <input type="email" placeholder="email@example.com" id="email-address">
+                                <label>Email Address <span class="required">*</span></label>
+                                <input type="email" placeholder="email@example.com" id="email-address" required>
                             </div>
                         </div>
                         <!-- Documents Upload -->
@@ -151,11 +181,11 @@
                                 <div class="form-group full-width">
                                     <label>FORM 138 / Report Card (PDF/Image) </label>
                                     <div class="file-input-container">
-                                        <label for="reportcard-upload" class="file-input-label">
+                                        <label for="reportcard-new" class="file-input-label">
                                             <i class="fas fa-file-alt"></i>
                                             <span class="file-input-text">Choose file </span>
                                         </label>
-                                        <input type="file" id="reportcard-upload" class="file-input"
+                                        <input type="file" id="reportcard-new" class="file-input"
                                             accept=".pdf,.jpg,.png">
                                     </div>
                                 </div>
@@ -169,39 +199,7 @@
                                         <input type="file" id="psa-upload" class="file-input" accept=".pdf,.jpg,.png">
                                     </div>
                                 </div>
-                                <div class="form-group full-width">
-                                    <label> Good Moral Character Certificate (PDF/Image) </label>
-                                    <div class="file-input-container">
-                                        <label for="good-moral-upload" class="file-input-label">
-                                            <i class="fas fa-file-alt"></i>
-                                            <span class="file-input-text">Choose file</span>
-                                        </label>
-                                        <input type="file" id="good-moral-upload" class="file-input"
-                                            accept=".pdf,.jpg,.png">
-                                    </div>
-                                </div>
-                                <div class="form-group full-width">
-                                    <label>FORM 137</label>
-                                    <div class="file-input-container">
-                                        <label for="form-137" class="file-input-label">
-                                            <i class="fas fa-file-alt"></i>
-                                            <span class="file-input-text">Choose file or drag & drop here</span>
-                                        </label>
-                                        <input type="file" id="form-137" class="file-input" accept=".pdf,.jpg,.png">
-
-                                    </div>
-                                </div>
-                                <div class="form-group full-width">
-                                    <label>Certificate of Completion</label>
-                                    <div class="file-input-container">
-                                        <label for="completion-certificate" class="file-input-label">
-                                            <i class="fas fa-file-alt"></i>
-                                            <span class="file-input-text">Choose file or drag & drop here</span>
-                                        </label>
-                                        <input type="file" id="completion-certificate" class="file-input"
-                                            accept=".pdf,.jpg,.png">
-                                    </div>
-                                </div>
+                               
                             </div>
 
                             <!-- Returning Student Documents -->
@@ -214,6 +212,17 @@
                                             <span class="file-input-text">Choose file</span>
                                         </label>
                                         <input type="file" id="clearance-upload" class="file-input"
+                                            accept=".pdf,.jpg,.png">
+                                    </div>
+                                </div>
+                                <div class="form-group full-width">
+                                    <label>FORM 138 / Report Card (PDF/Image) </label>
+                                    <div class="file-input-container">
+                                        <label for="reportcard-returning" class="file-input-label">
+                                            <i class="fas fa-file-alt"></i>
+                                            <span class="file-input-text">Choose file </span>
+                                        </label>
+                                        <input type="file" id="reportcard-returning" class="file-input"
                                             accept=".pdf,.jpg,.png">
                                     </div>
                                 </div>
@@ -255,21 +264,13 @@
                         <p class="confirmation-message">Are you sure you want to submit your application? Please ensure
                             all information is correct
                             before proceeding.</p>
-                        <div class="provide-email">
-                            <label for="confirm-email">Email Address (optional):</label>
-                            <input type="email" id="confirm-email"><br>
-                            <label for="confirm-contact">Contact Number (optional):</label>
-                            <input type="phone" id="confirm-contact">
-                            <br>
-                            <small>If provided, a confirmation email or number will be sent to this address.</small>
 
-                        </div>
                         <div class="confirmation-actions">
                             <button id="modal-cancel-btn" class="cancel-btn">Cancel</button>
-                           <button type="button" id="modal-confirm-btn" class="confirmation-btn">Confirm</button>
+                            <button type="button" id="modal-confirm-btn" class="confirmation-btn">Confirm</button>
                         </div>
                     </div>
-                </div>  
+                </div>
 
                 <!-- modal for successful submission -->
                 <div class="success-modal" id="success-modal" style="display: none;">

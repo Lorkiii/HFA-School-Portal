@@ -35,11 +35,12 @@ document.addEventListener("DOMContentLoaded", function () {
         const input = completionYearGroup.querySelector("input");
         if (input) input.required = true;
       }
-    } else if (selectedValue === "returning") {
+    } else if (selectedValue === "old") {
       if (studentNumberGroup) studentNumberGroup.style.display = "block";
       if (previousSchoolGroup) previousSchoolGroup.style.display = "none";
       if (studentNumberInput) studentNumberInput.required = true;
       if (previousSchoolInput) previousSchoolInput.required = false;
+
       if (returningStudentDocs) returningStudentDocs.style.display = "block";
       if (newStudentDocs) newStudentDocs.style.display = "none";
       if (returningStdRequirements) returningStdRequirements.style.display = "block";

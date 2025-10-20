@@ -1,16 +1,341 @@
 // adminportal/admin-user-management.js
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import { auth } from "../firebase-config.js";
 import { apiFetch } from "../api-fetch.js"; // <-- centralized helper; put api-fetch.js at project root or adjust path
 
-// Debug handle
-window._debugAuth = auth;
-console.log('[debug] admin-user-management loaded, auth:', !!auth, 'currentUser:', auth.currentUser);
 
 // helper
 const $ = (s) => document.querySelector(s);
 
+// User Management Modal Helper Functions
+const userMgmtModals = {
+  showOverlay() {
+    const overlay = $('#user-mgmt-modal-overlay');
+    if (overlay) overlay.style.display = 'block';
+  },
+  
+  hideOverlay() {
+    const overlay = $('#user-mgmt-modal-overlay');
+    if (overlay) overlay.style.display = 'none';
+  },
+  
+  showModal(modalId) {
+    this.showOverlay();
+    const modal = $(modalId);
+    if (modal) modal.style.display = 'block';
+  },
+  
+  hideModal(modalId) {
+    const modal = $(modalId);
+    if (modal) modal.style.display = 'none';
+    this.hideOverlay();
+  },
+  
+  hideAllModals() {
+    ['#user-mgmt-view-modal', '#user-mgmt-edit-modal', '#user-mgmt-confirm-modal', '#user-mgmt-notify-modal', '#um-admin-create-modal', '#um-admin-otp-modal', '#um-admin-success-modal']
+      .forEach(id => {
+        const modal = $(id);
+        if (modal) modal.style.display = 'none';
+      });
+    this.hideOverlay();
+  },
+  
+  showNotification(title, message) {
+    const titleEl = $('#user-mgmt-notify-title');
+    const messageEl = $('#user-mgmt-notify-message');
+    if (titleEl) titleEl.textContent = title;
+    if (messageEl) messageEl.textContent = message;
+    this.showModal('#user-mgmt-notify-modal');
+  },
+  
+  showConfirmation(title, message, onConfirm) {
+    const titleEl = $('#user-mgmt-confirm-title');
+    const messageEl = $('#user-mgmt-confirm-message');
+    const confirmBtn = $('#user-mgmt-confirm-modal .user-mgmt-btn-confirm');
+    
+    if (titleEl) titleEl.textContent = title;
+    if (messageEl) messageEl.textContent = message;
+    
+    // Store the confirm callback
+    if (confirmBtn) {
+      confirmBtn.onclick = () => {
+        this.hideModal('#user-mgmt-confirm-modal');
+        if (onConfirm) onConfirm();
+      };
+    }
+    this.showModal('#user-mgmt-confirm-modal');
+  }
+};
 
+//  Admin creation flow state 
+const adminFlow = {
+  formData: null,
+  lastOtpRequest: 0,
+  resendCooldown: 30,
+  reset() {
+    this.formData = null;
+    this.lastOtpRequest = 0;
+    const form = $('#um-admin-create-form');
+    if (form) form.reset();
+    const errorBox = $('#um-admin-create-error');
+    if (errorBox) errorBox.textContent = '';
+    const otpError = $('#um-admin-otp-error');
+    if (otpError) otpError.textContent = '';
+    const otpMeta = $('#um-admin-otp-meta');
+    if (otpMeta) otpMeta.textContent = '';
+    const otpInput = $('#um-admin-otp');
+    if (otpInput) otpInput.value = '';
+  }
+};
+// open admin create modal
+
+function openAdminCreate() {
+  adminFlow.reset();
+  userMgmtModals.hideAllModals();
+  userMgmtModals.showModal('#um-admin-create-modal');
+}
+
+// validate phone number
+function validatePhilippinePhone(digits) {
+  // Must be empty (optional) OR valid PH mobile
+  if (!digits) return { valid: true, phone: null }; // Optional - empty is OK
+  
+  // Check: only digits, starts with 9, exactly 10 digits
+  if (!/^9\d{9}$/.test(digits)) {
+    return { valid: false, phone: null, error: 'Phone must be 10 digits starting with 9 (e.g., 9123456789)' };
+  }
+  
+  // Return E.164 formatted phone
+  return { valid: true, phone: `+63${digits}` };
+}
+
+// capture admin form
+function captureAdminForm() {
+  const name = $('#um-admin-name')?.value.trim();
+  const email = $('#um-admin-email')?.value.trim();
+  const phoneDigits = $('#um-admin-phone')?.value.trim();
+  
+  // Validate and format phone
+  const phoneValidation = validatePhilippinePhone(phoneDigits);
+  return { name, email, phone: phoneValidation.phone, phoneValidation };
+}
+
+// show admin error
+function showAdminError(targetId, message) {
+  const node = $(targetId);
+  if (node) node.textContent = message || '';
+}
+
+// lock resend button
+function lockResendButton(lock) {
+  const resendBtn = $('#um-admin-resend');
+  if (resendBtn) resendBtn.disabled = lock;
+}
+
+// update otp meta
+function updateOtpMeta(text) {
+  const meta = $('#um-admin-otp-meta');
+  if (meta) meta.textContent = text || '';
+}
+
+// handle admin send otp
+async function handleAdminSendOtp() {
+  const { name, email, phone, phoneValidation } = captureAdminForm();
+  if (!name || !email) {
+    showAdminError('#um-admin-create-error', 'Name and email are required.');
+    return;
+  }
+
+  // Validate phone number format if provided
+  if (!phoneValidation.valid) {
+    showAdminError('#um-admin-create-error', phoneValidation.error);
+    return;
+  }
+  // send otp
+  try {
+    showAdminError('#um-admin-create-error', '');
+    await apiFetch('/admin/create-admin/check-email', {
+      method: 'POST',
+      body: JSON.stringify({ email })
+    });
+    // send otp
+    const payload = { displayName: name, email, phoneNumber: phone || undefined };
+    const res = await apiFetch('/admin/create-admin/send-otp', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    });
+
+    adminFlow.formData = { ...payload, otpRequestId: res.requestId };
+    adminFlow.lastOtpRequest = Date.now();
+
+    $('#um-admin-summary-name').textContent = name;
+    $('#um-admin-summary-email').textContent = email;
+
+    updateOtpMeta('OTP sent to the provided email. Code expires in 5 minutes.');
+    lockResendButton(true);
+    setTimeout(() => lockResendButton(false), adminFlow.resendCooldown * 1000);
+
+    userMgmtModals.hideAllModals();
+    userMgmtModals.showModal('#um-admin-otp-modal');
+  } catch (err) {
+    console.error(err);
+    const message = err?.body?.error
+      || err?.body?.message
+      || err?.message
+      || 'Failed to send OTP.';
+    showAdminError('#um-admin-create-error', message);
+  }
+}
+
+// handle admin resend otp
+async function handleAdminResendOtp() {
+  if (!adminFlow.formData) return;
+  const now = Date.now();
+  if (now - adminFlow.lastOtpRequest < adminFlow.resendCooldown * 1000) {
+    const remaining = Math.ceil((adminFlow.resendCooldown * 1000 - (now - adminFlow.lastOtpRequest)) / 1000);
+    updateOtpMeta(`Please wait ${remaining}s before resending.`);
+    return;
+  }
+  // resend otp
+  try {
+    lockResendButton(true);
+    updateOtpMeta('Sending new OTP...');
+    const { displayName, email, phoneNumber } = adminFlow.formData;
+    const res = await apiFetch('/admin/create-admin/send-otp', {
+      method: 'POST',
+      body: JSON.stringify({ displayName, email, phoneNumber, resend: true })
+    });
+
+    adminFlow.formData.otpRequestId = res.requestId;
+    adminFlow.lastOtpRequest = Date.now();
+    // update otp 
+    updateOtpMeta('New OTP sent. Code expires in 5 minutes.');
+    showAdminError('#um-admin-otp-error', '');
+    setTimeout(() => lockResendButton(false), adminFlow.resendCooldown * 1000);
+  } catch (err) {
+    console.error(err);
+    updateOtpMeta('');
+    lockResendButton(false);
+    showAdminError('#um-admin-otp-error', err.message || 'Failed to resend OTP.');
+  }
+}
+
+// handle admin verify otp
+async function handleAdminVerifyOtp() {
+  if (!adminFlow.formData) {
+    showAdminError('#um-admin-otp-error', 'Start the process again.');
+    return;
+  }
+
+  const otp = $('#um-admin-otp')?.value.trim();
+  if (!otp || otp.length !== 6) {
+    showAdminError('#um-admin-otp-error', 'Enter the 6-digit OTP sent to the email.');
+    return;
+  }
+
+  try {
+    showAdminError('#um-admin-otp-error', '');
+    updateOtpMeta('Verifying OTP...');
+
+    const res = await apiFetch('/admin/create-admin/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({
+        otp,
+        requestId: adminFlow.formData.otpRequestId,
+        displayName: adminFlow.formData.displayName,
+        email: adminFlow.formData.email,
+        phoneNumber: adminFlow.formData.phoneNumber
+      })
+    });
+
+    updateOtpMeta('');
+    // show success modal
+    $('#um-admin-success-email').textContent = res.email || adminFlow.formData.email;
+
+    userMgmtModals.hideAllModals();
+    userMgmtModals.showModal('#um-admin-success-modal');
+
+    await loadUsers();
+  } catch (err) {
+    console.error(err);
+    updateOtpMeta('');
+    showAdminError('#um-admin-otp-error', err.message || 'Failed to verify OTP.');
+  }
+}
+ 
+// Initialize modal event listeners
+function initUserMgmtModals() {
+  // Close buttons
+  document.querySelectorAll('.user-mgmt-modal-close').forEach(btn => {
+    btn.addEventListener('click', () => userMgmtModals.hideAllModals());
+  });
+  
+  // Cancel buttons
+  document.querySelectorAll('.user-mgmt-btn-cancel').forEach(btn => {
+    btn.addEventListener('click', () => userMgmtModals.hideAllModals());
+  });
+  
+  // OK button
+  const okBtn = $('#user-mgmt-notify-modal .user-mgmt-btn-ok');
+  if (okBtn) {
+    okBtn.addEventListener('click', () => userMgmtModals.hideModal('#user-mgmt-notify-modal'));
+  }
+  
+  // Overlay click to close
+  const overlay = $('#user-mgmt-modal-overlay');
+  if (overlay) {
+    overlay.addEventListener('click', () => userMgmtModals.hideAllModals());
+  }
+  
+  // Save button for edit modal
+  const saveBtn = $('#user-mgmt-edit-modal .user-mgmt-btn-save');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', handleUserEditSave);
+  }
+
+  // Admin creation triggers
+  const addUserBtn = document.querySelector('.btn-add-user');
+  if (addUserBtn) addUserBtn.addEventListener('click', openAdminCreate);
+  // otp buttons
+  const sendOtpBtn = $('#um-admin-send-otp');
+  if (sendOtpBtn) sendOtpBtn.addEventListener('click', handleAdminSendOtp);
+  // verify otp button
+  const verifyBtn = $('#um-admin-verify');
+  if (verifyBtn) verifyBtn.addEventListener('click', handleAdminVerifyOtp);
+  // resend otp button
+  const resendBtn = $('#um-admin-resend');
+  if (resendBtn) resendBtn.addEventListener('click', handleAdminResendOtp);
+  // done button
+  const doneBtn = $('#um-admin-done');
+  if (doneBtn) doneBtn.addEventListener('click', () => {
+    adminFlow.reset();
+    userMgmtModals.hideAllModals();
+  });
+}
+
+// Handle edit form save
+async function handleUserEditSave() {
+  const uid = $('#user-mgmt-edit-id').value;
+  const displayName = $('#user-mgmt-edit-name').value;
+  // validate display name
+  if (!displayName.trim()) {
+    userMgmtModals.showNotification('Error', 'Display name is required');
+    return;
+  }
+  // update user
+  try {
+    await apiFetch(`/admin/users/${encodeURIComponent(uid)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ displayName: displayName.trim() })
+    });
+    // show success modal
+    userMgmtModals.hideModal('#user-mgmt-edit-modal');
+    userMgmtModals.showNotification('Success', 'User updated successfully');
+    // Reload current tab
+    reloadCurrentTab();
+  } catch (err) {
+    console.error(err);
+    userMgmtModals.showNotification('Error', 'Update failed: ' + (err.message || err));
+  }
+}
 
 // timestamp formatting helper
 function safeFormatTimestamp(ts) {
@@ -25,180 +350,88 @@ function safeFormatTimestamp(ts) {
   return String(ts);
 }
 
-// build table row without template strings (no HTML injection)
-function buildUserRow(u) {
-  const tr = document.createElement('tr');
+// Build table row from HTML template (much simpler!)
+// Context can be 'active' or 'archived' to show different action buttons
+function buildUserRow(u, context = 'active') {
+  // 1. Clone the template (preserves all HTML structure and accessibility)
+  const template = document.querySelector('#user-row-template');
+  const clone = template.content.cloneNode(true);
+  const tr = clone.querySelector('tr');
+  
+  // 2. Populate user data (safe - uses textContent, no XSS risk)
   tr.dataset.userId = u.uid;
-  tr.dataset.userStatus = u.archived ? 'archived' : (u.status || 'active');
-
-  // Name cell
-  const tdName = document.createElement('td');
-  tdName.className = 'name-cell';
-  const nameDiv = document.createElement('div');
-  nameDiv.className = 'user-name';
-  nameDiv.textContent = u.displayName || '-';
-  const metaDiv = document.createElement('div');
-  metaDiv.className = 'muted small';
-  metaDiv.textContent = u.customId || '';
-  tdName.appendChild(nameDiv);
-  tdName.appendChild(metaDiv);
-
-  // Email cell
-  const tdEmail = document.createElement('td');
-  tdEmail.className = 'email-cell';
-  tdEmail.textContent = u.email || '-';
-
-  // Role cell (badge)
-  const tdRole = document.createElement('td');
-  tdRole.className = 'role-cell';
-  const spanRole = document.createElement('span');
-  spanRole.className = 'badge ' + (u.role === 'admin' ? 'badge-admin' : 'badge-applicant');
-  spanRole.textContent = u.role || 'applicant';
-  tdRole.appendChild(spanRole);
-
-  // Status cell
-  const tdStatus = document.createElement('td');
-  tdStatus.className = 'status-cell';
-  const dot = document.createElement('span');
-  dot.className = 'status-dot ' + ((u.status === 'active') ? 'status-active' : 'status-inactive');
-  dot.setAttribute('aria-hidden', 'true');
-  const small = document.createElement('span');
-  small.className = 'small';
-  small.textContent = u.status || 'active';
-  tdStatus.appendChild(dot);
-  tdStatus.appendChild(small);
-
-  // Created cell
-  const tdCreated = document.createElement('td');
-  tdCreated.className = 'created-cell hide-mobile';
-  tdCreated.textContent = safeFormatTimestamp(u.createdAt);
-
-  // Actions cell - build buttons
-  const tdActions = document.createElement('td');
-  tdActions.className = 'actions-cell';
-
-  // Inline actions container
-  const inlineWrap = document.createElement('div');
-  inlineWrap.className = 'actions-inline';
-
-  // helper to create button
-  function createBtn(btnClass, title, iconClass) {
-    const b = document.createElement('button');
-    b.className = 'table-action-btn ' + btnClass;
-    b.type = 'button';
-    b.title = title;
-    const i = document.createElement('i');
-    i.className = iconClass;
-    b.appendChild(i);
-    return b;
+  tr.dataset.userStatus = context === 'archived' ? 'archived' : 'active';
+  tr.dataset.phone = u.phoneNumber || '';
+  
+  clone.querySelector('.user-name').textContent = u.displayName || '-';
+  clone.querySelector('.user-meta').textContent = u.customId || '';
+  clone.querySelector('.email-cell').textContent = u.email || '-';
+  
+  // 3. Set role badge
+  const badge = clone.querySelector('.badge');
+  badge.textContent = u.role || 'applicant';
+  badge.className = 'badge ' + (u.role === 'admin' ? 'badge-admin' : 'badge-applicant');
+  
+  // 4. Set created date
+  clone.querySelector('.created-cell').textContent = safeFormatTimestamp(u.createdAt);
+  
+  // 5. Show/hide buttons based on context
+  if (context === 'archived') {
+    // ARCHIVED USERS: Show View, Unarchive, Delete
+    clone.querySelector('.btn-edit').style.display = 'none';
+    clone.querySelector('.btn-reset').style.display = 'none';
+    clone.querySelector('.btn-unarchive').style.display = 'inline-block';
+    clone.querySelector('.btn-archive').style.display = 'none';
+    clone.querySelector('.btn-unarchive-dropdown').style.display = 'block';
+    
+    // Mobile menu
+    clone.querySelector('.mobile-edit').style.display = 'none';
+    clone.querySelector('.mobile-reset').style.display = 'none';
+    clone.querySelector('.mobile-archive').style.display = 'none';
+    clone.querySelector('.mobile-unarchive').style.display = 'block';
+  } else {
+    // ACTIVE USERS: Show View, Edit, Reset, Archive, Delete
+    clone.querySelector('.btn-edit').style.display = 'inline-block';
+    clone.querySelector('.btn-reset').style.display = 'inline-block';
+    clone.querySelector('.btn-unarchive').style.display = 'none';
+    clone.querySelector('.btn-archive').style.display = 'block';
+    clone.querySelector('.btn-unarchive-dropdown').style.display = 'none';
+    
+    // Mobile menu
+    clone.querySelector('.mobile-edit').style.display = 'block';
+    clone.querySelector('.mobile-reset').style.display = 'block';
+    clone.querySelector('.mobile-archive').style.display = 'block';
+    clone.querySelector('.mobile-unarchive').style.display = 'none';
   }
-
-  // View
-  const btnView = createBtn('btn-view', 'View', 'fas fa-eye');
-  inlineWrap.appendChild(btnView);
-
-  // Edit
-  const btnEdit = createBtn('btn-edit', 'Edit', 'fas fa-pen');
-  inlineWrap.appendChild(btnEdit);
-
-  // Reset
-  const btnReset = createBtn('btn-reset', 'Reset password', 'fas fa-key');
-  btnReset.dataset.uid = u.uid;
-  btnReset.dataset.confirm = 'Reset password for this user?';
-  inlineWrap.appendChild(btnReset);
-
-  // Dropdown details (we keep markup but create nodes)
-  const dropdownWrap = document.createElement('div');
-  dropdownWrap.className = 'action-dropdown';
-  const details = document.createElement('details');
-  details.className = 'dropdown-details';
-  const summary = document.createElement('summary');
-  summary.className = 'dropdown-summary table-action-btn';
-  summary.setAttribute('aria-haspopup', 'true');
-  const ell = document.createElement('i');
-  ell.className = 'fas fa-ellipsis-v';
-  summary.appendChild(ell);
-  details.appendChild(summary);
-
-  const menu = document.createElement('div');
-  menu.className = 'dropdown-menu';
-  menu.setAttribute('role', 'menu');
-
-  // Toggle active
-  const btnToggle = document.createElement('button');
-  btnToggle.className = 'dropdown-item btn-toggle';
-  btnToggle.type = 'button';
-  btnToggle.textContent = 'Activate / Deactivate';
-  btnToggle.dataset.action = 'toggle-active';
-  menu.appendChild(btnToggle);
-
-  // Archive
-  const btnArchive = document.createElement('button');
-  btnArchive.className = 'dropdown-item btn-archive';
-  btnArchive.type = 'button';
-  btnArchive.textContent = 'Archive';
-  btnArchive.dataset.action = 'archive';
-  menu.appendChild(btnArchive);
-
-  // Delete (danger)
-  const btnDelete = document.createElement('button');
-  btnDelete.className = 'dropdown-item danger btn-delete';
-  btnDelete.type = 'button';
-  btnDelete.textContent = 'Delete (hard)';
-  btnDelete.dataset.action = 'delete';
-  btnDelete.dataset.archivedOnly = 'true';
-  menu.appendChild(btnDelete);
-
-  details.appendChild(menu);
-  dropdownWrap.appendChild(details);
-  inlineWrap.appendChild(dropdownWrap);
-
-  // mobile actions wrapper - keep existing markup but build
-  const collapseWrap = document.createElement('div');
-  collapseWrap.className = 'actions-collapse';
-  const mobileDetails = document.createElement('details');
-  mobileDetails.className = 'mobile-actions';
-  const mobileSummary = document.createElement('summary');
-  mobileSummary.className = 'mobile-summary table-action-btn';
-  const mobileI = document.createElement('i');
-  mobileI.className = 'fas fa-ellipsis-h';
-  mobileSummary.appendChild(mobileI);
-  mobileDetails.appendChild(mobileSummary);
-
-  const mobileMenu = document.createElement('div');
-  mobileMenu.className = 'mobile-menu';
-
-  const mView = document.createElement('button'); mView.className = 'mobile-item'; mView.textContent = 'View profile'; mView.dataset.action = 'view';
-  const mEdit = document.createElement('button'); mEdit.className = 'mobile-item'; mEdit.textContent = 'Edit'; mEdit.dataset.action = 'edit';
-  const mReset = document.createElement('button'); mReset.className = 'mobile-item'; mReset.textContent = 'Reset password'; mReset.dataset.action = 'reset-password';
-  const mToggle = document.createElement('button'); mToggle.className = 'mobile-item'; mToggle.textContent = 'Activate / Deactivate'; mToggle.dataset.action = 'toggle-active';
-  const mArchive = document.createElement('button'); mArchive.className = 'mobile-item'; mArchive.textContent = 'Archive'; mArchive.dataset.action = 'archive';
-  const mDelete = document.createElement('button'); mDelete.className = 'mobile-item danger'; mDelete.textContent = 'Delete (hard)'; mDelete.dataset.action = 'delete'; mDelete.dataset.archivedOnly = 'true';
-
-  [mView, mEdit, mReset, mToggle, mArchive, mDelete].forEach(el => mobileMenu.appendChild(el));
-  mobileDetails.appendChild(mobileMenu);
-  collapseWrap.appendChild(mobileDetails);
-
-  tdActions.appendChild(inlineWrap);
-  tdActions.appendChild(collapseWrap);
-
-  // assemble tr
-  tr.appendChild(tdName);
-  tr.appendChild(tdEmail);
-  tr.appendChild(tdRole);
-  tr.appendChild(tdStatus);
-  tr.appendChild(tdCreated);
-  tr.appendChild(tdActions);
-
+  
   return tr;
 }
 
-// load users and append rows
+// Helper: Get current active tab and reload its data
+function reloadCurrentTab() {
+  const activeTab = document.querySelector('.user-management-tabs .tab-btn.active');
+  if (!activeTab) {
+    loadUsers(); // Default to active users
+    return;
+  }
+  
+  const tabName = activeTab.getAttribute('data-tab');
+  if (tabName === 'accounts') {
+    loadUsers();
+  } else if (tabName === 'archived') {
+    loadArchivedUsers();
+  } else if (tabName === 'activity') {
+    loadActivityLogs();
+  }
+}
+
+// Load ACTIVE users only (non-archived) and display in User Accounts tab
 async function loadUsers() {
   const tbody = document.querySelector('#users-tbody');
   if (!tbody) return;
   tbody.innerHTML = ''; // clear
-  // show loading row
+  
+  // Show loading row
   const loadingRow = document.createElement('tr');
   const loadingTd = document.createElement('td');
   loadingTd.colSpan = 6;
@@ -209,17 +442,23 @@ async function loadUsers() {
   try {
     const { users } = await apiFetch('/admin/users');
     tbody.innerHTML = '';
-    if (!users || users.length === 0) {
+    
+    // Filter out archived users - show only active users
+    const activeUsers = users.filter(u => !u.archived);
+    
+    if (!activeUsers || activeUsers.length === 0) {
       const r = document.createElement('tr');
       const c = document.createElement('td');
       c.colSpan = 6;
-      c.textContent = 'No users found.';
+      c.textContent = 'No active users found.';
       r.appendChild(c);
       tbody.appendChild(r);
       return;
     }
-    users.forEach(u => {
-      const tr = buildUserRow(u);
+    
+    // Build rows with 'active' context
+    activeUsers.forEach(u => {
+      const tr = buildUserRow(u, 'active');
       tbody.appendChild(tr);
     });
   } catch (err) {
@@ -231,129 +470,704 @@ async function loadUsers() {
     c.textContent = 'Failed to load users';
     r.appendChild(c);
     tbody.appendChild(r);
-    alert('Failed to load users: ' + (err.message || err));
+    userMgmtModals.showNotification('Error', 'Failed to load users: ' + (err.message || err));
   }
 }
 
-// event delegation for clicks - uses classes/data-action
+// Load ARCHIVED users only and display in Archived tab
+async function loadArchivedUsers() {
+  // Target the archived users tbody (not the active users tbody!)
+  const tbody = document.querySelector('#archived-users-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = ''; // clear
+  
+  // Show loading row
+  const loadingRow = document.createElement('tr');
+  const loadingTd = document.createElement('td');
+  loadingTd.colSpan = 6;
+  loadingTd.textContent = 'Loading archived users...';
+  loadingRow.appendChild(loadingTd);
+  tbody.appendChild(loadingRow);
+
+  try {
+    const { users } = await apiFetch('/admin/users');
+    tbody.innerHTML = '';
+    
+    // Filter only archived users
+    const archivedUsers = users.filter(u => u.archived);
+    
+    if (!archivedUsers || archivedUsers.length === 0) {
+      const r = document.createElement('tr');
+      const c = document.createElement('td');
+      c.colSpan = 6;
+      c.textContent = 'No archived users found.';
+      r.appendChild(c);
+      tbody.appendChild(r);
+      return;
+    }
+    
+    // Build rows with 'archived' context
+    archivedUsers.forEach(u => {
+      const tr = buildUserRow(u, 'archived');
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error(err);
+    tbody.innerHTML = '';
+    const r = document.createElement('tr');
+    const c = document.createElement('td');
+    c.colSpan = 6;
+    c.textContent = 'Failed to load archived users';
+    r.appendChild(c);
+    tbody.appendChild(r);
+    userMgmtModals.showNotification('Error', 'Failed to load archived users: ' + (err.message || err));
+  }
+}
+
+// Open view modal with user details
+function openUserViewModal(uid, tr) {
+  const userName = tr.querySelector('.user-name')?.textContent || '-';
+  const userEmail = tr.querySelector('.email-cell')?.textContent || '-';
+  const userRole = tr.querySelector('.role-cell .badge')?.textContent || '-';
+  const userCreated = tr.querySelector('.created-cell')?.textContent || '-';
+  const userPhone = tr.dataset.phone || '';
+  
+  $('#user-mgmt-view-name').textContent = userName;
+  $('#user-mgmt-view-email').textContent = userEmail;
+  $('#user-mgmt-view-phone').textContent = userPhone || 'Not set';
+  $('#user-mgmt-view-role').textContent = userRole;
+  $('#user-mgmt-view-created').textContent = userCreated;
+  $('#user-mgmt-view-id').textContent = uid;
+  
+  userMgmtModals.showModal('#user-mgmt-view-modal');
+}
+
+// Open edit modal with user details
+function openUserEditModal(uid, tr) {
+  const userName = tr.querySelector('.user-name')?.textContent || '';
+  const userRole = tr.querySelector('.role-cell .badge')?.textContent?.trim() || 'applicant';
+
+  $('#user-mgmt-edit-id').value = uid;
+  $('#user-mgmt-edit-name').value = userName;
+  const roleDisplay = $('#user-mgmt-edit-role-text');
+  if (roleDisplay) roleDisplay.textContent = userRole;
+  
+  userMgmtModals.showModal('#user-mgmt-edit-modal');
+}
+
+// event delegation for clicks - uses data-action attributes
 async function handleTableClick(e) {
   const btn = e.target.closest('button');
   if (!btn) return;
-  // find row
+  
+  const action = btn.dataset.action;
   const tr = btn.closest('tr');
   const uid = tr?.dataset?.userId;
   if (!uid) return;
 
-  // Reset password
-  if (btn.classList.contains('btn-reset')) {
-    if (!confirm(btn.dataset.confirm || 'Reset password for this user?')) return;
-    try {
-      const res = await apiFetch('/admin/reset-password', {
-        method: 'POST',
-        body: JSON.stringify({ uid, notifyUser: true })
-      });
-      if (res.emailed) alert('Password reset link emailed to the user.');
-      else alert('Password reset link generated.');
-    } catch (err) {
-      console.error(err);
-      alert('Reset failed: ' + (err.message || err));
-    }
-    return;
-  }
-
-  // View
-  if (btn.classList.contains('btn-view') || btn.dataset.action === 'view') {
-    openViewModal(uid);
-    return;
-  }
-
-  // Edit - uses prompt() to avoid HTML in JS
-  if (btn.classList.contains('btn-edit') || btn.dataset.action === 'edit') {
-    try {
-      // fetch current values to suggest defaults (optional)
-      const displayName = prompt('Enter display name (leave empty to cancel):', tr.querySelector('.user-name')?.textContent || '');
-      if (displayName === null) return; // cancelled
-      const currentRole = tr.querySelector('.role-cell .badge')?.textContent?.trim() || 'applicant';
-      const newRole = prompt('Enter role (admin or applicant):', currentRole) || currentRole;
-      if (!['admin', 'applicant'].includes(newRole.toLowerCase())) { alert('Role must be admin or applicant'); return; }
-
-      // send update
-      await apiFetch(`/admin/users/${encodeURIComponent(uid)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ displayName: displayName.trim(), role: newRole.toLowerCase() })
-      });
-      alert('User updated.');
-      // refresh row list
-      await loadUsers();
-    } catch (err) {
-      console.error(err);
-      alert('Update failed: ' + (err.message || err));
-    }
-    return;
-  }
-
-  // Toggle active - placeholder: implement your endpoint if desired
-  if (btn.classList.contains('btn-toggle') || btn.dataset.action === 'toggle-active') {
-    // toggle based on current status in row
-    const current = tr.dataset.userStatus === 'active' ? 'active' : 'inactive';
-    const setTo = current === 'active' ? 'inactive' : 'active';
-    if (!confirm(`Set user to ${setTo}?`)) return;
-    try {
-      // Using PUT to update status
-      await apiFetch(`/admin/users/${encodeURIComponent(uid)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ status: setTo }) // server will ignore unknown fields unless you choose to support them
-      });
-      alert('Status updated (refreshing list).');
-      await loadUsers();
-    } catch (err) {
-      console.error(err);
-      alert('Failed to update status: ' + (err.message || err));
-    }
-    return;
-  }
-
-  // Archive
-  if (btn.classList.contains('btn-archive') || btn.dataset.action === 'archive') {
-    if (!confirm('Archive this user? You can unarchive later.')) return;
-    try {
-      await apiFetch(`/admin/users/${encodeURIComponent(uid)}/archive`, { method: 'POST' });
-      alert('Archived. The list will refresh.');
-      await loadUsers();
-    } catch (err) {
-      console.error(err);
-      alert('Archive failed: ' + (err.message || err));
-    }
-    return;
-  }
-
-  // Unarchive support via mobile menu? We can map a special button - not included in markup by default.
-
-  // Delete (hard)
-  if (btn.classList.contains('btn-delete') || btn.dataset.action === 'delete') {
-    // Enforce archive-only server side; here do a strong confirmation
-    if (!confirm('THIS WILL PERMANENTLY DELETE this user. This action cannot be undone.')) return;
-    try {
-      await apiFetch(`/admin/users/${encodeURIComponent(uid)}`, { method: 'DELETE' });
-      alert('User deleted.');
-      await loadUsers();
-    } catch (err) {
-      console.error(err);
-      alert('Delete failed: ' + (err.message || err));
-    }
-    return;
+  switch(action) {
+    case 'view':
+      openUserViewModal(uid, tr);
+      break;
+      
+    case 'edit':
+      openUserEditModal(uid, tr);
+      break;
+      
+    case 'reset-password':
+      userMgmtModals.showConfirmation(
+        'Reset Password',
+        'Are you sure you want to reset the password for this user?',
+        async () => {
+          try {
+            const res = await apiFetch('/admin/reset-password', {
+              method: 'POST',
+              body: JSON.stringify({ uid, notifyUser: true })
+            });
+            if (res.emailed) {
+              userMgmtModals.showNotification('Success', 'Password reset link emailed to the user.');
+            } else {
+              userMgmtModals.showNotification('Success', 'Password reset link generated.');
+            }
+          } catch (err) {
+            console.error(err);
+            userMgmtModals.showNotification('Error', 'Reset failed: ' + (err.message || err));
+          }
+        }
+      );
+      break;
+      
+    case 'archive':
+      userMgmtModals.showConfirmation(
+        'Archive User',
+        'Are you sure you want to archive this user? You can unarchive them later.',
+        async () => {
+          try {
+            await apiFetch(`/admin/users/${encodeURIComponent(uid)}/archive`, { method: 'POST' });
+            userMgmtModals.showNotification('Success', 'User archived successfully');
+            // Reload current tab (removes user from active list)
+            reloadCurrentTab();
+          } catch (err) {
+            console.error(err);
+            userMgmtModals.showNotification('Error', 'Archive failed: ' + (err.message || err));
+          }
+        }
+      );
+      break;
+      
+    case 'unarchive':
+      // Unarchive user - restore them to active status
+      userMgmtModals.showConfirmation(
+        'Unarchive User',
+        'Are you sure you want to restore this user to active status?',
+        async () => {
+          try {
+            await apiFetch(`/admin/users/${encodeURIComponent(uid)}/unarchive`, { method: 'POST' });
+            userMgmtModals.showNotification('Success', 'User unarchived successfully');
+            // Reload current tab (removes user from archived list)
+            reloadCurrentTab();
+          } catch (err) {
+            console.error(err);
+            userMgmtModals.showNotification('Error', 'Unarchive failed: ' + (err.message || err));
+          }
+        }
+      );
+      break;
+      
+    case 'delete':
+      userMgmtModals.showConfirmation(
+        'Delete User',
+        'WARNING: This will PERMANENTLY DELETE this user. This action cannot be undone. Are you sure?',
+        async () => {
+          try {
+            await apiFetch(`/admin/users/${encodeURIComponent(uid)}`, { method: 'DELETE' });
+            userMgmtModals.showNotification('Success', 'User deleted successfully');
+            // Reload current tab
+            reloadCurrentTab();
+          } catch (err) {
+            console.error(err);
+            userMgmtModals.showNotification('Error', 'Delete failed: ' + (err.message || err));
+          }
+        }
+      );
+      break;
+      
+    default:
+      // Handle cases with no data-action (e.g., using classes)
+      if (btn.classList.contains('btn-reset')) {
+        userMgmtModals.showConfirmation(
+          'Reset Password',
+          'Are you sure you want to reset the password for this user?',
+          async () => {
+            try {
+              const res = await apiFetch('/admin/reset-password', {
+                method: 'POST',
+                body: JSON.stringify({ uid, notifyUser: true })
+              });
+              if (res.emailed) {
+                userMgmtModals.showNotification('Success', 'Password reset link emailed to the user.');
+              } else {
+                userMgmtModals.showNotification('Success', 'Password reset link generated.');
+              }
+            } catch (err) {
+              console.error(err);
+              userMgmtModals.showNotification('Error', 'Reset failed: ' + (err.message || err));
+            }
+          }
+        );
+      } else if (btn.classList.contains('btn-view')) {
+        openUserViewModal(uid, tr);
+      } else if (btn.classList.contains('btn-edit')) {
+        openUserEditModal(uid, tr);
+      } 
+      else if (btn.classList.contains('btn-archive')) {
+        userMgmtModals.showConfirmation(
+          'Archive User',
+          'Are you sure you want to archive this user? You can unarchive them later.',
+          async () => {
+            try {
+              await apiFetch(`/admin/users/${encodeURIComponent(uid)}/archive`, { method: 'POST' });
+              userMgmtModals.showNotification('Success', 'User archived successfully');
+              // Reload current tab
+              reloadCurrentTab();
+            } catch (err) {
+              console.error(err);
+              userMgmtModals.showNotification('Error', 'Archive failed: ' + (err.message || err));
+            }
+          }
+        );
+      } else if (btn.classList.contains('btn-unarchive')) {
+        // Unarchive button handler
+        userMgmtModals.showConfirmation(
+          'Unarchive User',
+          'Are you sure you want to restore this user to active status?',
+          async () => {
+            try {
+              await apiFetch(`/admin/users/${encodeURIComponent(uid)}/unarchive`, { method: 'POST' });
+              userMgmtModals.showNotification('Success', 'User unarchived successfully');
+              // Reload current tab
+              reloadCurrentTab();
+            } catch (err) {
+              console.error(err);
+              userMgmtModals.showNotification('Error', 'Unarchive failed: ' + (err.message || err));
+            }
+          }
+        );
+      } else if (btn.classList.contains('btn-delete')) {
+        userMgmtModals.showConfirmation(
+          'Delete User',
+          'WARNING: This will PERMANENTLY DELETE this user. This action cannot be undone. Are you sure?',
+          async () => {
+            try {
+              await apiFetch(`/admin/users/${encodeURIComponent(uid)}`, { method: 'DELETE' });
+              userMgmtModals.showNotification('Success', 'User deleted successfully');
+              // Reload current tab
+              reloadCurrentTab();
+            } catch (err) {
+              console.error(err);
+              userMgmtModals.showNotification('Error', 'Delete failed: ' + (err.message || err));
+            }
+          }
+        );
+      }
+      break;
   }
 }
 
-// simple view modal placeholder
-function openViewModal(uid) {
-  alert('Open view modal for user: ' + uid + ' (implement UI).');
+/* ========== ACTIVITY LOG FUNCTIONS ========== */
+
+// Action icon mapping
+const ACTION_ICONS = {
+  'create-admin': 'fas fa-user-plus',
+  'update-user': 'fas fa-user-edit',
+  'archive-user': 'fas fa-archive',
+  'unarchive-user': 'fas fa-undo',
+  'delete-user': 'fas fa-trash-alt',
+  'reset-password': 'fas fa-key',
+  'send-admin-otp': 'fas fa-envelope',
+  'send-message': 'fas fa-paper-plane',
+  'clear-force-password': 'fas fa-unlock',
+  'default': 'fas fa-info-circle'
+};
+
+// Action label mapping
+const ACTION_LABELS = {
+  'create-admin': 'created admin account',
+  'update-user': 'updated user profile',
+  'archive-user': 'archived user',
+  'unarchive-user': 'restored user',
+  'delete-user': 'deleted user',
+  'reset-password': 'reset password',
+  'send-admin-otp': 'sent admin OTP',
+  'send-message': 'sent message',
+  'clear-force-password': 'cleared password change requirement',
+  'default': 'performed action'
+};
+
+// Get icon class for action
+function getActionIcon(action) {
+  return ACTION_ICONS[action] || ACTION_ICONS.default;
+}
+
+// Get icon modifier class for action
+function getIconClass(action) {
+  if (action.includes('create') || action.includes('admin-otp')) return 'log-icon-create';
+  if (action.includes('update') || action.includes('edit')) return 'log-icon-update';
+  if (action.includes('delete')) return 'log-icon-delete';
+  if (action.includes('archive')) return 'log-icon-archive';
+  return '';
+}
+
+// Get friendly label for action
+function getActionLabel(action) {
+  return ACTION_LABELS[action] || ACTION_LABELS.default;
+}
+
+// Format Firestore timestamp
+function formatActivityTimestamp(ts) {
+  if (!ts) return 'Unknown time';
+  
+  const seconds = ts._seconds || ts.seconds;
+  if (!seconds) return 'Unknown time';
+  
+  const date = new Date(seconds * 1000);
+  const now = new Date();
+  const diff = now - date;
+  
+  // Less than 1 minute
+  if (diff < 60000) return 'Just now';
+  
+  // Less than 1 hour
+  if (diff < 3600000) {
+    const mins = Math.floor(diff / 60000);
+    return `${mins} minute${mins > 1 ? 's' : ''} ago`;
+  }
+  
+  // Less than 24 hours (today)
+  if (diff < 86400000 && date.getDate() === now.getDate()) {
+    return `Today, ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  }
+  
+  // Yesterday
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth()) {
+    return `Yesterday, ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  }
+  
+  // Older
+  return date.toLocaleString('en-US', { 
+    month: 'short', 
+    day: 'numeric', 
+    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+    hour: 'numeric', 
+    minute: '2-digit' 
+  });
+}
+
+// Fetch activity logs from server
+async function fetchActivityLogs(limit = 50) {
+  try {
+    const response = await apiFetch(`/admin/activity-logs?limit=${limit}`);
+    return response.items || [];
+  } catch (error) {
+    console.error('Failed to fetch activity logs:', error);
+    throw error;
+  }
+}
+
+// Render activity logs to UI
+function renderActivityLogs(logs) {
+  const container = $('#activity-log-container');
+  const loadingState = container.querySelector('.activity-log-loading');
+  const emptyState = container.querySelector('.activity-log-empty');
+  const errorState = container.querySelector('.activity-log-error');
+  const logList = container.querySelector('.activity-log-list');
+  
+  // Hide all states
+  loadingState.style.display = 'none';
+  emptyState.style.display = 'none';
+  errorState.style.display = 'none';
+  
+  // Check if empty
+  if (!logs || logs.length === 0) {
+    emptyState.style.display = 'flex';
+    logList.innerHTML = '';
+    return;
+  }
+  
+  // Render logs
+  logList.innerHTML = '';
+  logs.forEach(log => {
+    const entry = document.createElement('div');
+    entry.className = 'log-entry';
+    
+    // Icon
+    const iconDiv = document.createElement('div');
+    iconDiv.className = `log-icon ${getIconClass(log.action)}`;
+    const icon = document.createElement('i');
+    icon.className = getActionIcon(log.action);
+    iconDiv.appendChild(icon);
+    
+    // Details
+    const detailsDiv = document.createElement('div');
+    detailsDiv.className = 'log-details';
+    
+    // Message
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'log-message';
+    // Use actorName (already stored in log) - Simple and fast!
+    const actorName = log.actorName || log.actorEmail || 'System';
+    messageDiv.textContent = `${actorName} ${getActionLabel(log.action)}`;
+    
+    // Meta (time + detail)
+    const metaDiv = document.createElement('div');
+    metaDiv.className = 'log-meta';
+    
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'log-time';
+    timeSpan.textContent = formatActivityTimestamp(log.timestamp);
+    metaDiv.appendChild(timeSpan);
+    
+    if (log.detail) {
+      const detailSpan = document.createElement('span');
+      detailSpan.className = 'log-detail';
+      detailSpan.textContent = log.detail;
+      metaDiv.appendChild(detailSpan);
+    }
+    
+    detailsDiv.appendChild(messageDiv);
+    detailsDiv.appendChild(metaDiv);
+    
+    entry.appendChild(iconDiv);
+    entry.appendChild(detailsDiv);
+    logList.appendChild(entry);
+  });
+}
+
+// Show loading state
+function showActivityLoading() {
+  const container = $('#activity-log-container');
+  const loadingState = container.querySelector('.activity-log-loading');
+  const emptyState = container.querySelector('.activity-log-empty');
+  const errorState = container.querySelector('.activity-log-error');
+  const logList = container.querySelector('.activity-log-list');
+  
+  loadingState.style.display = 'flex';
+  emptyState.style.display = 'none';
+  errorState.style.display = 'none';
+  logList.innerHTML = '';
+}
+
+// Show error state
+function showActivityError(message = 'Failed to load activity logs.') {
+  const container = $('#activity-log-container');
+  const loadingState = container.querySelector('.activity-log-loading');
+  const emptyState = container.querySelector('.activity-log-empty');
+  const errorState = container.querySelector('.activity-log-error');
+  const errorMessage = errorState.querySelector('.error-message');
+  const logList = container.querySelector('.activity-log-list');
+  
+  loadingState.style.display = 'none';
+  emptyState.style.display = 'none';
+  errorState.style.display = 'flex';
+  errorMessage.textContent = message;
+  logList.innerHTML = '';
+}
+
+// Load and display activity logs
+async function loadActivityLogs() {
+  const limitSelect = $('#activity-limit');
+  const limit = limitSelect ? parseInt(limitSelect.value) : 50;
+  
+  showActivityLoading();
+  
+  try {
+    const logs = await fetchActivityLogs(limit);
+    renderActivityLogs(logs);
+  } catch (error) {
+    showActivityError(error.message || 'Failed to load activity logs.');
+  }
+}
+
+// Handle refresh button click
+async function handleRefreshLogs() {
+  await loadActivityLogs();
+}
+
+// Handle limit change
+async function handleLimitChange() {
+  await loadActivityLogs();
+}
+
+// Handle toggle change
+async function handleToggleChange(event) {
+  const isChecked = event.target.checked;
+  const manualCleanBtn = $('#btn-manual-clean');
+  
+  // Update UI immediately
+  if (manualCleanBtn) {
+    manualCleanBtn.style.display = isChecked ? 'none' : 'flex';
+  }
+  
+  // Save to server
+  try {
+    await apiFetch('/admin/activity-logs/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ autoCleanEnabled: isChecked })
+    });
+   
+  } catch (error) {
+    console.error('Failed to save toggle state:', error);
+    // Revert toggle on error
+    event.target.checked = !isChecked;
+    if (manualCleanBtn) {
+      manualCleanBtn.style.display = !isChecked ? 'none' : 'flex';
+    }
+    alert('Failed to save settings: ' + (error.message || 'Unknown error'));
+  }
+}
+
+// Handle manual clean button click
+async function handleManualClean() {
+  try {
+    // Fetch count of old logs
+    const countResponse = await apiFetch('/admin/activity-logs/count-old?days=90');
+    const count = countResponse.count || 0;
+    
+    if (count === 0) {
+      alert('No logs older than 90 days found.');
+      return;
+    }
+    
+    // Show confirmation with count
+    const confirmed = confirm(
+      `Delete ${count} activity log${count > 1 ? 's' : ''} older than 90 days?\n\n` +
+      'This action cannot be undone.'
+    );
+    
+    if (!confirmed) return;
+    
+    // Call cleanup endpoint
+    const response = await apiFetch('/admin/activity-logs/cleanup', {
+      method: 'POST',
+      body: JSON.stringify({ retentionDays: 90 })
+    });
+    
+    alert(response.message || `Successfully deleted ${response.deleted} logs.`);
+    
+    // Reload logs to reflect changes
+    await loadActivityLogs();
+  } catch (error) {
+    console.error('Cleanup failed:', error);
+    alert('Failed to clean logs: ' + (error.message || 'Unknown error'));
+  }
+}
+
+/* ========== TAB SWITCHING ========== */
+
+// Switch between User Accounts, Activity Log, and Archived tabs
+function initTabSwitching() {
+  const tabButtons = document.querySelectorAll('.user-management-tabs .tab-btn');
+  const tabContents = document.querySelectorAll('.user-management-tabs .tab-content');
+  
+  if (!tabButtons.length || !tabContents.length) return;
+  
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const targetTab = button.getAttribute('data-tab');
+      
+      // Remove active class from all buttons and contents
+      tabButtons.forEach(btn => btn.classList.remove('active'));
+      tabContents.forEach(content => content.classList.remove('active'));
+      
+      // Add active class to clicked button
+      button.classList.add('active');
+      
+      // Show corresponding content
+      const targetContent = document.getElementById(targetTab);
+      if (targetContent) {
+        targetContent.classList.add('active');
+      }
+      
+      // Load appropriate data based on tab
+      if (targetTab === 'accounts') {
+        // Load active users (non-archived)
+        loadUsers();
+      } else if (targetTab === 'archived') {
+        // Load archived users only
+        loadArchivedUsers();
+      } else if (targetTab === 'activity') {
+        // Load activity logs
+        loadActivityLogs();
+      }
+    });
+  });
+}
+
+// Load toggle state from server
+async function loadActivitySettings() {
+  try {
+    const settings = await apiFetch('/admin/activity-logs/settings');
+    const toggleInput = $('#auto-clean-toggle');
+    const manualCleanBtn = $('#btn-manual-clean');
+    
+    if (toggleInput && settings) {
+      toggleInput.checked = settings.autoCleanEnabled || false;
+      
+      // Update button visibility
+      if (manualCleanBtn) {
+        manualCleanBtn.style.display = settings.autoCleanEnabled ? 'none' : 'flex';
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load activity log settings:', error);
+    // Keep default state (toggle OFF, button visible)
+  }
+}
+
+// Initialize activity log UI
+function initActivityLog() {
+  // Toggle switch
+  const toggleInput = $('#auto-clean-toggle');
+  if (toggleInput) {
+    toggleInput.addEventListener('change', handleToggleChange);
+  }
+  
+  // Manual clean button
+  const manualCleanBtn = $('#btn-manual-clean');
+  if (manualCleanBtn) {
+    manualCleanBtn.addEventListener('click', handleManualClean);
+  }
+  
+  // Refresh button
+  const refreshBtn = $('#btn-refresh-logs');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', handleRefreshLogs);
+  }
+  
+  // Limit selector
+  const limitSelect = $('#activity-limit');
+  if (limitSelect) {
+    limitSelect.addEventListener('change', handleLimitChange);
+  }
+  
+  // Retry button
+  const retryBtn = document.querySelector('.btn-retry');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', handleRefreshLogs);
+  }
+  
+  // Load settings and logs on init
+  loadActivitySettings();
+  loadActivityLogs();
+}
+
+/* ========== DROPDOWN AUTO-CLOSE ========== */
+
+// Close dropdowns and mobile menus when clicking outside
+function initDropdownAutoClose() {
+  document.addEventListener('click', (e) => {
+    // Find all open dropdown details elements (desktop and mobile)
+    const openDropdowns = document.querySelectorAll('.dropdown-details[open], .mobile-actions[open]');
+    
+    openDropdowns.forEach(dropdown => {
+      // Check if the click was outside this dropdown/menu
+      if (!dropdown.contains(e.target)) {
+        // Close the dropdown/menu by removing the 'open' attribute
+        dropdown.removeAttribute('open');
+      }
+    });
+  });
 }
 
 // init
 document.addEventListener('DOMContentLoaded', () => {
+  // Get both table bodies (active and archived)
   const tbody = document.querySelector('#users-tbody');
+  const archivedTbody = document.querySelector('#archived-users-tbody');
+  
   if (!tbody) return;
+  
+  // Initialize modal system
+  initUserMgmtModals();
+  
+  // Add event delegation for BOTH tables (active and archived)
+  // This ensures buttons work in both tabs
   tbody.addEventListener('click', handleTableClick);
+  if (archivedTbody) {
+    archivedTbody.addEventListener('click', handleTableClick);
+  }
+  
+  // Load users on init
   loadUsers();
+  
+  // Initialize tab switching
+  initTabSwitching();
+  
+  // Initialize activity log
+  initActivityLog();
+  
+  // Initialize dropdown auto-close
+  initDropdownAutoClose();
 });

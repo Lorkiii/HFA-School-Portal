@@ -20,14 +20,6 @@
           <img src="../assets/transparent_logo.png" alt="school_logo" />
         </a>
         <h3 class="schoolname">Holy Family Academy of Sta Maria Bulacan Inc.</h3>
-        <div class="nav-icons">
-          <a href="#notifications" title="Notifications" class="nav-icon">
-            <i class="fas fa-bell"></i>
-          </a>
-          <a href="#messages" title="Messages" class="nav-icon">
-            <i class="fas fa-envelope"></i>
-          </a>
-        </div>
       </nav>
     </header>
 
@@ -36,11 +28,8 @@
       <button id="close-sidebar" title="Close Menu"><i class="fas fa-times"></i></button>
 
       <div class="user-info">
-        <div class="avatar">
-          <i class="fas fa-user-circle"></i>
-        </div>
         <h3 class="Teacher-name">Teacher Name</h3>
-        <p class="teacher-id">ID: TEACH-12345</p>
+
       </div>
 
       <nav class="sidebar-nav">
@@ -57,21 +46,7 @@
               <span>Application Status</span>
             </a>
           </li>
-
         </ul>
-
-        <nav class="secondary-sidebar">
-          <ul class="sidebar-links">
-            <li>
-              <a href="#announcement-and-news">
-                <i class="fas fa-newspaper"></i>
-                <span>News</span>
-              </a>
-            </li>
-
-          </ul>
-        </nav>
-
         <nav class="profile-links">
           <ul class="sidebar-links">
             <li>
@@ -129,93 +104,123 @@
                   <div class="card-value" id="next-action">No interview scheduled</div>
 
                 </div>
-
-                <div class="card card-contact">
-                  <div class="card-title">Contact</div>
-                  <div class="card-value" id="assigned-reviewer">—</div>
-                  <div class="card-sub">Message: <button id="btn-message-admin" class="btn small">Message</button></div>
-                </div>
-
               </div>
             </div>
 
-            <!-- Attachments & Messages Row -->
-            <div class="attachments-messages-row">
-              <div class="attachments-panel">
-                <div class="panel-header">
-                  <h4>Attachments</h4>
-                  <div class="panel-actions">
-                    <button id="btn-upload" class="btn small"><i class="fas fa-upload"></i> Upload</button>
+            <div class="status-activity-grid">
+
+              <!-- LEFT: Timeline column -->
+              <div class="timeline-column">
+                <div class="status-timeline" id="status-timeline">
+
+                  <div class="status-header">
+                    <h2>Application Timeline</h2>
+                  </div>
+
+                  <div class="timeline-item" data-step="submitted">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                      <h3>Application Submitted</h3>
+                      <p class="time"> - </p>
+                      <p>Your application documents have been submitted.</p>
+                    </div>
+                  </div>
+
+                  <div class="timeline-item" data-step="screening">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                      <h3>Initial Screening</h3>
+                      <p class="time"> - </p>
+                      <p>Your qualifications have been reviewed.</p>
+                    </div>
+                  </div>
+
+                  <div class="timeline-item" data-step="interview">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                      <h3>Interview Scheduled</h3>
+                      <p class="time" id="interview-date">—</p>
+                      <p id="interview-details">No interview scheduled.</p>
+                    </div>
+                  </div>
+
+                  <div class="timeline-item" data-step="demo">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                      <h3>Demo Teaching</h3>
+                      <p>Pending</p>
+                      <p>Will be scheduled after successful interview.</p>
+                    </div>
+                  </div>
+
+                  <div class="timeline-item" data-step="result">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                      <h3>Pass or Fail</h3>
+                      <p id="decision-status">Pending</p>
+                      <p>Will be determined after the demo teaching.</p>
+                    </div>
+                  </div>
+
+                  <div class="timeline-item" data-step="decision">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                      <h3>On boarding</h3>
+                      <p>Pending</p>
+                      <p>Administration will review all evaluation results.</p>
+                    </div>
+                  </div>
+
+                  <!-- Attachments inside timeline -->
+                  <div class="timeline-item attachments-item">
+                    <div class="timeline-marker"></div>
+                    <div class="timeline-content">
+                      <div class="panel-header">
+                        <h3>Attachments</h3>
+                        <div class="panel-actions">
+                          <button id="btn-upload" class="btn small"><i class="fas fa-upload"></i> Upload</button>
+                        </div>
+                      </div>
+
+                      <ul id="attachments-list" class="attachments-list">
+                        <!-- injected by JS -->
+                      </ul>
+                    </div>
+                  </div>
+
+                </div><!-- /.status-timeline -->
+              </div><!-- /.timeline-column -->
+
+              <!-- RIGHT: activity column (messages + notifications) -->
+              <div class="activity-column">
+
+                <div class="attachments-messages-row">
+                  <div class="messages-panel">
+                    <div class="panel-header">
+                      <h4>Messages</h4>
+                      <div class="panel-actions">
+                        <button id="btn-compose" class="btn small"><i class="fas fa-edit"></i> Compose</button>
+                      </div>
+                    </div>
+                    <div id="note-list" class="note-list">
+                      <!-- injected by JS -->
+                    </div>
+                  </div>
+
+                  <div class="notification-panel">
+                    <div class="panel-header">
+                      <h4>Notifications</h4>
+                    </div>
+                    <div id="notif-list" class="notif-list">
+                      <!-- injected by JS -->
+                    </div>
                   </div>
                 </div>
-                <ul id="attachments-list" class="attachments-list">
-                  <!-- items injected by JS -->
-                </ul>
-              </div>
 
-              <div class="messages-panel">
-                <div class="panel-header">
-                  <h4>Messages</h4>
-                  <div class="panel-actions">
-                    <button id="btn-compose" class="btn small"><i class="fas fa-edit"></i> Compose</button>
-                  </div>
-                </div>
-                <div id="note-list" class="note-list">
-                  <!-- messages injected by JS -->
-                </div>
-              </div>
-            </div>
-
-            <!-- Timeline (your existing timeline kept, with data-step attributes) -->
-            <div class="status-timeline" id="status-timeline">
-
-              <div class="timeline-item" data-step="submitted">
-                <div class="timeline-marker"></div>
-                <div class="timeline-content">
-                  <h3>Application Submitted</h3>
-                  <p class="time">January 15, 2024</p>
-                  <p>Your application documents have been received.</p>
-                </div>
-              </div>
-
-              <div class="timeline-item" data-step="screening">
-                <div class="timeline-marker"></div>
-                <div class="timeline-content">
-                  <h3>Initial Screening</h3>
-                  <p class="time">January 22, 2024</p>
-                  <p>Your qualifications have been reviewed.</p>
-                </div>
-              </div>
-
-              <div class="timeline-item" data-step="interview">
-                <div class="timeline-marker"></div>
-                <div class="timeline-content">
-                  <h3>Interview Scheduled</h3>
-                  <p class="time" id="interview-date">—</p>
-                  <p id="interview-details">No interview scheduled.</p>
-                </div>
-              </div>
-
-              <div class="timeline-item" data-step="demo">
-                <div class="timeline-marker"></div>
-                <div class="timeline-content">
-                  <h3>Demo Teaching</h3>
-                  <p>Pending</p>
-                  <p>Will be scheduled after successful interview.</p>
-                </div>
-              </div>
-
-              <div class="timeline-item" data-step="decision">
-                <div class="timeline-marker"></div>
-                <div class="timeline-content">
-                  <h3>Final Decision</h3>
-                  <p>Pending</p>
-                  <p>Administration will review all evaluation results.</p>
-                </div>
-              </div>
-            </div>
-
+              </div><!-- /.activity-column -->
+            </div><!-- /.status-activity-grid -->
           </div>
+
         </div>
 
         <!-- Hidden file input for uploads -->
@@ -336,9 +341,6 @@
                 <div class="field"><label>Previous Schools</label>
                   <div class="value"><span id="status-previous-schools">—</span></div>
                 </div>
-                <div class="field"><label>License No.</label>
-                  <div class="value"><span id="status-license">—</span></div>
-                </div>
                 <div class="field"><label>Subjects</label>
                   <div class="value"><span id="status-subjects">—</span></div>
                 </div>
@@ -355,56 +357,64 @@
 
 
           <aside class="app-status-right">
-            <div class="progress-card">
-              <div class="progress-header">
+            <div class="progress-card-enhanced">
+              <div class="progress-header-enhanced">
                 <div>
-                  <div class="progress-title">Application progress</div>
-                  <div id="submitted-at-timeline" class="progress-sub">Submitted: —</div>
+                  <h3 class="progress-title-enhanced">Application Progress</h3>
+                  <div id="submitted-at-timeline" class="progress-sub-enhanced">Submitted: —</div>
                 </div>
               </div>
 
-              <div id="app-status-timeline" class="progress-steps">
+              <div id="app-status-timeline" class="status-timeline-enhanced">
                 <div class="timeline-item" data-step="submitted">
-                  <div class="marker"></div>
-                  <div class="step-content">
-                    <div class="step-title">Application Submitted</div>
-                    <div class="step-desc">Your application documents have been received.</div>
+                  <div class="timeline-marker"></div>
+                  <div class="timeline-content">
+                    <h3>Application Submitted</h3>
+                    <p class="timeline-desc">Your application documents have been received.</p>
                   </div>
                 </div>
 
-                <div class="timeline-item" data-step="reviewing">
-                  <div class="marker"></div>
-                  <div class="step-content">
-                    <div class="step-title">Under Review</div>
-                    <div class="step-desc">Your qualifications are being reviewed.</div>
+                <div class="timeline-item" data-step="screening">
+                  <div class="timeline-marker"></div>
+                  <div class="timeline-content">
+                    <h3>Initial Screening</h3>
+                    <p class="timeline-desc">Your qualifications are being reviewed.</p>
                   </div>
                 </div>
 
-                <div class="timeline-item" data-step="interview_scheduled">
-                  <div class="marker"></div>
-                  <div class="step-content">
-                    <div class="step-title">Interview Scheduled</div>
-                    <div class="step-desc">Interview will be scheduled by Admissions.</div>
-                    <div id="status-interview-info" class="step-meta" style="display:none;">
-                      <div><strong>Date:</strong> <span id="status-interview-date">—</span></div>
-                      <div><strong>Location:</strong> <span id="status-interview-details">—</span></div>
+                <div class="timeline-item" data-step="interview">
+                  <div class="timeline-marker"></div>
+                  <div class="timeline-content">
+                    <h3>Interview Scheduled</h3>
+                    <p class="timeline-desc" id="status-interview-desc-text">Interview will be scheduled by Admissions.</p>
+                    <div id="status-interview-info" class="interview-details" style="display:none;">
+                      <div class="detail-row"><strong>Date:</strong> <span id="status-interview-date">—</span></div>
+                      <div class="detail-row"><strong>Location:</strong> <span id="status-interview-details">—</span></div>
                     </div>
                   </div>
                 </div>
 
                 <div class="timeline-item" data-step="demo">
-                  <div class="marker"></div>
-                  <div class="step-content">
-                    <div class="step-title">Demo Teaching</div>
-                    <div class="step-desc">Demo teaching (if applicable).</div>
+                  <div class="timeline-marker"></div>
+                  <div class="timeline-content">
+                    <h3>Demo Teaching</h3>
+                    <p class="timeline-desc">Will be scheduled after successful interview.</p>
+                  </div>
+                </div>
+
+                <div class="timeline-item" data-step="result">
+                  <div class="timeline-marker"></div>
+                  <div class="timeline-content">
+                    <h3>Pass or Fail</h3>
+                    <p class="timeline-desc">Will be determined after the demo teaching.</p>
                   </div>
                 </div>
 
                 <div class="timeline-item" data-step="decision">
-                  <div class="marker"></div>
-                  <div class="step-content">
-                    <div class="step-title">Final Decision</div>
-                    <div class="step-desc">Administration will review all evaluation results.</div>
+                  <div class="timeline-marker"></div>
+                  <div class="timeline-content">
+                    <h3>On boarding</h3>
+                    <p class="timeline-desc">Administration will review all evaluation results.</p>
                   </div>
                 </div>
               </div>
@@ -413,8 +423,101 @@
 
         </div>
       </section>
+
+      <!-- Profile Settings Section -->
+      <section id="profile-settings" style="display: none;">
+        <div class="profile-settings-container">
+          <div class="section-header">
+            <h2><i class="fas fa-user-cog"></i> Profile Settings</h2>
+          </div>
+
+          <div class="profile-content-grid">
+            <!-- Left: Profile Form Card -->
+            <div class="profile-form-card">
+              <h3>Personal Information</h3>
+              
+              <!-- Display Name (Read-only for teacher) -->
+              <div class="profile-field">
+                <label class="profile-current-label">Your Display Name</label>
+                <div class="profile-current-value" id="display-name-text">Loading...</div>
+                <small class="help-text"><i class="fas fa-lock"></i> Only administrators can change your display name</small>
+              </div>
+
+              <div class="profile-separator"></div>
+
+              <!-- Email (Read-only) -->
+              <div class="profile-field">
+                <label class="profile-current-label">Your Email Address</label>
+                <div class="profile-current-value" id="email-text">Loading...</div>
+              </div>
+
+              <div class="profile-separator"></div>
+
+              <!-- Phone Number -->
+              <div class="profile-field">
+                <label class="profile-current-label">Current Phone Number</label>
+                <div class="profile-current-value profile-not-set" id="current-phone-text">Not set</div>
+              </div>
+
+              <div class="form-group">
+                <label>Update Phone Number</label>
+                <div class="phone-input-wrapper">
+                  <span class="phone-prefix">+63</span>
+                  <input type="text" id="profile-phone" maxlength="10" placeholder="9123456789" />
+                </div>
+                <small class="help-text">Enter your 10-digit mobile number</small>
+              </div>
+
+              <button id="save-profile-btn" class="btn primary">
+                <i class="fas fa-save"></i> Save Changes
+              </button>
+            </div>
+
+            <!-- Right: Change Password Card -->
+            <div class="password-change-card">
+              <h3>Change Password</h3>
+              
+              <div class="form-group">
+                <label>Current Password</label>
+                <input type="password" id="current-password" placeholder="Enter current password" autocomplete="current-password" />
+              </div>
+
+              <div class="form-group">
+                <label>New Password</label>
+                <input type="password" id="new-password" placeholder="Enter new password" autocomplete="new-password" />
+              </div>
+
+              <div class="form-group">
+                <label>Confirm New Password</label>
+                <input type="password" id="confirm-password" placeholder="Re-enter new password" autocomplete="new-password" />
+              </div>
+
+              <!-- Password Requirements -->
+              <div class="password-requirements">
+                <div class="requirements-title">
+                  <i class="fas fa-info-circle"></i> Password Requirements:
+                </div>
+                <ul class="requirements-list">
+                  <li>At least 8 characters long</li>
+                  <li>Must contain letters (a-z, A-Z)</li>
+                  <li>Must contain numbers (0-9)</li>
+                  <li>Cannot be the same as current password</li>
+                </ul>
+              </div>
+
+              <button id="change-password-btn" class="btn secondary">
+                <i class="fas fa-key"></i> Update Password
+              </button>
+            </div>
+          </div>
+
+          <!-- Success/Error Messages -->
+          <div id="profile-message" class="message-container" style="display: none;"></div>
+        </div>
+      </section>
     </main>
     <script type="module" src="teacher.js"></script>
+    <script type="module" src="date.js"></script>
   </body>
 
 </html>

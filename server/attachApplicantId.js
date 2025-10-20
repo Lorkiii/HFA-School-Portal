@@ -45,14 +45,10 @@ export default function createAttachApplicantId({ dbClient } = {}) {
       // put updated user back on req
       req.user = user;
 
-      // Helpful dev logging — remove or guard in production if too verbose
-      console.log('[attachApplicantId] explicitApplicantId ->', normalizedExplicitId);
-      console.log('[attachApplicantId] user.uid ->', user.uid, 'user.applicantIdFromDb ->', user.applicantIdFromDb, 'user.isAdmin ->', user.isAdmin);
-      console.log('[attachApplicantId] chosen req.applicantId ->', req.applicantId);
-
+      
       return next();
     } catch (err) {
-      console.error('attachApplicantId middleware unexpected error', err && (err.stack || err));
+      console.log('attachApplicantId middleware unexpected error', err && (err.stack || err));
       // set defaults but continue
       req.user = req.user || {};
       req.user.isAdmin = !!(req.user.role && String(req.user.role).toLowerCase() === 'admin');

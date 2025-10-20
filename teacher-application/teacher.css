@@ -1,11 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Josefin+Sans:ital,wght@0,100..700;1,100..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
 
 /* Base Reset */
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Josefin Sans', sans-serif;
+    font-family: 'Poppins', sans-serif;
 }
 
 body {
@@ -149,7 +149,7 @@ header .schoolname {
     padding: 20px;
     text-align: center;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    margin-top: 10px;
+    margin-top: 80px;
 }
 
 .user-info .avatar {
@@ -243,36 +243,11 @@ body.sidebar-permanent .main-content {
     .overview-cards{
         flex-direction:column}
 }
-/* Responsive Design */
-@media (max-width: 1600px) {
-    /* Large desktop adjustments */
-    .sidebar {
-        width: 240px;
-    }
-    body.sidebar-permanent .main-content {
-        margin-left: 240px;
-    }
-     .navbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
 
-    .navbar .schoolname {
-     padding: 10px 10px;
-    }
-    
-    .logo img{
-     width: 70px;
-      padding: 10px 10px;
-    }
-}
 
 @media (max-width: 768px) {
     /* Tablet portrait */
-    header {
-        height: 65px;
-    }
+
     header .navbar {
         padding: 5px 10px;
     }
@@ -306,7 +281,7 @@ body.sidebar-permanent .main-content {
     .main-content {
         padding: 70px 15px 25px;
     }
-        .navbar {
+    .navbar {
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -319,24 +294,16 @@ body.sidebar-permanent .main-content {
 
 @media (max-width: 576px) {
     /* Mobile landscape */
-    header {
-        height: 60px;
-    }
+
     .logo img {
         width: 60px;
     }
-    header .schoolname {
-        font-size: 0.9rem;
-        max-width: 180px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
+
     .nav-icon {
         font-size: 1rem;
     }
     .sidebar {
-        width: 85%;
+        width: 40%;
         left: -85%;
     }
     .user-info .stdname {
@@ -349,16 +316,11 @@ body.sidebar-permanent .main-content {
 
 @media (max-width: 480px) {
     /* Mobile portrait */
-    header {
-        height: 55px;
-    }
+
     .logo img {
         width: 50px;
     }
-    header .schoolname {
-        font-size: 0.85rem;
-        max-width: 150px;
-    }
+
     #open-sidebar {
         font-size: 1.1rem;
         margin-right: 5px;
@@ -367,7 +329,7 @@ body.sidebar-permanent .main-content {
         gap: 8px;
     }
     .sidebar {
-        width: 100%;
+        width: 40%;
         left: -100%;
     }
     .sidebar-links li a {
@@ -384,9 +346,7 @@ body.sidebar-permanent .main-content {
 
 @media (max-width: 360px) {
     /* Small mobile devices */
-    header {
-        height: 50px;
-    }
+
     .logo {
         margin-right: auto;
     }
@@ -400,29 +360,21 @@ body.sidebar-permanent .main-content {
     .main-content {
         padding: 60px 10px 15px;
     }
-        .navbar {
+    .navbar {
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-
+    .sidebar{
+        width: 50%;
+        left: -30%;
+    }
     .navbar .schoolname {
      padding: 10px 10px;
     }
 }
 
-/* Enhanced Mobile Interactions */
-@media (hover: none) {
-    /* Disable hover effects on touch devices */
-    .nav-icon:hover, 
-    #open-sidebar:hover,
-    .sidebar-links li a:hover {
-        transform: none;
-    }
-    .nav-icon:hover {
-        color: #e7e7e7;
-    }
-}
+
 
 /* Print Styles */
 @media print {

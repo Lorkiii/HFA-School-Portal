@@ -11,14 +11,6 @@ export default function createAdminActionsRouter(deps = {}) {
 
   const router = express.Router();
 
-  // Helper: load applicant doc
-  async function fetchApplicantDoc(applicantId) {
-    const ref = db.collection("teacherApplicants").doc(applicantId);
-    const snap = await ref.get();
-    if (!snap.exists) return null;
-    return { ref, data: snap.data() };
-  }
-
   // Helper: best-effort activity logging
   async function safeLog(evt = {}) {
     try {
@@ -201,43 +193,6 @@ export default function createAdminActionsRouter(deps = {}) {
     }
   });
 
-  // PUT /api/applicants/:id/progress-notes
-  router.put("/applicants/:id/progress-notes", requireAdmin, async (req, res) => {
-    const applicantId = req.params.id;
-    const notes = (req.body && req.body.notes) || null;
-    if (!applicantId) return res.status(400).json({ ok: false, error: "Missing applicant id" });
-
-    try {
-      const appRef = db.collection("teacherApplicants").doc(applicantId);
-      const result = await db.runTransaction(async (t) => {
-        const snap = await t.get(appRef);
-        if (!snap.exists) return { notFound: true };
-        t.update(appRef, {
-          progressNotes: notes,
-          statusUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          statusUpdatedBy: (req.adminUser && req.adminUser.uid) || null,
-        });
-        return { ok: true };
-      });
-
-      if (result && result.notFound) return res.status(404).json({ ok: false, error: "Applicant not found" });
-
-      await safeLog({
-        actorUid: (req.adminUser && req.adminUser.uid) || null,
-        actorEmail: (req.adminUser && req.adminUser.email) || null,
-        action: "update-progress-notes",
-        targetType: "teacherApplicant",
-        targetId: applicantId,
-        detail: `notes-length:${(notes && notes.length) || 0}`,
-      });
-
-      const finalSnap = await appRef.get();
-      return res.json({ ok: true, applicant: { id: finalSnap.id, ...finalSnap.data() } });
-    } catch (err) {
-      console.error("PUT /applicants/:id/progress-notes error", err && (err.stack || err));
-      return res.status(500).json({ ok: false, error: "Server error" });
-    }
-  });
 
   return router;
 }

@@ -1,27 +1,17 @@
 // admin-applicant.js (merged: realtime, progress modal, edit mode, schedule->server)
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
 import {
-  getFirestore,
   collection,
   doc,
   updateDoc,
   deleteDoc,
   serverTimestamp,
   onSnapshot,
-  query
+  query,
+  getDocs
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-import { firebaseConfig } from "../firebase-config.js";
-// init firebase
-let app;
-let db;
-try {
-  app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  console.log("[admin] Firebase initialized");
-} catch (err) {
-  console.error("[admin] Firebase init error", err);
-}
+import { db } from "../firebase-config.js";
+import { apiFetch } from "../api-fetch.js";
 
 // pagination & state
 let currentPage = 1;
@@ -37,10 +27,13 @@ let applicantsUnsubscribe = null;
 // flag used when schedule modal was opened from progress modal
 let openedFromProgress = false;
 
+
+
 // dom ready
 document.addEventListener("DOMContentLoaded", () => {
   safeInit();
 });
+
 // initialize UI and fetch data
 async function safeInit() {
   const archivedBtn = document.getElementById("teacher-archived-btn");
@@ -101,7 +94,14 @@ async function initApplicantsRealtime() {
       },
       (err) => {
         console.error("[admin] applicants onSnapshot error", err);
-        showErrorToast("Realtime update failed");
+        // Handle permission errors gracefully (don't show toast)
+        if (err.code === 'permission-denied' || err.message?.includes('insufficient permissions')) {
+          console.warn('[admin] Firestore permission issue - this is expected if rules are restrictive');
+          // Don't show error toast for permission issues - not critical
+        } else {
+          // Only show toast for unexpected errors
+          showErrorToast("Realtime update failed");
+        }
       }
     );
   } catch (err) {
@@ -142,12 +142,12 @@ function wireProgressModalHandlers() {
     try {
       await updateDoc(doc(db, "teacherApplicants", selectedApplicantId), {
         interview: null,
-        status: "reviewing",
+        status: "screening",
         statusUpdatedAt: serverTimestamp(),
         statusUpdatedBy: "admin",
       });
       const a = allApplicants.find((x) => x.id === selectedApplicantId);
-      if (a) { a.interview = null; a.status = "reviewing"; }
+      if (a) { a.interview = null; a.status = "screening"; }
       showInfoToast("Interview cancelled");
       // update progress modal UI
       renderProgressSteps(allApplicants.find((x) => x.id === selectedApplicantId) || {});
@@ -163,18 +163,16 @@ function wireProgressModalHandlers() {
     }
   });
 
-  // Approve / Reject inside decision
+  // Approve / Reject inside decision - Now uses new final decision API
   document.getElementById("hfa-progress-approve-btn")?.addEventListener("click", async () => {
     if (!selectedApplicantId) return showInfoToast("No applicant selected");
-    if (!confirm("Are you sure you want to approve this applicant?")) return;
-    await updateApplicantStatus("approved");
-    closeProgressModal();
+    if (!confirm("✅ Approve this applicant?\n\nThis will:\n• Send approval email\n• Archive their account\n• Schedule deletion in 30 days")) return;
+    await handleFinalDecision("approved");
   });
   document.getElementById("hfa-progress-reject-btn")?.addEventListener("click", async () => {
     if (!selectedApplicantId) return showInfoToast("No applicant selected");
-    if (!confirm("Are you sure you want to reject this applicant?")) return;
-    await updateApplicantStatus("rejected");
-    closeProgressModal();
+    if (!confirm("❌ Reject this applicant?\n\nThis will:\n• Send rejection email\n• Schedule deletion in 30 days")) return;
+    await handleFinalDecision("rejected");
   });
 }
 
@@ -236,15 +234,25 @@ function wireEventHandlers() {
   document
     .getElementById("close-teacher-modal")
     ?.addEventListener("click", closeTeacherModal);
+  
+  // PHASE 1B: Close modal when clicking outside (backdrop)
+  document
+    .getElementById("teacher-detail-modal")
+    ?.addEventListener("click", (e) => {
+      if (e.target.id === "teacher-detail-modal") {
+        closeTeacherModal();
+      }
+    });
+  
   document
     .getElementById("cancel-schedule")
     ?.addEventListener("click", closeScheduleModal);
   document
     .getElementById("approve-teacher-btn")
-    ?.addEventListener("click", () => updateApplicantStatus("approved"));
+    ?.addEventListener("click", () => confirmStatusChange("approved"));
   document
     .getElementById("reject-teacher-btn")
-    ?.addEventListener("click", () => updateApplicantStatus("rejected"));
+    ?.addEventListener("click", () => confirmStatusChange("rejected"));
   document
     .getElementById("archive-teacher-btn")
     ?.addEventListener("click", async () => {
@@ -257,9 +265,7 @@ function wireEventHandlers() {
     .getElementById("message-teacher-btn")
     ?.addEventListener("click", sendApplicantMessage);
   document.getElementById("edit-teacher-btn")?.addEventListener("click", editApplicantDetails);
-  document.getElementById("save-notes-btn")?.addEventListener("click", saveAdminNotes);
-  document.getElementById("schedule-interview-btn")?.addEventListener("click", openScheduleModal);
-  document.getElementById("reschedule-interview-btn")?.addEventListener("click", openScheduleModal);
+
   document.getElementById("schedule-interview-form")?.addEventListener("submit", handleScheduleInterview);
 
   document.getElementById("teacher-export-btn")?.addEventListener("click", (e) => {
@@ -270,6 +276,37 @@ function wireEventHandlers() {
     e.preventDefault();
     showInfoToast("Filter disabled");
   });
+
+  // PHASE 2: Message modal event listeners
+  document
+    .getElementById("close-message-modal")
+    ?.addEventListener("click", closeMessageModal);
+  document
+    .getElementById("cancel-message-btn")
+    ?.addEventListener("click", closeMessageModal);
+  
+  // Backdrop click to close message modal
+  document
+    .getElementById("message-applicant-modal")
+    ?.addEventListener("click", (e) => {
+      if (e.target.id === "message-applicant-modal") {
+        closeMessageModal();
+      }
+    });
+  
+  // Character counter for message body
+  document
+    .getElementById("message-body")
+    ?.addEventListener("input", (e) => {
+      const charCount = e.target.value.length;
+      const counter = document.getElementById("message-char-count");
+      if (counter) counter.textContent = charCount;
+    });
+  
+  // Message form submission
+  document
+    .getElementById("message-applicant-form")
+    ?.addEventListener("submit", handleSendMessage);
 }
 
 // filters + render
@@ -394,8 +431,7 @@ function renderGridApplicants(applicants) {
     if (!a.archived) {
       const msgBtn = createBtn("btn-message-teacher", "Message", "fas fa-envelope");
       msgBtn.addEventListener("click", () => {
-        selectedApplicantId = a.id;
-        sendApplicantMessage();
+        openMessageModal(a.id);
       });
 
       // REPLACED: Schedule -> Progress (use unique btn-hfa-progress per your request)
@@ -602,18 +638,29 @@ function viewApplicantDetails(id) {
 
   setText("modal-teacher-experience", `${a.experienceYears || 0} years`);
   setText("modal-teacher-schools", a.previousSchools || "None");
-  setText("modal-teacher-license", a.licenseNumber || "Not provided");
   setText("modal-teacher-level", a.preferredLevel || "Not specified");
   setText("modal-teacher-subjects", a.qualifiedSubjects ? (Array.isArray(a.qualifiedSubjects) ? a.qualifiedSubjects.join(", ") : a.qualifiedSubjects) : "Not specified");
   setText("modal-teacher-employment", a.employmentType || "Not specified");
+
+  setText("interview-date", a.interview?.date || "Not scheduled");
+  setText("interview-time", a.interview?.time || "Not scheduled");
+
+  // PHASE 1: Populate application info section
+  const submittedDate = a.createdAt ? formatDate(a.createdAt.toDate ? a.createdAt.toDate() : a.createdAt) : "--";
+  setText("modal-submitted-date", submittedDate);
+
+  if (a.interview && a.interview.date && a.interview.time) {
+    setText("modal-interview-time", `${a.interview.date} at ${a.interview.time}`);
+    setText("modal-interview-location", a.interview.location || a.interview.mode || "--");
+  } else {
+    setText("modal-interview-time", "Not scheduled");
+    setText("modal-interview-location", "--");
+  }
 
   renderDocuments(a.documents || []);
   updateProgressTracker(a.status);
   if (a.interview) showInterviewDetails(a.interview);
   else showNoInterview();
-
-  const notesEl = document.getElementById("admin-notes");
-  if (notesEl) notesEl.value = a.adminNotes || "";
 
   const modalArchiveBtn = document.getElementById("archive-teacher-btn");
   if (modalArchiveBtn) {
@@ -622,6 +669,56 @@ function viewApplicantDetails(id) {
   }
 
   document.getElementById("teacher-detail-modal") && (document.getElementById("teacher-detail-modal").style.display = "block");
+}
+
+// PHASE 1: Wire up 2x2 button grid event handlers
+function wireUpActionGrid(applicantId, isArchived) {
+  // View Details button - scrolls to details section (already showing)
+  const viewDetailsBtn = document.getElementById("view-details-btn");
+  if (viewDetailsBtn) {
+    viewDetailsBtn.onclick = () => {
+      const modalBody = document.querySelector(".teacher-modal-body");
+      if (modalBody) modalBody.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+  }
+
+  // Message button - opens message modal
+  const messageBtn = document.getElementById("message-applicant-btn");
+  if (messageBtn) {
+    messageBtn.onclick = () => {
+      openMessageModal(applicantId);
+    };
+  }
+
+  // Progress button - opens progress modal (existing functionality)
+  const progressBtn = document.getElementById("view-progress-btn");
+  if (progressBtn) {
+    progressBtn.onclick = () => {
+      openProgressModal(applicantId);
+    };
+  }
+
+  // Archive button - archives/unarchives applicant (existing functionality)
+  const archiveBtn = document.getElementById("archive-applicant-btn");
+  if (archiveBtn) {
+    // Update button text based on archived status
+    const archiveIcon = archiveBtn.querySelector("i");
+    const archiveText = archiveBtn.querySelector("span");
+    if (isArchived) {
+      if (archiveIcon) archiveIcon.className = "fas fa-folder-open";
+      if (archiveText) archiveText.textContent = "Unarchive";
+    } else {
+      if (archiveIcon) archiveIcon.className = "fas fa-archive";
+      if (archiveText) archiveText.textContent = "Archive";
+    }
+
+    archiveBtn.onclick = async () => {
+      const a = allApplicants.find((x) => x.id === applicantId);
+      if (!a) return;
+      if (a.archived) await unarchiveApplicant(applicantId);
+      else await archiveApplicant(applicantId);
+    };
+  }
 }
 
 // render documents
@@ -746,7 +843,156 @@ async function unarchiveApplicant(id) {
   }
 }
 
-// status change
+// PHASE 1B: Confirmation dialog for status change
+function confirmStatusChange(newStatus) {
+  if (!selectedApplicantId) return showInfoToast("No applicant selected");
+  
+  const applicant = allApplicants.find((x) => x.id === selectedApplicantId);
+  if (!applicant) return showErrorToast("Applicant not found");
+  
+  const statusText = newStatus === "approved" ? "approve" : "reject";
+  const message = `Are you sure you want to ${statusText} ${applicant.firstName} ${applicant.lastName}?`;
+  
+  // Create custom confirmation dialog
+  if (confirm(message)) {
+    updateApplicantStatusWithUndo(newStatus, applicant.status);
+  }
+}
+
+// PHASE 1B: Update status with undo functionality
+async function updateApplicantStatusWithUndo(newStatus, previousStatus) {
+  if (!selectedApplicantId) return showInfoToast("No applicant selected");
+  
+  try {
+    // Save the ID before closing modal
+    const applicantId = selectedApplicantId;
+    
+    // Update in Firestore
+    await updateDoc(doc(db, "teacherApplicants", applicantId), {
+      status: newStatus,
+      statusUpdatedAt: serverTimestamp(),
+      statusUpdatedBy: "admin",
+    });
+    
+    // Update local data
+    const a = allApplicants.find((x) => x.id === applicantId);
+    if (a) a.status = newStatus;
+    
+    // Show toast with undo button
+    const statusText = newStatus === "approved" ? "Approved" : "Rejected";
+    const toastClass = newStatus === "approved" ? "toast-approve" : "toast-reject";
+    
+    createToastWithAction(
+      `Applicant ${statusText.toLowerCase()}`,
+      toastClass,
+      5000, // 5 second timeout
+      "Undo",
+      async () => {
+        // Undo action - revert status
+        try {
+          await updateDoc(doc(db, "teacherApplicants", applicantId), {
+            status: previousStatus,
+            statusUpdatedAt: serverTimestamp(),
+            statusUpdatedBy: "admin",
+          });
+          
+          const applicant = allApplicants.find((x) => x.id === applicantId);
+          if (applicant) applicant.status = previousStatus;
+          
+          filterAndRenderApplicants();
+          updateStatsOverview();
+          showInfoToast("Status change undone");
+        } catch (err) {
+          console.error("[admin] undo status change error", err);
+          showErrorToast("Failed to undo status change");
+        }
+      }
+    );
+    
+    // Close modal and refresh
+    setTimeout(() => {
+      closeTeacherModal();
+      filterAndRenderApplicants();
+      updateStatsOverview();
+    }, 600);
+    
+  } catch (err) {
+    console.error("[admin] updateApplicantStatus", err);
+    showErrorToast("Error updating status");
+  }
+}
+
+// NEW: Handle final decision (approve/reject) - Uses backend API
+async function handleFinalDecision(decision) {
+  if (!selectedApplicantId) return showInfoToast("No applicant selected");
+  
+  try {
+    // Show loading state
+    const approveBtn = document.getElementById("hfa-progress-approve-btn");
+    const rejectBtn = document.getElementById("hfa-progress-reject-btn");
+    const originalApproveText = approveBtn?.textContent;
+    const originalRejectText = rejectBtn?.textContent;
+    
+    if (decision === "approved" && approveBtn) {
+      approveBtn.disabled = true;
+      approveBtn.textContent = "Processing...";
+    }
+    if (decision === "rejected" && rejectBtn) {
+      rejectBtn.disabled = true;
+      rejectBtn.textContent = "Processing...";
+    }
+
+    // Call API endpoint
+    const response = await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/final-decision`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision })
+    });
+
+    if (response.ok) {
+      // Update local data
+      const applicant = allApplicants.find((x) => x.id === selectedApplicantId);
+      if (applicant) {
+        applicant.finalDecision = decision;
+        applicant.status = decision === 'approved' ? 'archived' : applicant.status;
+      }
+
+      // Show success message
+      if (decision === "approved") {
+        showApproveToast("✅ Applicant approved! Email sent & account archived.");
+      } else {
+        showRejectToast("❌ Applicant rejected. Email sent & deletion scheduled.");
+      }
+
+      // Close modal and refresh
+      setTimeout(() => {
+        closeProgressModal();
+        filterAndRenderApplicants();
+        updateStatsOverview();
+      }, 1500);
+    } else {
+      throw new Error(response.error || "Failed to process decision");
+    }
+
+  } catch (err) {
+    console.error("[admin] handleFinalDecision error:", err);
+    showErrorToast("Failed to process decision: " + (err.message || "Unknown error"));
+    
+    // Reset buttons
+    const approveBtn = document.getElementById("hfa-progress-approve-btn");
+    const rejectBtn = document.getElementById("hfa-progress-reject-btn");
+    if (approveBtn) {
+      approveBtn.disabled = false;
+      approveBtn.textContent = "Approve";
+    }
+    if (rejectBtn) {
+      rejectBtn.disabled = false;
+      rejectBtn.textContent = "Reject";
+    }
+  }
+}
+
+// status change (legacy - kept for backward compatibility)
 async function updateApplicantStatus(newStatus) {
   if (!selectedApplicantId) return showInfoToast("No applicant selected");
   try {
@@ -787,6 +1033,123 @@ function sendApplicantMessage() {
   showInfoToast("Opening email client");
 }
 
+// PHASE 2: Message modal functions
+function openMessageModal(applicantId) {
+  const applicant = allApplicants.find((x) => x.id === applicantId);
+  if (!applicant) {
+    showErrorToast("Applicant not found");
+    return;
+  }
+
+  // Auto-fill recipient email
+  const recipientInput = document.getElementById("message-recipient-email");
+  if (recipientInput) {
+    recipientInput.value = applicant.email || "";
+  }
+
+  // Set default subject
+  const subjectInput = document.getElementById("message-subject");
+  if (subjectInput) {
+    subjectInput.value = `Update on Your Teaching Application`;
+  }
+
+  // Clear message body
+  const bodyInput = document.getElementById("message-body");
+  if (bodyInput) {
+    bodyInput.value = "";
+  }
+
+  // Reset character counter
+  const charCounter = document.getElementById("message-char-count");
+  if (charCounter) {
+    charCounter.textContent = "0";
+  }
+
+  // Show modal
+  const modal = document.getElementById("message-applicant-modal");
+  if (modal) {
+    modal.style.display = "block";
+  }
+}
+
+function closeMessageModal() {
+  const modal = document.getElementById("message-applicant-modal");
+  if (modal) {
+    modal.style.display = "none";
+  }
+
+  // Reset form
+  const form = document.getElementById("message-applicant-form");
+  if (form) {
+    form.reset();
+  }
+}
+
+async function handleSendMessage(e) {
+  e.preventDefault();
+
+  const recipientEmail = document.getElementById("message-recipient-email")?.value;
+  const subject = document.getElementById("message-subject")?.value.trim();
+  const body = document.getElementById("message-body")?.value.trim();
+
+  // Validation
+  if (!recipientEmail) {
+    showErrorToast("Recipient email is required");
+    return;
+  }
+
+  if (!subject) {
+    showErrorToast("Subject is required");
+    document.getElementById("message-subject")?.focus();
+    return;
+  }
+
+  if (!body) {
+    showErrorToast("Message body is required");
+    document.getElementById("message-body")?.focus();
+    return;
+  }
+
+  // Disable send button and show loading state
+  const sendBtn = document.getElementById("send-message-btn");
+  if (sendBtn) {
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+  }
+
+  try {
+    // Call backend API - endpoint: /api/teacher-applicants/:id/send-message
+    const response = await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/send-message`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipient: recipientEmail,
+        subject: subject,
+        body: body,
+      }),
+    });
+
+    if (response.ok) {
+      showSaveToast("Message sent successfully");
+      closeMessageModal();
+    } else {
+      const error = await response.json();
+      showErrorToast(error.error || "Failed to send message");
+    }
+  } catch (err) {
+    console.error("[admin] handleSendMessage error:", err);
+    showErrorToast("Failed to send message. Please try again.");
+  } finally {
+    // Re-enable send button
+    if (sendBtn) {
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Message';
+    }
+  }
+}
+
 // ------------------ Edit applicant details (inline inside modal) ------------------
 function editApplicantDetails() {
   if (!selectedApplicantId) {
@@ -810,7 +1173,6 @@ function editApplicantDetails() {
     "input-modal-gradYear": "gradYear",
     "input-modal-experienceYears": "experienceYears",
     "input-modal-previousSchools": "previousSchools",
-    "input-modal-licenseNumber": "licenseNumber",
     "input-modal-preferredLevel": "preferredLevel",
     "input-modal-qualifiedSubjects": "qualifiedSubjects",
     "input-modal-employmentType": "employmentType"
@@ -840,7 +1202,6 @@ function editApplicantDetails() {
     "modal-teacher-gradyear",
     "modal-teacher-experience",
     "modal-teacher-schools",
-    "modal-teacher-license",
     "modal-teacher-level",
     "modal-teacher-subjects",
     "modal-teacher-employment"
@@ -936,24 +1297,110 @@ function editApplicantDetails() {
   }
 }
 
-// save admin notes
-async function saveAdminNotes() {
-  if (!selectedApplicantId) return showInfoToast("No applicant selected");
-  const notes = document.getElementById("admin-notes")?.value || "";
+
+/**
+ * STEP 5: Check interview availability
+ * Validates max 3 interviews per day and no time overlap (1 hour buffer)
+ * @param {string} dateVal - Interview date (YYYY-MM-DD)
+ * @param {string} timeVal - Interview time (HH:MM)
+ * @param {string} currentApplicantId - ID of current applicant (to exclude from checks when rescheduling)
+ * @returns {Promise<{valid: boolean, error: string}>}
+ */
+async function checkInterviewAvailability(dateVal, timeVal, currentApplicantId) {
   try {
-    await updateDoc(doc(db, "teacherApplicants", selectedApplicantId), {
-      adminNotes: notes,
-      notesUpdatedAt: serverTimestamp(),
-      notesUpdatedBy: "admin",
+    // Get all teacher applicants
+    const applicantsRef = collection(db, "teacherApplicants");
+    const applicantsQuery = query(applicantsRef);
+    const snapshot = await applicantsRef.get ? await applicantsRef.get() : await getDocs(applicantsQuery);
+    
+    // Filter interviews for the same date (excluding current applicant if rescheduling)
+    const interviewsOnDate = [];
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      const docId = doc.id;
+      
+      // Skip current applicant (when rescheduling)
+      if (docId === currentApplicantId) return;
+      
+      // Only check active interviews
+      const activeStatuses = ["interview_scheduled", "screening", "submitted"];
+      if (!activeStatuses.includes(data.status)) return;
+      
+      // Check if interview exists and matches date
+      if (data.interview && data.interview.date === dateVal && data.interview.time) {
+        interviewsOnDate.push({
+          id: docId,
+          time: data.interview.time,
+          name: `${data.firstName || ""} ${data.lastName || ""}`.trim()
+        });
+      }
     });
-    const a = allApplicants.find((x) => x.id === selectedApplicantId);
-    if (a) a.adminNotes = notes;
-    showSaveToast("Notes saved");
-    showModalConfirmation("Notes saved");
-  } catch (err) {
-    console.error("[admin] saveAdminNotes", err);
-    showErrorToast("Error saving notes");
+    
+    // Check 1: Max 3 interviews per day
+    if (interviewsOnDate.length >= 3) {
+      return {
+        valid: false,
+        error: `Daily interview limit reached (${interviewsOnDate.length}/3 scheduled). Please select another date.`
+      };
+    }
+    
+    // Check 2: Time overlap (1 hour buffer)
+    const newTimeMinutes = timeToMinutes(timeVal);
+    if (newTimeMinutes === null) {
+      return {
+        valid: false,
+        error: "Invalid time format. Please use HH:MM format."
+      };
+    }
+    
+    const conflicts = [];
+    for (const interview of interviewsOnDate) {
+      const existingTimeMinutes = timeToMinutes(interview.time);
+      if (existingTimeMinutes === null) continue;
+      
+      const timeDifference = Math.abs(newTimeMinutes - existingTimeMinutes);
+      
+      // Must be at least 60 minutes apart
+      if (timeDifference < 60) {
+        conflicts.push(interview.time);
+      }
+    }
+    
+    if (conflicts.length > 0) {
+      return {
+        valid: false,
+        error: `Time slot unavailable. Existing interviews at: ${conflicts.join(", ")}. Please choose a time at least 1 hour apart.`
+      };
+    }
+    
+    return { valid: true, error: null };
+    
+  } catch (error) {
+    console.error("[checkInterviewAvailability] Error:", error);
+    // Don't block scheduling on validation errors, just warn
+    return { valid: true, error: null };
   }
+}
+
+/**
+ * Helper: Convert time string (HH:MM) to minutes since midnight
+ * @param {string} timeStr - Time in HH:MM format
+ * @returns {number|null} - Minutes since midnight, or null if invalid
+ */
+function timeToMinutes(timeStr) {
+  if (!timeStr || typeof timeStr !== 'string') return null;
+  
+  const parts = timeStr.split(':');
+  if (parts.length !== 2) return null;
+  
+  const hours = parseInt(parts[0], 10);
+  const minutes = parseInt(parts[1], 10);
+  
+  if (isNaN(hours) || isNaN(minutes) || hours < 0 || hours > 23 || minutes < 0 || minutes > 59) {
+    return null;
+  }
+  
+  return hours * 60 + minutes;
 }
 
 // Schedule interview (client calls server endpoint first; fallback to client update)
@@ -1014,6 +1461,13 @@ if (!interviewData.datetimeISO) {
   return;
 }
 
+// STEP 5: Validate interview availability (max 3/day, 1 hour buffer)
+const availability = await checkInterviewAvailability(dateVal, timeVal, selectedApplicantId);
+if (!availability.valid) {
+  showErrorToast(availability.error);
+  return;
+}
+
   // Try server-side authoritative endpoint
   try {
     const res = await fetch("/api/scheduleInterview", {
@@ -1043,7 +1497,11 @@ if (!interviewData.datetimeISO) {
       if (openedFromProgress) {
         openedFromProgress = false;
         const pm = document.getElementById("hfa-progress-modal");
-        if (pm) pm.style.display = "block";
+        if (pm) {
+          pm.style.display = "flex";
+          pm.style.justifyContent = "center";
+          pm.style.alignItems = "center";
+        }
         const refreshed = allApplicants.find((x) => x.id === selectedApplicantId);
         if (refreshed) renderProgressSteps(refreshed);
       }
@@ -1095,7 +1553,11 @@ if (!interviewData.datetimeISO) {
     if (openedFromProgress) {
       openedFromProgress = false;
       const pm = document.getElementById("hfa-progress-modal");
-      if (pm) pm.style.display = "block";
+      if (pm) {
+        pm.style.display = "flex";
+        pm.style.justifyContent = "center";
+        pm.style.alignItems = "center";
+      }
       const refreshed = allApplicants.find((x) => x.id === selectedApplicantId);
       if (refreshed) renderProgressSteps(refreshed);
     }
@@ -1164,7 +1626,6 @@ function openProgressModal(id) {
       document.getElementById("hfa-progress-interview-date") && (document.getElementById("hfa-progress-interview-date").textContent = a.interview.date || '—');
       document.getElementById("hfa-progress-interview-time") && (document.getElementById("hfa-progress-interview-time").textContent = a.interview.time || '—');
       document.getElementById("hfa-progress-interview-location") && (document.getElementById("hfa-progress-interview-location").textContent = a.interview.location || '—');
-      document.getElementById("hfa-progress-interview-notes") && (document.getElementById("hfa-progress-interview-notes").textContent = a.interview.notes || '—');
     } else {
       noInterview.style.display = "block";
       interviewScheduledView.style.display = "none";
@@ -1184,15 +1645,22 @@ function renderProgressSteps(applicant) {
   if (!container) return;
   container.innerHTML = "";
 
+  // PHASE 2: Unified 6-step progress aligned with teacher portal
   const order = [
     { key: "submitted", label: "Application Submitted", desc: "Your application documents have been received." },
-    { key: "reviewing", label: "Under Review", desc: "Qualifications are being reviewed." },
+    { key: "screening", label: "Initial Screening", desc: "Qualifications are being reviewed." },
     { key: "interview_scheduled", label: "Interview Scheduled", desc: "Interview will be scheduled." },
     { key: "demo", label: "Demo Teaching", desc: "Demo teaching (if applicable)." },
-    { key: "decision", label: "Final Decision", desc: "Administration finalizes decision." }
+    { key: "result", label: "Pass or Fail", desc: "Evaluation results after demo teaching." },
+    { key: "onboarding", label: "Onboarding", desc: "Final onboarding process and document upload." }
   ];
 
-  let curIndex = order.findIndex((s) => s.key === (applicant.status || "submitted"));
+  // Backward compatibility: map old status names to new ones
+  let currentStatus = applicant.status || "submitted";
+  if (currentStatus === "reviewing") currentStatus = "screening";
+  if (currentStatus === "decision") currentStatus = "result";
+  
+  let curIndex = order.findIndex((s) => s.key === currentStatus);
   if (curIndex === -1) curIndex = 0;
 
   order.forEach((step, i) => {
@@ -1211,7 +1679,7 @@ function renderProgressSteps(applicant) {
     cb.className = "hfa-progress-step-checkbox";
     cb.dataset.stepKey = step.key;
     cb.dataset.stepIndex = String(i);
-    cb.checked = (i < curIndex);
+    cb.checked = (i <= curIndex);  // Check current step AND all previous steps
     if (i < curIndex) cb.disabled = true;
     if (i > curIndex) cb.disabled = true;
     if (i === curIndex) cb.disabled = false;
@@ -1229,8 +1697,8 @@ function renderProgressSteps(applicant) {
     desc.textContent = step.desc;
 
     item.appendChild(main);
-    // special case: show Approve/Reject when step is final decision
-    if (step.key === "decision") {
+    // PHASE 2: Show Approve/Reject when step is "result" (Pass or Fail)
+    if (step.key === "result") {
       // static decision area already exists; we won't duplicate buttons here.
       // simply append a small notice and then show the static #hfa-progress-decision when appropriate
       const decisionNotice = document.createElement("div");
@@ -1238,7 +1706,7 @@ function renderProgressSteps(applicant) {
       decisionNotice.textContent = "Use the decision controls below to Approve or Reject.";
       item.appendChild(decisionNotice);
 
-      // show static decision container if applicant is at/after decision step
+      // show static decision container if applicant is at/after result step
       const decisionBlock = document.getElementById("hfa-progress-decision");
       if (decisionBlock) {
         if (i <= curIndex) decisionBlock.style.display = "block";
@@ -1262,18 +1730,28 @@ async function handleProgressSave(ev) {
   const a = allApplicants.find((x) => x.id === selectedApplicantId);
   if (!a) return showErrorToast("Applicant not found");
 
-  const order = ["submitted","reviewing","interview_scheduled","demo","decision"];
-  const curIdx = Math.max(0, order.indexOf(a.status || "submitted"));
+  // Updated to 6-step unified progress order
+  const order = ["submitted", "screening", "interview_scheduled", "demo", "result", "onboarding"];
+  
+  // Backward compatibility: map old statuses to new ones
+  let currentStatus = a.status || "submitted";
+  if (currentStatus === "reviewing") currentStatus = "screening"; // old → new
+  if (currentStatus === "decision") currentStatus = "result"; // old → new
+  
+  const curIdx = Math.max(0, order.indexOf(currentStatus));
   const checkbox = document.querySelector(`.hfa-progress-step-checkbox[data-step-index="${curIdx}"]`);
 
   if (checkbox && checkbox.checked) {
     const nextStatus = order[curIdx + 1] || order[curIdx];
+    const completedStep = order[curIdx]; // The step that was just completed
+    
     if (nextStatus === "interview_scheduled" && !a.interview) {
       showErrorToast("Please schedule interview before marking this step done.");
       return;
     }
 
     try {
+      // Update status in Firestore
       await updateDoc(doc(db, "teacherApplicants", selectedApplicantId), {
         status: nextStatus,
         statusUpdatedAt: serverTimestamp(),
@@ -1281,7 +1759,26 @@ async function handleProgressSave(ev) {
       });
 
       if (a) a.status = nextStatus;
-      showUpdateToast("Progress updated");
+      
+      // PHASE 3: Send notification for completed step
+      try {
+        const data = await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/notify-progress`, {
+          method: 'POST',
+          body: JSON.stringify({ step: completedStep })
+        });
+        
+        if (data.success) {
+          console.log(`[admin] Notification sent for step: ${completedStep}`);
+          showToast(`Progress updated & applicant notified`);
+        } else {
+          console.warn(`[admin] Notification failed:`, data.error);
+          showToast("Progress updated (notification failed)");
+        }
+      } catch (notifError) {
+        console.error("[admin] Notification error:", notifError);
+        showToast("Progress updated (notification failed)");
+      }
+      
       closeProgressModal();
       filterAndRenderApplicants();
       updateStatsOverview();
@@ -1314,12 +1811,41 @@ function updateProgressTracker(status) {
 }
 
 function showInterviewDetails(interview) {
+  if (!interview) {
+    showNoInterview();
+    return;
+  }
+
   document.getElementById("no-interview-scheduled") && (document.getElementById("no-interview-scheduled").style.display = "none");
   document.getElementById("interview-scheduled") && (document.getElementById("interview-scheduled").style.display = "block");
-  document.getElementById("interview-date") && (document.getElementById("interview-date").textContent = formatDate(new Date(interview.date)));
-  document.getElementById("interview-time") && (document.getElementById("interview-time").textContent = interview.time || "");
-  document.getElementById("interview-mode") && (document.getElementById("interview-mode").textContent = interview.mode || "");
-  document.getElementById("interview-notes") && (document.getElementById("interview-notes").textContent = interview.notes || "");
+  
+  // Display date
+  const dateEl = document.getElementById("interview-date");
+  if (dateEl) {
+    if (interview.date) {
+      try {
+        // Handle date string format (YYYY-MM-DD or Date object)
+        const dateObj = interview.date.toDate ? interview.date.toDate() : new Date(interview.date);
+        dateEl.textContent = formatDate(dateObj);
+      } catch (err) {
+        dateEl.textContent = interview.date; // Fallback to raw string
+      }
+    } else {
+      dateEl.textContent = "Not set";
+    }
+  }
+  
+  // Display time
+  const timeEl = document.getElementById("interview-time");
+  if (timeEl) {
+    timeEl.textContent = interview.time || "Not set";
+  }
+  
+  // Display mode/location - use 'location' field (not 'mode')
+  const modeEl = document.getElementById("interview-mode");
+  if (modeEl) {
+    modeEl.textContent = interview.location || interview.mode || "Not specified";
+  }
 }
 function showNoInterview() {
   document.getElementById("no-interview-scheduled") && (document.getElementById("no-interview-scheduled").style.display = "block");
@@ -1337,15 +1863,16 @@ function updatePagination() {
 
 function updateStatsOverview() {
   const active = allApplicants.filter((a) => !a.archived);
-  const stats = { new: 0, reviewing: 0, interview_scheduled: 0, approved: 0 };
+  // PHASE 2: Include new status names with backward compatibility
+  const stats = { new: 0, screening: 0, interview_scheduled: 0, approved: 0 };
   active.forEach((a) => {
     if (a.status === "new") stats.new++;
-    else if (a.status === "reviewing") stats.reviewing++;
+    else if (a.status === "reviewing" || a.status === "screening") stats.screening++;
     else if (a.status === "interview_scheduled") stats.interview_scheduled++;
     else if (a.status === "approved") stats.approved++;
   });
   document.getElementById("new-teachers-count") && (document.getElementById("new-teachers-count").textContent = stats.new);
-  document.getElementById("review-teachers-count") && (document.getElementById("review-teachers-count").textContent = stats.reviewing);
+  document.getElementById("review-teachers-count") && (document.getElementById("review-teachers-count").textContent = stats.screening);
   document.getElementById("interview-teachers-count") && (document.getElementById("interview-teachers-count").textContent = stats.interview_scheduled);
   document.getElementById("approved-teachers-count") && (document.getElementById("approved-teachers-count").textContent = stats.approved);
 }
@@ -1357,15 +1884,19 @@ function formatDate(d) {
   return dt.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }
 function formatStatus(s) {
-  const m = {
+  const status = {
     new: "New",
-    reviewing: "Under Review",
+    reviewing: "Under Review", // backward compatibility
+    screening: "Initial Screening",
     interview_scheduled: "Interview Scheduled",
     interviewed: "Interviewed",
+    demo: "Demo Teaching",
+    result: "Pass or Fail",
+    onboarding: "Onboarding",
     approved: "Approved",
     rejected: "Rejected",
   };
-  return m[s] || s || "Unknown";
+  return status[s] || s || "Unknown";
 }
 function debounce(fn, wait = 300) {
   let t;
@@ -1478,6 +2009,11 @@ function createToastWithAction(message, styleClass = "toast-info", timeout = 350
     remove();
   });
   return { node: t, removeFn: remove, timerId: timer };
+}
+
+// Generic toast function (used by notification system)
+function showToast(msg = "Success", styleClass = "toast-info") { 
+  createToast(msg, styleClass); 
 }
 
 function showSaveToast(msg = "Saved") { createToast(msg, "toast-save"); }
