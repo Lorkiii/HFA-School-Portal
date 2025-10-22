@@ -5,6 +5,7 @@ dotenv.config();
 import express from "express";
 import admin from "firebase-admin";
 import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import bodyParser from "body-parser";
 import fs from "fs";
 import path from "path";
@@ -122,30 +123,80 @@ if (!JWT_SECRET) {
 }
 
 
-// SMTP credentials: support SMTP_USER or SMTP_EMAIL env var names
+// Email configuration: Prioritize Resend, fallback to SMTP
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
 const SMTP_USER = process.env.SMTP_USER || process.env.SMTP_EMAIL;
 const SMTP_PASS = process.env.SMTP_PASS;
 
-if (!SMTP_USER || !SMTP_PASS) {
-  console.warn("Warning: SMTP_USER or SMTP_PASS not set. Email sending (OTP, notifications) may fail.");
+// Initialize Resend client (preferred for Railway)
+let resendClient = null;
+if (RESEND_API_KEY) {
+  resendClient = new Resend(RESEND_API_KEY);
+  console.log('✅ Resend email service initialized');
+} else {
+  console.warn('⚠️ RESEND_API_KEY not set. Email will use SMTP fallback.');
 }
 
-// create transporter (nodemailer)
-const mailTransporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false, // use STARTTLS
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false // Allow self-signed certificates (Railway compatibility)
-  },
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,
-  socketTimeout: 10000
-});
+// SMTP fallback transporter (nodemailer)
+let mailTransporter = null;
+if (SMTP_USER && SMTP_PASS) {
+  mailTransporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASS,
+    },
+    tls: {
+      rejectUnauthorized: false
+    },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000
+  });
+  console.log('✅ SMTP fallback initialized');
+} else {
+  console.warn('⚠️ SMTP credentials not set. Email sending requires RESEND_API_KEY.');
+}
+
+// Universal email sender (tries Resend first, falls back to SMTP)
+async function sendEmail({ to, subject, html }) {
+  // Try Resend first (preferred for Railway)
+  if (resendClient) {
+    try {
+      const result = await resendClient.emails.send({
+        from: 'Holy Family Academy <onboarding@resend.dev>', // Use your verified domain
+        to: to,
+        subject: subject,
+        html: html
+      });
+      console.log('✅ Email sent via Resend:', result.id);
+      return { success: true, provider: 'resend', id: result.id };
+    } catch (error) {
+      console.warn('⚠️ Resend failed, trying SMTP fallback:', error.message);
+    }
+  }
+
+  // Fallback to SMTP (nodemailer)
+  if (mailTransporter) {
+    try {
+      const info = await mailTransporter.sendMail({
+        from: `"Holy Family Academy" <${SMTP_USER}>`,
+        to: to,
+        subject: subject,
+        html: html
+      });
+      console.log('✅ Email sent via SMTP:', info.messageId);
+      return { success: true, provider: 'smtp', id: info.messageId };
+    } catch (error) {
+      console.error('❌ SMTP also failed:', error.message);
+      throw error;
+    }
+  }
+
+  throw new Error('No email service configured. Set RESEND_API_KEY or SMTP credentials.');
+}
 
 // Helper to generate 6-digit OTP
 function generateOtp() {
@@ -218,14 +269,12 @@ app.post("/auth/login", async (req, res) => {
         emailBody = `<p>Your teacher applicant login code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`;
       }
 
-      const mailOptions = {
-        from: `"Holy Family Academy" <${SMTP_USER}>`,
-        to: userEmail,
-        subject: emailSubject,
-        html: emailBody
-      };
       try {
-        await mailTransporter.sendMail(mailOptions);
+        await sendEmail({
+          to: userEmail,
+          subject: emailSubject,
+          html: emailBody
+        });
       } catch (mailErr) {
         console.warn("/auth/login: failed to send OTP email:", mailErr && mailErr.message);
         // proceed: return needsOtp even if email failed (client may ask admin to check)
@@ -440,16 +489,13 @@ app.post("/auth/resend-otp", async (req, res) => {
     // persist back to otpStore
     otpStore.set(uid, entry);
 
-    // Prepare email
-    const mailOptions = {
-      from: `"Holy Family Academy" <${SMTP_USER}>`,
-      to: entry.email,
-      subject: "Your admin login code (resend)",
-      html: `<p>Your admin login code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`
-    };
-
+    // Send email
     try {
-      await mailTransporter.sendMail(mailOptions);
+      await sendEmail({
+        to: entry.email,
+        subject: "Your admin login code (resend)",
+        html: `<p>Your admin login code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`
+      });
       const nextAllowedIn = Math.ceil(RESEND_COOLDOWN_MS / 1000);
       return res.json({
         ok: true,
@@ -852,15 +898,13 @@ app.post('/applicants/send-code', async (req, res) => {
     await CONF.set(entry, { merge: true });
 
     // send email
-    const mailOptions = {
-      from: `"Holy Family Academy" <${SMTP_USER}>`,
-      to: email,
-      subject: "Your application confirmation code",
-      html: `<p>Your confirmation code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`
-    };
-    // resend functions
     try {
-      await mailTransporter.sendMail(mailOptions);
+      await sendEmail({
+        to: email,
+        subject: 'Resend: Confirm your Holy Family Academy application',
+        html: `<p>Hi,</p>
+        <p>Your confirmation code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`
+      });
       const nextAllowedIn = Math.ceil(cooldownMs / 1000);
       return res.json({ ok: true, message: 'Code sent', nextAllowedIn, emailed: true });
     } catch (mailErr) {
@@ -1014,21 +1058,18 @@ app.post('/applicants/confirm-email', async (req, res) => {
     }
 
     // Try to send credentials email 
-    const mailOptions = {
-      from: `"Holy Family Academy" <${SMTP_USER}>`,
-      to: lowerEmail,
-      subject: "Your application account is ready",
-      html: `
-        <h3>Your application account</h3>
-        <p>Your applicant account has been created. Use the credentials below to sign in:</p>
-        <p><strong>Email:</strong> ${lowerEmail}</p>
-        <p><strong>Temporary password:</strong> ${tempPassword}</p>
-        <p>On first login you will be required to change your password.</p>
-      `
-    };
-
     try {
-      await mailTransporter.sendMail(mailOptions);
+      await sendEmail({
+        to: lowerEmail,
+        subject: "Your application account is ready",
+        html: `
+          <h3>Your application account</h3>
+          <p>Your applicant account has been created. Use the credentials below to sign in:</p>
+          <p><strong>Email:</strong> ${lowerEmail}</p>
+          <p><strong>Temporary password:</strong> ${tempPassword}</p>
+          <p>On first login you will be required to change your password.</p>
+        `
+      });
       return res.json({ ok: true, emailed: true, message: 'Account created and emailed' });
     } catch (mailErr) {
       console.warn('/applicants/confirm-email: mail send failed', mailErr && mailErr.message);
@@ -1315,13 +1356,43 @@ cron.schedule('0 2 * * *', async () => {
 
 console.log('✅ Cron job scheduled: Archived messages auto-deletion (daily at 2:00 AM, 60+ days old)');
 
-// --- TEST SMTP ENDPOINT (for debugging) ---
-app.get('/test-smtp', async (req, res) => {
+// --- TEST EMAIL ENDPOINT (for debugging) ---
+app.get('/test-email', async (req, res) => {
   try {
-    await mailTransporter.verify();
-    res.json({ success: true, message: 'SMTP connection successful' });
+    const status = {
+      resend: resendClient ? 'configured' : 'not configured',
+      smtp: mailTransporter ? 'configured' : 'not configured'
+    };
+
+    // Test Resend if available
+    if (resendClient) {
+      try {
+        // Resend doesn't have a verify method, so we'll just report it's configured
+        status.resendStatus = 'ready';
+      } catch (error) {
+        status.resendStatus = 'error: ' + error.message;
+      }
+    }
+
+    // Test SMTP if available
+    if (mailTransporter) {
+      try {
+        await mailTransporter.verify();
+        status.smtpStatus = 'connected';
+      } catch (error) {
+        status.smtpStatus = 'error: ' + error.message;
+      }
+    }
+
+    status.primary = resendClient ? 'Resend (recommended)' : mailTransporter ? 'SMTP (fallback)' : 'none';
+    
+    res.json({ 
+      success: true, 
+      message: 'Email service status', 
+      ...status 
+    });
   } catch (error) {
-    console.error('SMTP test failed:', error);
+    console.error('Email test failed:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
