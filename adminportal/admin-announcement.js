@@ -1,94 +1,128 @@
+// adminportal/admin-announcement.js
+// Handles announcement and news CRUD operations with backend API
+
+import { apiFetch } from '../api-fetch.js';
 (function () {
   'use strict';
-  const STORE_KEY = "hfa_announcements";
 
-  function load() {
-    try { return JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); }
-    catch (e) { return []; }
+  // Utility: Escape HTML to prevent XSS
+  function escapeHtml(s) { 
+    return String(s||'').replace(/[&<>"']/g, m=>({ 
+      "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;" 
+    }[m])); 
   }
-  function save(list) {
-    localStorage.setItem(STORE_KEY, JSON.stringify(list));
-  }
-  function escapeHtml(s) { return String(s||'').replace(/[&<>"']/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m])); }
 
-  // Mock data for UI preview (temporary - will be replaced with API data)
-  function getMockData() {
-    return [
-      {
-        id: "1",
-        type: "announcement",
-        title: "Parent-Teacher Conference",
-        body: "The quarterly parent-teacher conference will be held on June 15, 2024 from 8:00 AM to 5:00 PM. Parents are encouraged to attend and discuss their child's academic progress with teachers.",
-        category: "ACADEMIC",
-        createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-        createdBy: "admin1",
-        createdByName: "Maria Santos",
-        imageUrl: null,
-        archived: false
-      },
-      {
-        id: "2",
-        type: "news",
-        title: "STEM Excellence Award",
-        body: "Congratulations to our Grade 11 STEM students for winning the Regional Science Fair! The team presented an innovative project on renewable energy solutions.",
-        category: "ACADEMIC",
-        createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), // 5 hours ago
-        createdBy: "admin2",
-        createdByName: "John Dela Cruz",
-        imageUrl: null,
-        archived: false
-      },
-      {
-        id: "3",
-        type: "announcement",
-        title: "Enrollment Period Extended",
-        body: "Good news! The enrollment period for SY 2024-2025 has been extended until June 30, 2024. Don't miss this opportunity to secure your slot!",
-        category: "GENERAL",
-        createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), // 1 day ago
-        createdBy: "admin1",
-        createdByName: "Maria Santos",
-        imageUrl: null,
-        archived: false
-      },
-      {
-        id: "4",
-        type: "announcement",
-        title: "School Intramurals 2024",
-        body: "The annual school intramurals will be held from July 10-15, 2024. All students are required to participate in at least one sports event.",
-        category: "EVENT",
-        createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), // 3 days ago
-        createdBy: "admin3",
-        createdByName: "Ana Reyes",
-        imageUrl: null,
-        archived: false
-      },
-      {
-        id: "5",
-        type: "news",
-        title: "New Library Books Arrived",
-        body: "The school library has received 200 new books covering various subjects. Students can now borrow them during library hours.",
-        category: "GENERAL",
-        createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 days ago
-        createdBy: "admin2",
-        createdByName: "John Dela Cruz",
-        imageUrl: null,
-        archived: false
-      },
-      {
-        id: "6",
-        type: "announcement",
-        title: "Archived: Old Announcement",
-        body: "This is an archived announcement that will be automatically deleted after 45 days.",
-        category: "GENERAL",
-        createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), // 10 days ago
-        createdBy: "admin1",
-        createdByName: "Maria Santos",
-        imageUrl: null,
-        archived: true,
-        archivedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() // Archived 5 days ago
+  // STATE MANAGEMENT
+
+  // Cache for all posts (fetched from API)
+  let allPosts = [];
+
+  // Edit mode tracking
+  let editingPostId = null; // null = create mode, string = edit mode
+  let selectedImageFile = null; // Store selected image file for upload
+  let shouldRemoveImage = false; // Flag to remove existing image
+
+  // API FUNCTIONS
+
+  // Fetch all posts from backend (including archived for admin view)
+  async function fetchAllPosts() {
+    try {
+      // Fetch from API with includeArchived flag for admin view
+      const response = await apiFetch('/api/announcements?includeArchived=true');
+      allPosts = response.posts || [];
+      return allPosts;
+    } catch (error) {
+      console.error('Error fetching posts:', error);
+      alert('Failed to load announcements. Please refresh the page.');
+      return [];
+    }
+  }
+
+  // Create new post with optional image
+  async function createPost(postData, imageFile) {
+    try {
+      // Prepare form data for multipart upload
+      const formData = new FormData();
+      formData.append('type', postData.type);
+      formData.append('title', postData.title);
+      formData.append('body', postData.body);
+      formData.append('category', postData.category);
+      
+      // Add image if selected
+      if (imageFile) {
+        formData.append('image', imageFile);
       }
-    ];
+
+      // Send to API
+      const response = await apiFetch('/api/announcements', {
+        method: 'POST',
+        body: formData
+      });
+
+      return response;
+    } catch (error) {
+      console.error('Error creating post:', error);
+      throw error;
+    }
   }
+
+  // Update existing post
+  async function updatePost(postId, postData, imageFile, removeImage) {
+    try {
+      // Prepare form data
+      const formData = new FormData();
+      if (postData.type) formData.append('type', postData.type);
+      if (postData.title) formData.append('title', postData.title);
+      if (postData.body) formData.append('body', postData.body);
+      if (postData.category) formData.append('category', postData.category);
+      
+      // Handle image changes
+      if (removeImage) {
+        formData.append('removeImage', 'true');
+      } else if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
+      // Send to API
+      const response = await apiFetch(`/api/announcements/${postId}`, {
+        method: 'PUT',
+        body: formData
+      });
+
+      return response;
+    } catch (error) {
+      console.error('Error updating post:', error);
+      throw error;
+    }
+  }
+
+  // Archive post (soft delete)
+  async function archivePost(postId) {
+    try {
+      const response = await apiFetch(`/api/announcements/${postId}/archive`, {
+        method: 'PUT'
+      });
+      return response;
+    } catch (error) {
+      console.error('Error archiving post:', error);
+      throw error;
+    }
+  }
+
+  // Restore archived post
+  async function restorePost(postId) {
+    try {
+      const response = await apiFetch(`/api/announcements/${postId}/restore`, {
+        method: 'PUT'
+      });
+      return response;
+    } catch (error) {
+      console.error('Error restoring post:', error);
+      throw error;
+    }
+  }
+
+  // UTILITY FUNCTIONS
 
   // Format relative time
   function getRelativeTime(dateString) {
@@ -108,18 +142,22 @@
 
   // DASHBOARD PREVIEW RENDER
 
-  function render() {
+  // Render dashboard preview (shows recent posts)
+  async function renderDashboard() {
     const wrap = document.getElementById("announcements-list");
     if (!wrap) return;
     
-    // Use mock data for now (will be replaced with API call later)
-    const items = getMockData();
+    // Fetch latest posts from API
+    await fetchAllPosts();
+    
+    // Filter only active posts (not archived) and take first 5
+    const activePosts = allPosts.filter(post => !post.archived).slice(0, 5);
     
     // Clear container first
     wrap.innerHTML = "";
     
-    // Show empty state if no items
-    if (!items.length) {
+    // Show empty state if no posts
+    if (!activePosts.length) {
       const emptyState = document.getElementById("ann-empty-state");
       if (emptyState) {
         emptyState.style.display = "flex";
@@ -134,7 +172,7 @@
     }
     
     // Render preview items
-    items.forEach(item => {
+    activePosts.forEach(item => {
       const previewItem = document.createElement("div");
       previewItem.className = "announcement-preview-item";
       previewItem.dataset.id = item.id;
@@ -163,10 +201,7 @@
     });
   }
 
-
   // FULL SECTION RENDER LOGIC
-
-  
   // Current filter state
   let currentTab = 'announcement'; // announcement, news, or archived
   let searchQuery = '';
@@ -186,9 +221,9 @@
     return `Deletes in ${daysRemaining} days`;
   }
 
-  // Filter and sort items based on current state
+  // Filter and sort items based on current state (uses cached allPosts)
   function getFilteredItems() {
-    let items = getMockData();
+    let items = [...allPosts]; // Clone array to avoid mutating original
     
     // Filter by tab (type or archived status)
     if (currentTab === 'archived') {
@@ -223,13 +258,18 @@
     return items;
   }
 
-  // Render full section cards
-  function renderFullSection() {
+  // Render full section cards (async to fetch data)
+  async function renderFullSection() {
     const grid = document.getElementById('ann-grid');
     const emptyState = document.getElementById('ann-empty');
     
     // Safety check: if grid doesn't exist, we're not on the announcements section page
     if (!grid) return;
+    
+    // Ensure we have latest data
+    if (allPosts.length === 0) {
+      await fetchAllPosts();
+    }
     
     // Get filtered items
     const items = getFilteredItems();
@@ -312,7 +352,65 @@
       // Append to grid
       grid.appendChild(card);
     });
+
+    // Wire up action buttons after rendering
+    setupCardActions();
   }
+
+  // EVENT HANDLERS - CARD ACTIONS
+
+  // Setup click handlers for archive, restore, and edit buttons
+  function setupCardActions() {
+    const grid = document.getElementById('ann-grid');
+    if (!grid) return;
+
+    // Use event delegation for better performance
+    grid.addEventListener('click', async (e) => {
+      const card = e.target.closest('.ann-card');
+      if (!card) return;
+
+      const postId = card.dataset.id;
+      if (!postId) return;
+
+      // Handle archive button
+      if (e.target.closest('.ann-archive-btn')) {
+        if (confirm('Are you sure you want to archive this post?')) {
+          try {
+            await archivePost(postId);
+            alert('Post archived successfully');
+            await fetchAllPosts(); // Refresh data
+            await renderFullSection(); // Re-render
+            await renderDashboard(); // Update dashboard too
+          } catch (error) {
+            alert('Failed to archive post. Please try again.');
+          }
+        }
+      }
+      
+      // Handle restore button
+      else if (e.target.closest('.ann-restore-btn')) {
+        try {
+          await restorePost(postId);
+          alert('Post restored successfully');
+          await fetchAllPosts(); // Refresh data
+          await renderFullSection(); // Re-render
+          await renderDashboard(); // Update dashboard too
+        } catch (error) {
+          alert('Failed to restore post. Please try again.');
+        }
+      }
+      
+      // Handle edit button
+      else if (e.target.closest('.ann-edit-btn')) {
+        const post = allPosts.find(p => p.id === postId);
+        if (post) {
+          openEditModal(post);
+        }
+      }
+    });
+  }
+
+  // TAB SWITCHING & FILTERS
 
   // Setup tab switching
   function setupTabs() {
@@ -363,14 +461,187 @@
       });
     }
   }
-    // opening and and closing the modal
-  function openModal(modalEl) {
+
+  // MODAL FUNCTIONS
+
+  // Open modal in CREATE mode
+  function openCreateModal(modalEl) {
     if (!modalEl) return;
+    
+    // Reset edit mode
+    editingPostId = null;
+    selectedImageFile = null;
+    shouldRemoveImage = false;
+    
+    // Reset form
+    resetModalForm(modalEl);
+    
+    // Update button text
+    const saveBtn = modalEl.querySelector('#post-save');
+    if (saveBtn) saveBtn.textContent = 'Post';
+    
+    // Open modal
     modalEl.setAttribute("aria-hidden", "false");
   }
+
+  // Open modal in EDIT mode
+  function openEditModal(post) {
+    const modal = document.getElementById('post-modal');
+    if (!modal) return;
+    
+    // Set edit mode
+    editingPostId = post.id;
+    selectedImageFile = null;
+    shouldRemoveImage = false;
+    
+    // Populate form with existing data
+    const titleEl = modal.querySelector('#ann-title');
+    const bodyEl = modal.querySelector('#ann-body');
+    const categoryEl = modal.querySelector('#ann-category');
+    const typeRadio = modal.querySelector(`input[name="ann-type"][value="${post.type}"]`);
+    
+    if (titleEl) titleEl.value = post.title;
+    if (bodyEl) bodyEl.value = post.body;
+    if (categoryEl) categoryEl.value = post.category;
+    if (typeRadio) typeRadio.checked = true;
+    
+    // Show existing image if present
+    if (post.imageUrl) {
+      showImagePreview(post.imageUrl, false);
+    }
+    
+    // Update button text
+    const saveBtn = modal.querySelector('#post-save');
+    if (saveBtn) saveBtn.textContent = 'Update Post';
+    
+    // Open modal
+    modal.setAttribute("aria-hidden", "false");
+  }
+
+  // Close modal
   function closeModal(modalEl) {
     if (!modalEl) return;
     modalEl.setAttribute("aria-hidden", "true");
+    
+    // Reset state
+    editingPostId = null;
+    selectedImageFile = null;
+    shouldRemoveImage = false;
+    resetModalForm(modalEl);
+  }
+
+  // Reset modal form to empty state
+  function resetModalForm(modalEl) {
+    const titleEl = modalEl.querySelector('#ann-title');
+    const bodyEl = modalEl.querySelector('#ann-body');
+    const categoryEl = modalEl.querySelector('#ann-category');
+    const announcementRadio = modalEl.querySelector('#ann-type-announcement');
+    const imageInput = modalEl.querySelector('#ann-image');
+    const imagePreview = modalEl.querySelector('#ann-image-preview');
+    
+    if (titleEl) titleEl.value = '';
+    if (bodyEl) bodyEl.value = '';
+    if (categoryEl) categoryEl.value = '';
+    if (announcementRadio) announcementRadio.checked = true;
+    if (imageInput) imageInput.value = '';
+    if (imagePreview) imagePreview.style.display = 'none';
+  }
+
+  // Show image preview
+  function showImagePreview(imageUrl, isNew) {
+    const previewContainer = document.getElementById('ann-image-preview');
+    if (!previewContainer) return;
+    
+    const previewImg = previewContainer.querySelector('img');
+    const removeBtn = previewContainer.querySelector('.remove-image-btn');
+    
+    if (previewImg) previewImg.src = imageUrl;
+    if (removeBtn) {
+      removeBtn.textContent = isNew ? 'Remove' : 'Remove Image';
+    }
+    
+    previewContainer.style.display = 'block';
+  }
+
+  // Hide image preview
+  function hideImagePreview() {
+    const previewContainer = document.getElementById('ann-image-preview');
+    if (previewContainer) {
+      previewContainer.style.display = 'none';
+    }
+  }
+
+  // IMAGE UPLOAD HANDLING 
+
+  // Setup image upload input handler
+  function setupImageUpload() {
+    const imageInput = document.getElementById('ann-image');
+    if (!imageInput) return;
+    
+    imageInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('Please select an image file');
+        imageInput.value = '';
+        return;
+      }
+      
+      // Validate file size (30MB max)
+      if (file.size > 30 * 1024 * 1024) {
+        alert('Image must be less than 30MB');
+        imageInput.value = '';
+        return;
+      }
+      
+      // Store file and show preview
+      selectedImageFile = file;
+      
+      // Create preview URL
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        showImagePreview(e.target.result, true);
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Setup remove image button
+  function setupRemoveImageButton() {
+    const modal = document.getElementById('post-modal');
+    if (!modal) return;
+    
+    // Create remove button if it doesn't exist
+    let removeBtn = modal.querySelector('.remove-image-btn');
+    if (!removeBtn) {
+      const previewContainer = document.getElementById('ann-image-preview');
+      if (previewContainer) {
+        removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'remove-image-btn';
+        removeBtn.textContent = 'Remove';
+        previewContainer.appendChild(removeBtn);
+      }
+    }
+    
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        // Clear file input and preview
+        const imageInput = document.getElementById('ann-image');
+        if (imageInput) imageInput.value = '';
+        
+        selectedImageFile = null;
+        
+        // If editing and had existing image, mark for removal
+        if (editingPostId) {
+          shouldRemoveImage = true;
+        }
+        
+        hideImagePreview();
+      });
+    }
   }
 
   function moveViewAll() {
@@ -386,23 +657,31 @@
     headerActions.appendChild(viewAll);
   }
 
-  function init() {
+  // INITIALIZATION
+
+  async function init() {
     const postBtn = document.getElementById("post-ann-btn") || document.querySelector(".btn-post");
     const modal = document.getElementById("post-modal");
     const saveBtn = document.getElementById("post-save");
     const cancelBtn = document.getElementById("post-cancel");
 
     moveViewAll();
-    render(); // Render dashboard preview
+    await renderDashboard(); // Render dashboard preview from API
 
+    // Setup image upload handlers
+    setupImageUpload();
+    setupRemoveImageButton();
+
+    // Open modal in CREATE mode
     if (postBtn && modal) {
-      postBtn.addEventListener("click", () => openModal(modal));
+      postBtn.addEventListener("click", () => openCreateModal(modal));
     }
     if (cancelBtn && modal) {
       cancelBtn.addEventListener("click", () => closeModal(modal));
     }
+    // Handle save button (CREATE or UPDATE mode)
     if (saveBtn && modal) {
-      saveBtn.addEventListener("click", () => {
+      saveBtn.addEventListener("click", async () => {
         // Get form values
         const titleEl = modal.querySelector("#ann-title");
         const bodyEl = modal.querySelector("#ann-body");
@@ -431,36 +710,42 @@
           return; 
         }
         
-        // Create new post object
-        const newPost = {
-          id: Date.now().toString(36),
+        // Prepare post data
+        const postData = {
           type: type,
           title: title,
           body: body,
-          category: category,
-          createdAt: new Date().toISOString(),
-          createdBy: "current-admin-id", // TODO: Replace with actual admin ID
-          createdByName: "Admin User", // TODO: Replace with actual admin name
-          imageUrl: null, // TODO: Handle image upload
-          archived: false
+          category: category
         };
         
-        // Save to localStorage (temporary - will be replaced with API)
-        const list = load();
-        list.push(newPost);
-        save(list);
-        
-        // Reset form
-        if (titleEl) titleEl.value = "";
-        if (bodyEl) bodyEl.value = "";
-        if (categoryEl) categoryEl.value = "";
-        const announcementRadio = modal.querySelector("#ann-type-announcement");
-        if (announcementRadio) announcementRadio.checked = true;
-        
-        // Close modal and refresh views
-        closeModal(modal);
-        render(); // Refresh dashboard preview
-        renderFullSection(); // Refresh full section if present
+        try {
+          // Disable button during save
+          saveBtn.disabled = true;
+          saveBtn.textContent = editingPostId ? 'Updating...' : 'Posting...';
+          
+          if (editingPostId) {
+            // UPDATE mode
+            await updatePost(editingPostId, postData, selectedImageFile, shouldRemoveImage);
+            alert('Post updated successfully!');
+          } else {
+            // CREATE mode
+            await createPost(postData, selectedImageFile);
+            alert('Post created successfully!');
+          }
+          
+          // Close modal and refresh
+          closeModal(modal);
+          await fetchAllPosts(); // Refresh cache
+          await renderDashboard(); // Update dashboard
+          await renderFullSection(); // Update full section if present
+          
+        } catch (error) {
+          alert('Failed to save post: ' + (error.message || 'Please try again'));
+        } finally {
+          // Re-enable button
+          saveBtn.disabled = false;
+          saveBtn.textContent = editingPostId ? 'Update Post' : 'Post';
+        }
       });
     }
 
@@ -484,11 +769,11 @@
 
     // Handle "New Post" button in full section
     const newAnnBtn = document.getElementById('btn-new-announcement');
-
     if (newAnnBtn && modal) {
-      newAnnBtn.addEventListener('click', () => openModal(modal));
+      newAnnBtn.addEventListener('click', () => openCreateModal(modal));
     }
   }
 
+  // Start initialization when DOM is ready
   document.addEventListener("DOMContentLoaded", init);
 })();

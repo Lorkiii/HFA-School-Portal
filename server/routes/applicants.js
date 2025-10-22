@@ -105,23 +105,35 @@ export default function createApplicantsRouter({ db, dbClient, requireAuth, requ
   router.get("/me", requireAuth, async (req, res) => {
     try {
       const requester = req.user;
-      if (!requester || !requester.uid) return res.status(401).json({ ok: false, error: "Unauthorized" });
+      if (!requester || !requester.uid) {
+        console.warn("[applicants:me] Unauthorized request (no uid)");
+        return res.status(401).json({ ok: false, error: "Unauthorized" });
+      }
+
+      console.log(`[applicants:me] Request from uid: ${requester.uid}, role: ${requester.role || 'unknown'}`);
 
       // If dbClient is available, use it to find applicantId and load doc (preferred).
       if (dbClient && typeof dbClient.findApplicantIdByUid === "function" && typeof dbClient.getApplicantById === "function") {
         try {
           const applicantId = await dbClient.findApplicantIdByUid(requester.uid);
           if (!applicantId) {
+            // Query succeeded but returned null = account truly deleted
+            console.warn(`[applicants:me] No applicant found for uid: ${requester.uid} - returning 404`);
             return res.status(404).json({ ok: false, error: "Applicant record not found for this user" });
           }
           const applicantRaw = await dbClient.getApplicantById(applicantId);
-          if (!applicantRaw) return res.status(404).json({ ok: false, error: "Applicant not found" });
+          if (!applicantRaw) {
+            console.warn(`[applicants:me] Applicant document ${applicantId} not found - returning 404`);
+            return res.status(404).json({ ok: false, error: "Applicant not found" });
+          }
 
+          console.log(`[applicants:me] Successfully loaded applicant: ${applicantId}`);
           const applicant = sanitizeApplicantFromDbClient(applicantRaw);
           return res.json({ ok: true, applicant });
         } catch (err) {
-          console.error("[applicants:me] dbClient path error", err && (err.stack || err));
-          return res.status(500).json({ ok: false, error: "Server error", details: err && err.message });
+          // Query failed (network, Firestore error, etc.) = temporary error
+          console.error("[applicants:me] Temporary error (not deleted):", err.message);
+          return res.status(503).json({ ok: false, error: "Service temporarily unavailable. Please try again.", retry: true });
         }
       }
 

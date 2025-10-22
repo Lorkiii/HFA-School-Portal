@@ -77,7 +77,6 @@ document.addEventListener("DOMContentLoaded", () => {
       { id: "gender", label: "Gender" },
       { id: "strand", label: "Strand" },
       { id: "track", label: "Track" },
-      { id: "street-address", label: "Street Address" },
       { id: "barangay", label: "Barangay" },
       { id: "city", label: "City" },
       { id: "province", label: "Province" },
@@ -102,13 +101,12 @@ document.addEventListener("DOMContentLoaded", () => {
       missingFields.push("Student Type");
     }
 
-    // Check conditional required fields based on student type
-    if (studentType === "new") {
-      const previousSchool = document.getElementById("previous-school")?.value?.trim();
-      if (!previousSchool) {
-        missingFields.push("Previous School");
-      }
-    } else if (studentType === "old") {
+    // Check conditional required fields
+    const previousSchool = document.getElementById("previous-school")?.value?.trim();
+    if (!previousSchool) {
+      missingFields.push("Previous School");
+    }
+    if (studentType === "old") {
       const studentNumber = document.getElementById("student-number")?.value?.trim();
       if (!studentNumber) {
         missingFields.push("Student Number");

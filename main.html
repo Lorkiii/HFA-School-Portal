@@ -215,7 +215,6 @@
                                 <i class="fas fa-bullhorn ann-icon"></i>
                                 <h3>Announcements</h3>
                             </div>
-                            <a href="#all-announcements" class="view-all-link">View All →</a>
                         </div>
 
                         <!-- Announcements List -->
@@ -243,7 +242,6 @@
                                 <i class="fas fa-newspaper ann-icon"></i>
                                 <h3>News</h3>
                             </div>
-                            <a href="#all-news" class="view-all-link">View All →</a>
                         </div>
 
                         <!-- News List -->
@@ -287,7 +285,6 @@
                     <p class="ann-post-body"></p>
                     
                     <div class="ann-post-footer">
-                        <span class="ann-post-author"></span>
                         <button class="ann-read-more">Read More →</button>
                     </div>
                 </div>
@@ -366,6 +363,53 @@
                 </div>
             </div>
         </section>
+
+        <!-- TASK 3: Landing Page Read More Modal -->
+        <div id="landing-view-modal" class="landing-modal" style="display: none;">
+            <div class="landing-modal-content">
+                
+                <!-- Modal Header -->
+                <div class="landing-modal-header">
+                    <h3 id="landing-modal-title"></h3>
+                    <button id="landing-modal-close" class="landing-modal-close">&times;</button>
+                </div>
+
+                <!-- Modal Body (scrollable) -->
+                <div class="landing-modal-body">
+                    
+                    <!-- Type & Category Badges -->
+                    <div class="landing-modal-badges">
+                        <span id="landing-modal-type-badge" class="landing-type-badge"></span>
+                        <span id="landing-modal-category-badge" class="landing-category-badge"></span>
+                    </div>
+
+                    <!-- Image (if exists) -->
+                    <div id="landing-modal-image-container" class="landing-modal-image-container" style="display: none;">
+                        <img id="landing-modal-image" src="" alt="Post image">
+                    </div>
+
+                    <!-- Content -->
+                    <div class="landing-modal-content-text">
+                        <h4>Content:</h4>
+                        <p id="landing-modal-body"></p>
+                    </div>
+
+                    <!-- Date (NO AUTHOR for public view) -->
+                    <div class="landing-modal-date">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Posted: <strong id="landing-modal-date"></strong></span>
+                    </div>
+
+                </div>
+
+                <!-- Modal Footer -->
+                <div class="landing-modal-footer">
+                    <button id="landing-modal-close-btn" class="landing-close-btn">Close</button>
+                </div>
+
+            </div>
+        </div>
+
         <!-- Footer  -->
         <footer>
             <div class="footer-container">

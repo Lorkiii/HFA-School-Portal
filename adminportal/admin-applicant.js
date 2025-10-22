@@ -21,6 +21,7 @@ let visibleApplicants = [];
 let activeViewMode = "grid";
 let selectedApplicantId = null;
 let isArchivedView = false;
+let selectedMessageAttachment = null;
 
 let applicantsUnsubscribe = null;
 
@@ -303,6 +304,68 @@ function wireEventHandlers() {
       if (counter) counter.textContent = charCount;
     });
   
+  // Attachment upload handlers
+  const attachmentInput = document.getElementById("message-attachment");
+  const btnSelectAttachment = document.getElementById("btn-select-attachment");
+  const btnRemoveAttachment = document.getElementById("btn-remove-attachment");
+  
+  if (btnSelectAttachment && attachmentInput) {
+    btnSelectAttachment.addEventListener("click", () => {
+      attachmentInput.click();
+    });
+  }
+  
+  if (attachmentInput) {
+    attachmentInput.addEventListener("change", (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      // Validate file size (10MB max)
+      const maxSize = 10 * 1024 * 1024; // 10MB
+      if (file.size > maxSize) {
+        showErrorToast("File too large. Maximum size is 10MB.");
+        attachmentInput.value = "";
+        return;
+      }
+      
+      // Store selected file
+      selectedMessageAttachment = file;
+      
+      // Show preview
+      const preview = document.getElementById("message-attachment-preview");
+      const nameEl = document.getElementById("message-attachment-name");
+      const sizeEl = document.getElementById("message-attachment-size");
+      
+      if (preview && nameEl && sizeEl) {
+        nameEl.textContent = file.name;
+        sizeEl.textContent = `(${(file.size / 1024).toFixed(1)} KB)`;
+        preview.style.display = "flex";
+      }
+      
+      // Hide choose button
+      if (btnSelectAttachment) {
+        btnSelectAttachment.style.display = "none";
+      }
+    });
+  }
+  
+  if (btnRemoveAttachment) {
+    btnRemoveAttachment.addEventListener("click", () => {
+      // Clear file
+      selectedMessageAttachment = null;
+      if (attachmentInput) attachmentInput.value = "";
+      
+      // Hide preview
+      const preview = document.getElementById("message-attachment-preview");
+      if (preview) preview.style.display = "none";
+      
+      // Show choose button
+      if (btnSelectAttachment) {
+        btnSelectAttachment.style.display = "inline-flex";
+      }
+    });
+  }
+  
   // Message form submission
   document
     .getElementById("message-applicant-form")
@@ -431,6 +494,7 @@ function renderGridApplicants(applicants) {
     if (!a.archived) {
       const msgBtn = createBtn("btn-message-teacher", "Message", "fas fa-envelope");
       msgBtn.addEventListener("click", () => {
+        selectedApplicantId = a.id;  // Set the correct applicantId before opening modal
         openMessageModal(a.id);
       });
 
@@ -1064,6 +1128,17 @@ function openMessageModal(applicantId) {
   if (charCounter) {
     charCounter.textContent = "0";
   }
+  
+  // Reset attachment
+  selectedMessageAttachment = null;
+  const attachmentInput = document.getElementById("message-attachment");
+  if (attachmentInput) attachmentInput.value = "";
+  
+  const preview = document.getElementById("message-attachment-preview");
+  if (preview) preview.style.display = "none";
+  
+  const btnSelectAttachment = document.getElementById("btn-select-attachment");
+  if (btnSelectAttachment) btnSelectAttachment.style.display = "inline-flex";
 
   // Show modal
   const modal = document.getElementById("message-applicant-modal");
@@ -1083,6 +1158,17 @@ function closeMessageModal() {
   if (form) {
     form.reset();
   }
+  
+  // Clear attachment
+  selectedMessageAttachment = null;
+  const attachmentInput = document.getElementById("message-attachment");
+  if (attachmentInput) attachmentInput.value = "";
+  
+  const preview = document.getElementById("message-attachment-preview");
+  if (preview) preview.style.display = "none";
+  
+  const btnSelectAttachment = document.getElementById("btn-select-attachment");
+  if (btnSelectAttachment) btnSelectAttachment.style.display = "inline-flex";
 }
 
 async function handleSendMessage(e) {
@@ -1118,25 +1204,44 @@ async function handleSendMessage(e) {
   }
 
   try {
-    // Call backend API - endpoint: /api/teacher-applicants/:id/send-message
-    const response = await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/send-message`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        recipient: recipientEmail,
-        subject: subject,
-        body: body,
-      }),
-    });
+    // Prepare request data
+    let response;
+    
+    if (selectedMessageAttachment) {
+      // Use FormData for multipart upload with attachment
+      const formData = new FormData();
+      formData.append("recipient", recipientEmail);
+      formData.append("subject", subject);
+      formData.append("body", body);
+      formData.append("attachment", selectedMessageAttachment);
+      
+      // Call backend API with multipart form data
+      response = await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/send-message`, {
+        method: "POST",
+        body: formData,
+        // Don't set Content-Type header - browser will set it with boundary
+      });
+    } else {
+      // Regular JSON request without attachment
+      response = await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/send-message`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          recipient: recipientEmail,
+          subject: subject,
+          body: body,
+        }),
+      });
+    }
 
-    if (response.ok) {
-      showSaveToast("Message sent successfully");
+    if (response.success) {
+      showSaveToast(response.message || "Message sent successfully");
       closeMessageModal();
     } else {
-      const error = await response.json();
-      showErrorToast(error.error || "Failed to send message");
+      // response is already parsed JSON from apiFetch, don't call .json()
+      showErrorToast(response.error || "Failed to send message");
     }
   } catch (err) {
     console.error("[admin] handleSendMessage error:", err);
@@ -1760,7 +1865,7 @@ async function handleProgressSave(ev) {
 
       if (a) a.status = nextStatus;
       
-      // PHASE 3: Send notification for completed step
+      //  Send notification for completed step
       try {
         const data = await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/notify-progress`, {
           method: 'POST',

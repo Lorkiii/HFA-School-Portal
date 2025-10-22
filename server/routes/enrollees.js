@@ -48,7 +48,7 @@ export default function createEnrolleesRouter(deps = {}) {
         });
       }
 
-      // Prepare initial document (simple - no upload session)
+      // Prepare initial document 
       const now = admin.firestore.FieldValue.serverTimestamp();
       const collection = (formType === "shs") ? "shsApplicants" : "jhsApplicants";
       const toSave = {

@@ -8,6 +8,11 @@ export default function createDbClient({ db, admin } = {}) {
   return {
     // Insert new message into applicant_messages collection
     insertMessage: async (msg) => {
+      console.log(`[dbClient.insertMessage] ========== INSERTING TO FIRESTORE ==========`);
+      console.log(`[dbClient.insertMessage] Input applicantId: ${msg.applicantId}`);
+      console.log(`[dbClient.insertMessage] Input subject: ${msg.subject}`);
+      console.log(`[dbClient.insertMessage] Input has attachment: ${!!msg.attachment}`);
+      
       const payload = {
         applicantId: msg.applicantId || null,
         fromUid: msg.fromUid || null,
@@ -20,9 +25,21 @@ export default function createDbClient({ db, admin } = {}) {
           : msg.recipients
           ? [msg.recipients]
           : [],
+        attachment: msg.attachment || null, // Include attachment metadata
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        isArchived: false, // Initialize as not archived
+        archivedAt: null   // Initialize as null
       };
+      
+      console.log(`[dbClient.insertMessage] Payload to save:`, JSON.stringify({
+        ...payload,
+        createdAt: '[ServerTimestamp]'
+      }, null, 2));
+      
       const docRef = await db.collection("applicant_messages").add(payload);
+      console.log(`[dbClient.insertMessage] ✅ Document created with ID: ${docRef.id}`);
+      console.log(`[dbClient.insertMessage] Collection: applicant_messages`);
+      console.log(`[dbClient.insertMessage] =================================================`);
       return { id: docRef.id };
     },
 
@@ -57,13 +74,41 @@ export default function createDbClient({ db, admin } = {}) {
 
     // Get messages for an applicant (returns array with createdAt as ISO string)
     getMessagesForApplicant: async (applicantId) => {
-      if (!applicantId) return [];
+      console.log(`[dbClient.getMessagesForApplicant] ========== QUERYING MESSAGES ==========`);
+      console.log(`[dbClient.getMessagesForApplicant] Query applicantId: ${applicantId}`);
+      
+      if (!applicantId) {
+        console.warn(`[dbClient.getMessagesForApplicant] ⚠️ No applicantId provided - returning empty array`);
+        return [];
+      }
+      
       try {
+        console.log(`[dbClient.getMessagesForApplicant] Querying collection: applicant_messages`);
+        console.log(`[dbClient.getMessagesForApplicant] Where: applicantId == ${applicantId}`);
+        console.log(`[dbClient.getMessagesForApplicant] OrderBy: createdAt ASC`);
+        
         const snap = await db
           .collection("applicant_messages")
           .where("applicantId", "==", applicantId)
           .orderBy("createdAt", "asc")
           .get();
+
+        console.log(`[dbClient.getMessagesForApplicant] ✅ Query completed - found ${snap.docs.length} documents`);
+        
+        if (snap.docs.length > 0) {
+          console.log(`[dbClient.getMessagesForApplicant] Documents found:`);
+          snap.docs.forEach((doc, index) => {
+            const data = doc.data();
+            console.log(`  ${index + 1}. Doc ID: ${doc.id}`);
+            console.log(`     - applicantId: ${data.applicantId}`);
+            console.log(`     - subject: ${data.subject}`);
+            console.log(`     - senderEmail: ${data.senderEmail}`);
+            console.log(`     - createdAt: ${data.createdAt ? data.createdAt.toDate?.() : 'N/A'}`);
+          });
+        } else {
+          console.log(`[dbClient.getMessagesForApplicant] ⚠️ No documents found matching applicantId: ${applicantId}`);
+        }
+        console.log(`[dbClient.getMessagesForApplicant] =============================================`);
 
         return snap.docs.map((d) => {
           const data = d.data() || {};
@@ -86,6 +131,7 @@ export default function createDbClient({ db, admin } = {}) {
             subject: data.subject,
             body: data.body,
             recipients: data.recipients || [],
+            attachment: data.attachment || null,
             createdAt,
           };
         });
@@ -118,14 +164,30 @@ export default function createDbClient({ db, admin } = {}) {
 
     // Find the teacherApplicants doc id that matches uid (returns doc id or null)
     findApplicantIdByUid: async (uid) => {
-      if (!uid) return null;
-      const q = await db
-        .collection("teacherApplicants")
-        .where("uid", "==", uid)
-        .limit(1)
-        .get();
-      if (q.empty) return null;
-      return q.docs[0].id;
+      if (!uid) {
+        console.warn('[dbClient] findApplicantIdByUid called with empty uid');
+        return null;
+      }
+      try {
+        console.log(`[dbClient] Querying teacherApplicants for uid: ${uid}`);
+        const q = await db
+          .collection("teacherApplicants")
+          .where("uid", "==", uid)
+          .limit(1)
+          .get();
+        
+        if (q.empty) {
+          console.warn(`[dbClient] No applicant found for uid: ${uid} (query succeeded but returned empty)`);
+          return null; // Query succeeded but empty = account truly deleted
+        }
+        
+        console.log(`[dbClient] Found applicant: ${q.docs[0].id} for uid: ${uid}`);
+        return q.docs[0].id;
+      } catch (err) {
+        // Query failed (network, permission, etc.) - let caller handle it
+        console.error(`[dbClient] findApplicantIdByUid query FAILED for uid: ${uid}:`, err.message);
+        throw err; // Throw error so caller knows it's a temporary failure, not "account deleted"
+      }
     },
 
     // Get a full applicant document by its Firestore doc id (returns plain object or null)

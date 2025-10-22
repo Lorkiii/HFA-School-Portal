@@ -264,17 +264,160 @@ document.addEventListener("DOMContentLoaded", () => {
     el.addEventListener("input", () => { el.dataset.userEdited = 'true'; });
   });
 
-  // Phone number input validation - restrict to numeric only, max 10 digits
-  const phoneInput = document.getElementById("contact-number");
-  if (phoneInput) {
-    phoneInput.addEventListener("input", function(e) {
-      // Only allow numeric characters
-      this.value = this.value.replace(/[^0-9]/g, '');
-      // Limit to 10 digits
-      if (this.value.length > 10) {
-        this.value = this.value.slice(0, 10);
+  // -------- Live validation (simple) --------
+  function setError(el, msg) {
+    if (!el) return;
+    // Check if input is inside phone-input-wrapper
+    const wrapper = el.closest('.phone-input-wrapper');
+    if (wrapper) {
+      wrapper.classList.add('is-invalid');
+      const formGroup = wrapper.parentElement;
+      let msgEl = formGroup && formGroup.querySelector('.error-text');
+      if (!msgEl && formGroup) {
+        msgEl = document.createElement('small');
+        msgEl.className = 'error-text';
+        formGroup.appendChild(msgEl);
       }
-    });
+      if (msgEl) msgEl.textContent = msg || '';
+    } else {
+      el.classList.add('is-invalid');
+      let msgEl = el.parentElement && el.parentElement.querySelector('.error-text');
+      if (!msgEl && el.parentElement) {
+        msgEl = document.createElement('small');
+        msgEl.className = 'error-text';
+        el.parentElement.appendChild(msgEl);
+      }
+      if (msgEl) msgEl.textContent = msg || '';
+    }
+  }
+  function clearError(el) {
+    if (!el) return;
+    // Check if input is inside phone-input-wrapper
+    const wrapper = el.closest('.phone-input-wrapper');
+    if (wrapper) {
+      wrapper.classList.remove('is-invalid');
+      const formGroup = wrapper.parentElement;
+      const msgEl = formGroup && formGroup.querySelector('.error-text');
+      if (msgEl) msgEl.textContent = '';
+    } else {
+      el.classList.remove('is-invalid');
+      const msgEl = el.parentElement && el.parentElement.querySelector('.error-text');
+      if (msgEl) msgEl.textContent = '';
+    }
+  }
+
+  const NAME_RE = /^[A-Za-zÀ-ÖØ-öø-ÿ' -]+$/;
+  const EMAIL_GMAIL_RE = /^[A-Za-z0-9._%+-]+@gmail\.com$/i;
+
+  function validateName(el, required = true) {
+    if (!el) return true;
+    const val = (el.value || '').trim();
+    if (!val) { if (required) { setError(el, 'This field is required.'); return false; } else { clearError(el); return true; } }
+    if (!NAME_RE.test(val)) { setError(el, 'Letters, spaces, apostrophes, hyphens only.'); return false; }
+    clearError(el); return true;
+  }
+  function validateEmail(el) {
+    if (!el) return true;
+    const v = (el.value || '').trim();
+    if (!v) { setError(el, 'Email is required.'); return false; }
+    if (!EMAIL_GMAIL_RE.test(v)) { setError(el, 'Use a Gmail address ending with @gmail.com'); return false; }
+    clearError(el); return true;
+  }
+  function validatePhone(el) {
+    if (!el) return true;
+    // keep only digits and max 10
+    el.value = (el.value || '').replace(/[^0-9]/g, '').slice(0, 10);
+    const v = el.value;
+    if (v.length !== 10 || v[0] !== '9') { setError(el, 'Enter 10 digits starting with 9.'); return false; }
+    clearError(el); return true;
+  }
+  function validateAge18Plus(el) {
+    if (!el) return true;
+    const v = el.value;
+    if (!v) { setError(el, 'Birthdate is required.'); return false; }
+    const bd = new Date(v);
+    const today = new Date();
+    let age = today.getFullYear() - bd.getFullYear();
+    const monthDiff = today.getMonth() - bd.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < bd.getDate())) age--;
+    if (age < 18) { setError(el, 'You must be at least 18 years old.'); return false; }
+    clearError(el); return true;
+  }
+  function validateRequired(el) {
+    if (!el) return true;
+    const v = (el.value || '').trim();
+    if (!v) { setError(el, 'This field is required.'); return false; }
+    clearError(el); return true;
+  }
+  function validateCVFile(el) {
+    if (!el || !el.files || el.files.length === 0) return true; // optional
+    const file = el.files[0];
+    const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_SIZE) {
+      setError(el, 'File size must be 5MB or less.');
+      el.value = '';
+      return false;
+    }
+    const isPDF = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+    if (!isPDF) {
+      setError(el, 'Only PDF files are allowed.');
+      el.value = '';
+      return false;
+    }
+    clearError(el); return true;
+  }
+
+  // Get all relevant elements
+  const firstNameEl = document.getElementById('first-name');
+  const lastNameEl = document.getElementById('last-name');
+  const middleNameEl = document.getElementById('middle-name');
+  const emailEl = document.getElementById('email');
+  const phoneEl = document.getElementById('contact-number');
+  const birthdateEl = document.getElementById('birthdate');
+  const addressEl = document.getElementById('address');
+  const cvEl = document.getElementById('cv-upload');
+
+  // Phone number input validation - restrict to numeric only, max 10 digits
+  if (phoneEl) {
+    phoneEl.addEventListener('input', () => validatePhone(phoneEl));
+    phoneEl.addEventListener('blur', () => validatePhone(phoneEl));
+  }
+
+  // Name validations
+  if (firstNameEl) {
+    firstNameEl.addEventListener('input', () => validateName(firstNameEl, true));
+    firstNameEl.addEventListener('blur', () => validateName(firstNameEl, true));
+  }
+  if (lastNameEl) {
+    lastNameEl.addEventListener('input', () => validateName(lastNameEl, true));
+    lastNameEl.addEventListener('blur', () => validateName(lastNameEl, true));
+  }
+  if (middleNameEl) {
+    middleNameEl.addEventListener('input', () => validateName(middleNameEl, false));
+    middleNameEl.addEventListener('blur', () => validateName(middleNameEl, false));
+  }
+
+  // Email validation (Gmail-only)
+  if (emailEl) {
+    emailEl.addEventListener('input', () => validateEmail(emailEl));
+    emailEl.addEventListener('blur', () => validateEmail(emailEl));
+  }
+
+  // Birthdate validation (18+)
+  if (birthdateEl) {
+    birthdateEl.addEventListener('input', () => validateAge18Plus(birthdateEl));
+    birthdateEl.addEventListener('blur', () => validateAge18Plus(birthdateEl));
+  }
+
+  // Address validation (required)
+  if (addressEl) {
+    addressEl.addEventListener('input', () => validateRequired(addressEl));
+    addressEl.addEventListener('blur', () => validateRequired(addressEl));
+  }
+
+  // CV file validation (PDF only, <= 5MB)
+  if (cvEl) {
+    cvEl.addEventListener('change', () => validateCVFile(cvEl));
   }
 
   async function handleFileSelect(el, key) {

@@ -583,3 +583,15 @@ h3.schoolname {
   color: #6b7280;
   font-size: 13px;
 }
+
+/* Live validation helpers */
+.is-invalid,
+.phone-input-wrapper.is-invalid {
+  border-color: #dc2626 !important;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.08) !important;
+}
+.error-text {
+  margin-top: 6px;
+  color: #dc2626;
+  font-size: 0.85rem;
+}

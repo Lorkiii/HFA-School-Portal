@@ -137,14 +137,11 @@ export default function createApplicantMessagesRouter({
       const uid = user.uid || null;
       const isAdmin = !!user.isAdmin;
 
-      console.log(
-        "[applicant-messages:get] user.uid ->",
-        uid,
-        "param applicantId ->",
-        applicantId,
-        "isAdmin ->",
-        isAdmin
-      );
+      console.log(`[applicant-messages:get] ========== GET MESSAGES REQUEST ==========`);
+      console.log(`[applicant-messages:get] Request from user UID: ${uid}`);
+      console.log(`[applicant-messages:get] Requested applicantId: ${applicantId}`);
+      console.log(`[applicant-messages:get] User is admin: ${isAdmin}`);
+      console.log(`[applicant-messages:get] User role: ${user.role || 'unknown'}`);
 
       // Fetch applicant doc and verify ownership
       let applicantDoc = null;
@@ -184,7 +181,9 @@ export default function createApplicantMessagesRouter({
       // Fetch messages
       let messages;
       try {
+        console.log(`[applicant-messages:get] 🔍 Fetching messages from database...`);
         messages = await dbClient.getMessagesForApplicant(applicantId);
+        console.log(`[applicant-messages:get] ✅ Fetched ${messages.length} messages from database`);
       } catch (dbErr) {
         console.error(
           "[applicant-messages:get] getMessagesForApplicant failed",
@@ -214,6 +213,12 @@ export default function createApplicantMessagesRouter({
         });
       }
 
+      console.log(`[applicant-messages:get] 📤 Returning ${messages.length} messages to client`);
+      if (messages.length > 0) {
+        console.log(`[applicant-messages:get] Message subjects:`, messages.map(m => m.subject));
+      }
+      console.log(`[applicant-messages:get] ===============================================`);
+      
       return res.json({ ok: true, messages });
     } catch (err) {
       console.error(

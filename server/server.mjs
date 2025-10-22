@@ -32,9 +32,11 @@ import createNotesRouter from "./routes/notes.js";
 import createTeacherProfileRouter from "./routes/teacher-profile.js";
 import createAdminProfileRouter from "./routes/admin-profile.js";
 import createEnrollmentRouter from "./routes/enrollment.js";
+import createAnnouncementsRouter from "./routes/announcements.js";
 import createTeacherMessagesRouter from "./routes/teacher-messages.js";
 import createTeacherNotificationsRouter from "./routes/teacher-notifications.js";
 import createTeacherDecisionRouter from "./routes/teacher-decision.js";
+import createAdminMailRouter from "./routes/admin-mail.js";
 
 import { deleteExpiredAccounts } from "./utils/teacherDecision.js";
 
@@ -486,7 +488,11 @@ async function requireAdmin(req, res, next) {
 
     const userDoc = await db.collection('users').doc(uid).get();
     const role = userDoc.exists ? userDoc.data().role : null;
-    if (role !== 'admin') return res.status(403).json({ error: 'Forbidden: admin only', message: 'You must be an admin to access this resource.' });
+    
+    if (role !== 'admin') {
+      console.warn(`[requireAdmin] Access denied for uid ${uid} - role is '${role}', expected 'admin'`);
+      return res.status(403).json({ error: 'Forbidden: admin only', message: 'You must be an admin to access this resource.' });
+    }
 
     // attach admin info
     req.adminUser = { uid, email: userDoc.exists ? userDoc.data().email : null };
@@ -1109,6 +1115,14 @@ app.use('/api/applicant-messages', requireAuth, attachApplicantId, applicantMess
 // enrollment period settings
 app.use('/api/enrollment', createEnrollmentRouter({ db, writeActivityLog ,requireAdmin }));
 
+// announcements and news router (public GET, admin POST/PUT/DELETE)
+app.use("/api", createAnnouncementsRouter({ 
+  db, 
+  admin, 
+  requireAdmin, 
+  writeActivityLog 
+}));
+
 // applicants router under /api/applicants (with admin for file uploads)
 app.use('/api/applicants', createApplicantsRouter({ 
   db, 
@@ -1179,9 +1193,11 @@ app.use("/", createAdminProfileRouter({
 // Teacher messages routes - handles sending messages to teacher applicants
 app.use("/api/teacher-applicants", createTeacherMessagesRouter({
   db,
+  dbClient,
   mailTransporter,
   requireAdmin,
-  writeActivityLog
+  writeActivityLog,
+  admin
 }));
 
 // Teacher notifications routes - handles notification operations
@@ -1198,6 +1214,15 @@ app.use("/api/teacher-applicants", createTeacherDecisionRouter({
   mailTransporter, 
   requireAdmin,
   writeActivityLog 
+}));
+
+// Admin Mail Routes - handles admin inbox, sent messages, and compose functionality
+app.use("/api/admin/mail", createAdminMailRouter({
+  db,
+  admin,
+  mailTransporter,
+  writeActivityLog,
+  requireAdmin
 }));
 
 // HELPERS
@@ -1224,6 +1249,42 @@ cron.schedule('0 2 * * *', async () => {
 });
 
 console.log('✅ Cron job scheduled: Teacher account auto-deletion (daily at 2:00 AM)');
+
+// --- CRON JOB: AUTO-DELETE ARCHIVED MESSAGES ---
+// Runs every day at 2:00 AM - Delete archived messages older than 60 days
+cron.schedule('0 2 * * *', async () => {
+  console.log('🕒 Running auto-delete job for archived messages...');
+  try {
+    // Calculate date 60 days ago
+    const sixtyDaysAgo = new Date();
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+    
+    // Find archived messages older than 60 days
+    const snapshot = await db.collection('applicant_messages')
+      .where('isArchived', '==', true)
+      .where('archivedAt', '<', sixtyDaysAgo)
+      .get();
+    
+    if (snapshot.empty) {
+      console.log('✅ No archived messages to delete');
+      return;
+    }
+    
+    // Delete messages in batch
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    
+    await batch.commit();
+    console.log(`✅ Auto-delete completed: ${snapshot.size} archived message(s) deleted (60+ days old)`);
+    
+  } catch (error) {
+    console.error('❌ Auto-delete archived messages job failed:', error);
+  }
+});
+
+console.log('✅ Cron job scheduled: Archived messages auto-deletion (daily at 2:00 AM, 60+ days old)');
 
 // --- START SERVER ---
 const PORT = process.env.PORT || 3000;

@@ -216,44 +216,44 @@ section:not(:target) {
 }
 
 /* SCROLLABLE areas with fixed height */
-#note-list.note-list {
-  height: 320px;
+#note-list {
+  max-height: 400px;
+  min-height: 200px;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 12px 18px;
   box-sizing: border-box;
-  flex: 1;
 }
 
-#notif-list.notif-list {
-  height: 240px;
+#notif-list {
+  max-height: 350px;
+  min-height: 200px;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 12px 18px;
   box-sizing: border-box;
-  flex: 1;
 }
 
 /* Custom scrollbar styling */
-#note-list.note-list::-webkit-scrollbar,
-#notif-list.notif-list::-webkit-scrollbar {
+#note-list::-webkit-scrollbar,
+#notif-list::-webkit-scrollbar {
   width: 6px;
 }
 
-#note-list.note-list::-webkit-scrollbar-track,
-#notif-list.notif-list::-webkit-scrollbar-track {
+#note-list::-webkit-scrollbar-track,
+#notif-list::-webkit-scrollbar-track {
   background: #f3f4f6;
   border-radius: 10px;
 }
 
-#note-list.note-list::-webkit-scrollbar-thumb,
-#notif-list.notif-list::-webkit-scrollbar-thumb {
+#note-list::-webkit-scrollbar-thumb,
+#notif-list::-webkit-scrollbar-thumb {
   background: #2e8b57;
   border-radius: 10px;
 }
 
-#note-list.note-list::-webkit-scrollbar-thumb:hover,
-#notif-list.notif-list::-webkit-scrollbar-thumb:hover {
+#note-list::-webkit-scrollbar-thumb:hover,
+#notif-list::-webkit-scrollbar-thumb:hover {
   background: #246c43;
 }
 
@@ -535,8 +535,8 @@ section:not(:target) {
     max-width: 100%;
   }
   /* reduce heights on small screens */
-  #note-list.note-list { max-height: 36vh; }
-  #notif-list.notif-list { max-height: 28vh; }
+  #note-list { max-height: 36vh; }
+  #notif-list { max-height: 28vh; }
 
   .status-activity-grid .status-timeline { padding-right: 56px; }
   .status-activity-grid .status-timeline::before { right: 28px; }
@@ -559,8 +559,8 @@ section:not(:target) {
     min-width: 0;
   }
 
-  .note-list { max-height: 36vh; }
-  .notif-list { max-height: 28vh; }
+  #note-list { max-height: 32vh; }
+  #notif-list { max-height: 28vh; }
 
   /* adjust timeline marker offsets for the narrower column */
   .status-timeline { padding-right: 56px; }
@@ -766,6 +766,294 @@ section:not(:target) {
   border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
+}
+
+/* ===== Notification View Modal - Simple Design ===== */
+.notification-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1300;
+  padding: 20px;
+}
+
+.notification-modal-box {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 100%;
+  max-width: 500px;
+  position: relative;
+  padding: 24px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.notification-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: #666;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.notification-modal-close:hover {
+  background: #f3f4f6;
+  color: #2e8b57;
+}
+
+.notification-modal-content {
+  margin-top: 8px;
+}
+
+.notification-modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 16px 0;
+  padding-right: 30px;
+}
+
+.notification-modal-sender {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-left: 3px solid #2e8b57;
+  border-radius: 4px;
+}
+
+.notification-modal-message {
+  font-size: 0.95rem;
+  color: #374151;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.notification-modal-date {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  text-align: right;
+  margin-top: 12px;
+}
+
+/* Responsive modal */
+@media (max-width: 768px) {
+  .notification-modal-box {
+    max-width: 95%;
+    padding: 20px;
+  }
+  
+  .notification-modal-title {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .notification-modal-box {
+    max-width: 100%;
+    padding: 16px;
+    max-height: 90vh;
+  }
+  
+  .notification-modal-title {
+    font-size: 1rem;
+  }
+  
+  .notification-modal-message {
+    font-size: 0.9rem;
+    padding: 10px;
+  }
+}
+
+/* ===== View Message Detail Modal - Simple Design ===== */
+.view-message-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1300;
+  padding: 20px;
+}
+
+.view-message-modal-box {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 100%;
+  max-width: 500px;
+  position: relative;
+  padding: 24px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.view-message-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  color: #666;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.view-message-modal-close:hover {
+  background: #f3f4f6;
+  color: #2e8b57;
+}
+
+.view-message-modal-content {
+  margin-top: 8px;
+}
+
+.view-message-modal-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 16px 0;
+  padding-right: 30px;
+}
+
+.view-message-modal-from {
+  font-size: 0.9rem;
+  color: #6b7280;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-left: 3px solid #2e8b57;
+  border-radius: 4px;
+}
+
+.view-message-modal-subject {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: #f0fdf4;
+  border-left: 3px solid #2e8b57;
+  border-radius: 4px;
+}
+
+.view-message-modal-body {
+  font-size: 0.95rem;
+  color: #374151;
+  line-height: 1.6;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.view-message-modal-attachment {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  display: none;
+}
+
+.view-message-modal-attachment.has-attachment {
+  display: block;
+}
+
+.view-message-modal-attachment strong {
+  display: block;
+  color: #1f2937;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+
+.view-message-modal-attachment a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #2e8b57;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 0.9rem;
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid #86efac;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.view-message-modal-attachment a:hover {
+  background: #dcfce7;
+  border-color: #2e8b57;
+}
+
+.view-message-modal-attachment .file-size {
+  color: #6b7280;
+  font-size: 0.85rem;
+  margin-left: 8px;
+}
+
+.view-message-modal-date {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  text-align: right;
+  margin-top: 12px;
+}
+
+/* Responsive modal */
+@media (max-width: 768px) {
+  .view-message-modal-box {
+    max-width: 95%;
+    padding: 20px;
+  }
+  
+  .view-message-modal-title {
+    font-size: 1.1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .view-message-modal-box {
+    max-width: 100%;
+    padding: 16px;
+    max-height: 90vh;
+  }
+  
+  .view-message-modal-title {
+    font-size: 1rem;
+  }
+  
+  .view-message-modal-body {
+    font-size: 0.9rem;
+    padding: 10px;
+    max-height: 200px;
+  }
 }
 
 /*  */

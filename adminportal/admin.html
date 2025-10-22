@@ -1163,6 +1163,33 @@
                             </div>
                         </div>
                         
+                        <!-- Attachment Upload -->
+                        <div class="form-group">
+                            <label for="message-attachment">Attachment (Optional):</label>
+                            <div class="attachment-upload-area">
+                                <input 
+                                    type="file" 
+                                    id="message-attachment" 
+                                    accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                                    style="display: none;"
+                                >
+                                <button type="button" class="btn-upload-attachment" id="btn-select-attachment">
+                                    <i class="fas fa-paperclip"></i> Choose File
+                                </button>
+                                <div id="message-attachment-preview" class="attachment-preview" style="display: none;">
+                                    <div class="attachment-info">
+                                        <i class="fas fa-file"></i>
+                                        <span id="message-attachment-name">No file selected</span>
+                                        <span id="message-attachment-size"></span>
+                                    </div>
+                                    <button type="button" class="btn-remove-attachment" id="btn-remove-attachment">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <small class="attachment-hint">Max 10MB. Allowed: PDF, DOC, DOCX, XLS, XLSX, PNG, JPG</small>
+                            </div>
+                        </div>
+                        
                         <div class="form-actions">
                             <button type="submit" class="btn btn-primary" id="send-message-btn">
                                 <i class="fas fa-paper-plane"></i> Send Message
@@ -1813,6 +1840,31 @@
 
             <section id="school-calendar">
                 <h2>School Calendar</h2>
+                
+                <!-- Color Legend -->
+                <div class="calendar-legend">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #f59e0b;"></span>
+                        <span>Announcements</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #3b82f6;"></span>
+                        <span>News</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #10b981;"></span>
+                        <span>Interviews</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #8b5cf6;"></span>
+                        <span>JHS Enrollment</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #ec4899;"></span>
+                        <span>SHS Enrollment</span>
+                    </div>
+                </div>
+
                 <div class="Mycalendar">
                     <div class="calendarcontent">
                         <div id="calendar"></div>
@@ -1918,77 +1970,194 @@
                 <div id="profile-message" class="message-container" style="display: none;"></div>
             </div>
         </section>
+
+        <!-- Mail Section -->
+        <section id="mail" style="display: none;">
+            <div class="section-header">
+                <h2><i class="fas fa-envelope"></i> Mail</h2>
+                <!-- Compose button removed - Use Applicants → Message for teacher applicants -->
+            </div>
+
+            <!-- Tab Navigation -->
+            <div class="mail-tabs">
+                <button class="mail-tab active" data-tab="inbox">
+                    <i class="fas fa-inbox"></i> Inbox
+                </button>
+                <button class="mail-tab" data-tab="sent">
+                    <i class="fas fa-paper-plane"></i> Sent
+                </button>
+                <button class="mail-tab" data-tab="archived">
+                    <i class="fas fa-archive"></i> Archived
+                </button>
+            </div>
+
+            <!-- Message List -->
+            <div id="mail-list" class="mail-list">
+                <!-- Messages will be inserted here -->
+            </div>
+
+            <!-- Empty State -->
+            <div id="mail-empty" class="mail-empty" style="display: none;">
+                <i class="fas fa-inbox"></i>
+                <h3>No messages</h3>
+                <p>Your mailbox is empty</p>
+            </div>
+
+            <!-- Message Item Template -->
+            <template id="mail-item-template">
+                <div class="mail-item" data-id="">
+                    <div class="mail-item-content">
+                        <div class="mail-item-header">
+                            <span class="mail-sender"></span>
+                            <span class="mail-date"></span>
+                        </div>
+                        <div class="mail-subject"></div>
+                        <div class="mail-preview"></div>
+                    </div>
+                    <div class="mail-item-actions">
+                        <button class="btn-mail-archive" title="Archive">
+                            <i class="fas fa-archive"></i>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </section>
     </main>
 
 
-    <!-- Announcement Modal -->
+    <!-- Announcement Modal - TASK 1: Scrollable with header/body/footer -->
     <div id="post-modal" class="announcement-modal" role="dialog" aria-modal="true" aria-hidden="true">
         <div class="announcement-modal-content" role="document">
-            <h3 class="ann-modal-title">New Post</h3>
+            
+            <!-- Modal Header (fixed at top) -->
+            <div class="modal-header">
+                <h3 class="ann-modal-title">New Post</h3>
+            </div>
 
-            <!-- Type Selection -->
-            <div class="ann-field">
-                <span class="ann-label">Type</span>
-                <div class="ann-type-selection">
-                    <label class="ann-radio-option">
-                        <input type="radio" name="ann-type" value="announcement" id="ann-type-announcement" checked />
-                        <span class="radio-label">
-                            <i class="fas fa-bullhorn"></i>
-                            <span>Announcement</span>
-                        </span>
-                    </label>
-                    <label class="ann-radio-option">
-                        <input type="radio" name="ann-type" value="news" id="ann-type-news" />
-                        <span class="radio-label">
-                            <i class="fas fa-newspaper"></i>
-                            <span>News</span>
-                        </span>
-                    </label>
+            <!-- Modal Body (scrollable) -->
+            <div class="modal-body">
+                <!-- Type Selection -->
+                <div class="ann-field">
+                    <span class="ann-label">Type</span>
+                    <div class="ann-type-selection">
+                        <label class="ann-radio-option">
+                            <input type="radio" name="ann-type" value="announcement" id="ann-type-announcement" checked />
+                            <span class="radio-label">
+                                <i class="fas fa-bullhorn"></i>
+                                <span>Announcement</span>
+                            </span>
+                        </label>
+                        <label class="ann-radio-option">
+                            <input type="radio" name="ann-type" value="news" id="ann-type-news" />
+                            <span class="radio-label">
+                                <i class="fas fa-newspaper"></i>
+                                <span>News</span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Title -->
+                <label class="ann-field">
+                    <span class="ann-label">Title</span>
+                    <input id="ann-title" class="ann-input" type="text" placeholder="Enter title" required />
+                </label>
+
+                <!-- Body -->
+                <label class="ann-field">
+                    <span class="ann-label">Body</span>
+                    <textarea id="ann-body" class="ann-textarea" rows="4"
+                        placeholder="Write the content details" required></textarea>
+                </label>
+
+                <!-- Category -->
+                <label class="ann-field">
+                    <span class="ann-label">Category</span>
+                    <select id="ann-category" class="ann-input" required>
+                        <option value="">Select category</option>
+                        <option value="ACADEMIC">Academic</option>
+                        <option value="GENERAL">General</option>
+                        <option value="EVENT">Event</option>
+                        <option value="SPORTS">Sports</option>
+                    </select>
+                </label>
+
+                <!-- Image Upload -->
+                <div class="ann-image-upload">
+                    <label class="ann-image-label">Image (optional)</label>
+                    <input id="ann-image" class="ann-image-input" type="file" accept="image/*" />
+                    <div id="ann-image-preview" class="ann-image-preview" aria-hidden="true">
+                        <img id="ann-image-thumb" class="ann-image-thumb" src=""
+                            alt="Post preview" />
+                        <button id="ann-image-remove" class="ann-image-remove task-btn outline"
+                            type="button">Remove image</button>
+                    </div>
                 </div>
             </div>
 
-            <!-- Title -->
-            <label class="ann-field">
-                <span class="ann-label">Title</span>
-                <input id="ann-title" class="ann-input" type="text" placeholder="Enter title" required />
-            </label>
-
-            <!-- Body -->
-            <label class="ann-field">
-                <span class="ann-label">Body</span>
-                <textarea id="ann-body" class="ann-textarea" rows="4"
-                    placeholder="Write the content details" required></textarea>
-            </label>
-
-            <!-- Category -->
-            <label class="ann-field">
-                <span class="ann-label">Category</span>
-                <select id="ann-category" class="ann-input" required>
-                    <option value="">Select category</option>
-                    <option value="ACADEMIC">Academic</option>
-                    <option value="GENERAL">General</option>
-                    <option value="EVENT">Event</option>
-                    <option value="SPORTS">Sports</option>
-                </select>
-            </label>
-
-            <!-- Image Upload -->
-            <div class="ann-image-upload">
-                <label class="ann-image-label">Image (optional)</label>
-                <input id="ann-image" class="ann-image-input" type="file" accept="image/*" />
-                <div id="ann-image-preview" class="ann-image-preview" aria-hidden="true">
-                    <img id="ann-image-thumb" class="ann-image-thumb" src=""
-                        alt="Post preview" />
-                    <button id="ann-image-remove" class="ann-image-remove task-btn outline"
-                        type="button">Remove image</button>
+            <!-- Modal Footer (fixed at bottom) -->
+            <div class="modal-footer">
+                <div class="announcement-modal-actions">
+                    <button class="post" id="post-save" type="button">Post</button>
+                    <button class="btn-cancel" id="post-cancel" type="button">Cancel</button>
                 </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="announcement-modal-actions">
-                <button class="post" id="post-save" type="button">Post</button>
-                <button class="btn-cancel" id="post-cancel" type="button">Cancel</button>
+        </div>
+    </div>
+
+    <!-- TASK 2: View Announcement Modal (Read-only) -->
+    <div id="view-modal" class="announcement-modal" role="dialog" aria-modal="true" aria-hidden="true" style="display: none;">
+        <div class="announcement-modal-content" role="document">
+            
+            <!-- Modal Header -->
+            <div class="modal-header">
+                <h3 class="ann-modal-title" id="view-modal-title">View Post</h3>
             </div>
+
+            <!-- Modal Body (scrollable) -->
+            <div class="modal-body">
+                
+                <!-- Type & Category Badges -->
+                <div class="view-badges">
+                    <span class="view-type-badge" id="view-type-badge"></span>
+                    <span class="view-category-badge" id="view-category-badge"></span>
+                </div>
+
+                <!-- Image (if exists) -->
+                <div id="view-image-container" class="view-image-container" style="display: none;">
+                    <img id="view-image" src="" alt="Post image">
+                </div>
+
+                <!-- Content -->
+                <div class="view-content">
+                    <h4>Content:</h4>
+                    <p id="view-body"></p>
+                </div>
+
+                <!-- Metadata -->
+                <div class="view-metadata">
+                    <div class="view-meta-item">
+                        <i class="fas fa-calendar-alt"></i>
+                        <span>Posted: <strong id="view-date"></strong></span>
+                    </div>
+                    <div class="view-meta-item">
+                        <i class="fas fa-user"></i>
+                        <span>By: <strong id="view-author"></strong></span>
+                    </div>
+                    <div class="view-meta-item">
+                        <i class="fas fa-info-circle"></i>
+                        <span>Status: <strong id="view-status"></strong></span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer">
+                <button class="btn-cancel" id="view-modal-close" type="button">Close</button>
+            </div>
+
         </div>
     </div>
 
@@ -2037,14 +2206,23 @@
         </div>
     </div>
 
+    <!-- Compose Mail Modal - REMOVED -->
+    <!-- Use Applicants → Message button to send messages to teacher applicants -->
+    <!-- Modal removed as part of Option 2 implementation -->
+
+    <!-- API Helper (must load first) -->
+    <script type="module" src="../api-fetch.js"></script>
+    
     <script type="module" src="admin.js"></script>
     <script type="module" src="admin-student.js"></script>
     <script type="module" src="admin-applicant.js"></script>
     <script type="module" src="admin-user-management.js"></script>
+    <script type="module" src="admin-notes.js"></script>
     <script type="module" src="admin-dashboard.js"></script>
     <script type="module" src="admin-announcement.js"></script>
     <script type="module" src="admin-schoolcalendar.js"></script>
     <script type="module" src="admin-enrollment.js"></script>
+    <script type="module" src="admin-mail.js"></script>
 
 
 </html>

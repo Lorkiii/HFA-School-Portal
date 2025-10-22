@@ -378,7 +378,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- Load applicant from server ----------
     // Authentication handled via JWT cookie automatically
-    async function loadApplicant() {
+    async function loadApplicant(retryCount = 0) {
         try {
             const opts = {
                 method: 'GET',
@@ -394,8 +394,64 @@ document.addEventListener('DOMContentLoaded', () => {
                 return null;
             }
 
+            if (res.status === 503) {
+                // Temporary error (network, Firestore issue) - retry up to 3 times
+                if (retryCount < 3) {
+                    // Use shorter delay for first retry (Firestore consistency issue)
+                    const delay = retryCount === 0 ? 500 : 2000;
+                    console.warn(`Temporary error loading applicant (attempt ${retryCount + 1}/3). Retrying in ${delay}ms...`);
+                    showToast('Connection issue. Retrying...', 'info');
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return loadApplicant(retryCount + 1); // Retry with incremented count
+                } else {
+                    console.error('Failed to load applicant after 3 retries');
+                    showToast('Unable to load your data. Please refresh the page.');
+                    return null;
+                }
+            }
+
             if (res.status === 404) {
-                // Account not found or deleted
+                // Check if user is admin trying to access applicant page
+                try {
+                    const errorData = await res.json().catch(() => ({}));
+
+                    
+                    // Try to decode JWT to check role (basic check without importing jwt library)
+                    // Cookie format: JWT token in __session cookie
+                    const cookies = document.cookie.split(';');
+                    let isAdmin = false;
+                    
+                    for (let cookie of cookies) {
+                        const [name, value] = cookie.trim().split('=');
+                        if (name === '__session' && value) {
+                            try {
+                                // JWT format: header.payload.signature
+                                const parts = value.split('.');
+                                if (parts.length === 3) {
+                                    const payload = JSON.parse(atob(parts[1]));
+                                    if (payload.role === 'admin') {
+                                        isAdmin = true;
+                                        break;
+                                    }
+                                }
+                            } catch (e) {
+                                // Continue checking
+                            }
+                        }
+                    }
+                    
+                    if (isAdmin) {
+                        // Admin trying to access applicant page - redirect to admin portal
+                        console.log('[loadApplicant] Admin detected on applicant page, redirecting...');
+                        alert('⚠️ You are logged in as an administrator.\n\nRedirecting to Admin Portal...');
+                        window.location.href = '/adminportal/admin.html';
+                        return null;
+                    }
+                } catch (parseErr) {
+                    console.warn('[loadApplicant] Could not parse 404 response:', parseErr);
+                }
+                
+                // Account truly not found or deleted (for actual applicants)
                 alert('⚠️ Your account has been removed from our system.\n\nThis may be because:\n• Your application was archived\n• The 30-day period has expired\n\nYou may submit a new application if needed.');
                 logoutAndRedirect("../login/login.html");
                 return null;
@@ -485,9 +541,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---------- Load messages for current applicant ----------
     async function loadApplicantMessages() {
+        console.log(`[loadApplicantMessages] ========== FRONTEND: LOADING MESSAGES ==========`);
+        
         const id = applicantState.id || window.CURRENT_APPLICANT_ID || '';
+        console.log(`[loadApplicantMessages] Applicant ID from state: ${applicantState.id}`);
+        console.log(`[loadApplicantMessages] Window.CURRENT_APPLICANT_ID: ${window.CURRENT_APPLICANT_ID || 'N/A'}`);
+        console.log(`[loadApplicantMessages] Using ID: ${id}`);
+        
         if (!id) {
-            console.warn('loadApplicantMessages: no applicant id');
+            console.warn('[loadApplicantMessages] ⚠️ No applicant ID available - cannot load messages');
             return [];
         }
 
@@ -497,6 +559,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 credentials: 'include',
                 headers: { 'Accept': 'application/json' }
             });
+            
+
 
             // Helpful handling for index-required Firestore errors surfaced as 503/500 with details
             if (res.status === 503) {
@@ -522,17 +586,32 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const data = await res.json().catch(() => ({}));
+            console.log(`[loadApplicantMessages] Response data:`, data);
+            
             if (!data || !data.ok) {
+                console.warn('[loadApplicantMessages] ⚠️ Response not OK or missing data');
                 showToast('Failed to load messages.');
                 return [];
             }
 
             // assign messages to state and render
+            const messageCount = Array.isArray(data.messages) ? data.messages.length : 0;
+            console.log(`[loadApplicantMessages] ✅ Received ${messageCount} messages from API`);
+            
+            if (messageCount > 0) {
+                console.log(`[loadApplicantMessages] Message subjects:`, data.messages.map(m => m.subject || 'No subject'));
+            } else {
+                console.log(`[loadApplicantMessages] ⚠️ No messages in response`);
+            }
+            
             applicantState.messages = Array.isArray(data.messages) ? data.messages.slice() : [];
+            console.log(`[loadApplicantMessages] Updated applicantState.messages with ${applicantState.messages.length} items`);
+            console.log(`[loadApplicantMessages] Calling renderNotes()...`);
             renderNotes();
+            console.log(`[loadApplicantMessages] =================================================`);
             return applicantState.messages;
         } catch (err) {
-            console.error('loadApplicantMessages error', err);
+            console.error('[loadApplicantMessages] ❌ Error:', err);
             showToast('Network error while loading messages.');
             return [];
         }
@@ -699,6 +778,12 @@ document.addEventListener('DOMContentLoaded', () => {
         copy.forEach(function (m) {
             const div = document.createElement('div');
             div.className = 'message';
+            div.style.cursor = 'pointer';
+            
+            // Make message clickable to open modal
+            div.addEventListener('click', function() {
+                openViewMessageModal(m);
+            });
             
             // Determine sender display name
             let senderDisplay = 'You';
@@ -845,10 +930,176 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteNotification(notif.id);
             };
             
+            // Add click handler to open modal
+            content.style.cursor = 'pointer';
+            content.onclick = function () {
+                openNotificationModal(notif);
+            };
+            
             // Append to notification item
             div.appendChild(content);
             div.appendChild(deleteBtn);
             container.appendChild(div);
+        });
+    }
+
+    // Open notification detail modal
+    function openNotificationModal(notification) {
+        const overlay = document.getElementById('notificationModalOverlay');
+        const titleEl = document.getElementById('notificationModalTitle');
+        const senderEl = document.getElementById('notificationModalSender');
+        const messageEl = document.getElementById('notificationModalMessage');
+        const dateEl = document.getElementById('notificationModalDate');
+        
+        if (!overlay) return;
+        
+        // Populate modal content
+        if (titleEl) titleEl.textContent = notification.title || 'Notification';
+        if (senderEl) senderEl.textContent = 'From: AlpHFAbet Admin';
+        if (messageEl) messageEl.textContent = notification.message || '';
+        if (dateEl) dateEl.textContent = formatForDisplay(notification.createdAt || notification.timestamp);
+        
+        // Show modal
+        overlay.style.display = 'flex';
+        
+        // Set up close handlers
+        setupNotificationModalCloseHandlers();
+    }
+
+    // Close notification modal
+    function closeNotificationModal() {
+        const overlay = document.getElementById('notificationModalOverlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+    }
+
+    // Set up close handlers for notification modal
+    function setupNotificationModalCloseHandlers() {
+        const overlay = document.getElementById('notificationModalOverlay');
+        const closeBtn = document.getElementById('notificationModalClose');
+        
+        // Close button click
+        if (closeBtn) {
+            closeBtn.onclick = closeNotificationModal;
+        }
+        
+        // Click outside modal (on overlay)
+        if (overlay) {
+            overlay.onclick = function(e) {
+                if (e.target === overlay) {
+                    closeNotificationModal();
+                }
+            };
+        }
+        
+        // ESC key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeNotificationModal();
+            }
+        });
+    }
+
+    // ============================================
+    // VIEW MESSAGE DETAIL MODAL (Simple Design)
+    // ============================================
+    
+    // Open message detail modal
+    function openViewMessageModal(message) {
+        const overlay = document.getElementById('viewMessageModalOverlay');
+        const fromEl = document.getElementById('viewMessageModalFrom');
+        const subjectEl = document.getElementById('viewMessageModalSubject');
+        const bodyEl = document.getElementById('viewMessageModalBody');
+        const attachmentEl = document.getElementById('viewMessageModalAttachment');
+        const dateEl = document.getElementById('viewMessageModalDate');
+        
+        if (!overlay) return;
+        
+        // Determine sender display name
+        let senderDisplay = 'AlpHFAbet Admin';
+        if (message.senderRole === 'admin' || message.sender === 'admin' || (message.senderName && message.senderName.toLowerCase().includes('admin'))) {
+            senderDisplay = 'AlpHFAbet Admin';
+        } else if (message.senderName) {
+            senderDisplay = message.senderName;
+        }
+        
+        // Populate modal content
+        if (fromEl) {
+            fromEl.textContent = 'From: ' + senderDisplay;
+        }
+        
+        if (subjectEl) {
+            subjectEl.textContent = message.subject || '(No Subject)';
+        }
+        
+        if (bodyEl) {
+            bodyEl.textContent = message.body || message.message || '';
+        }
+        
+        // Handle attachment if present
+        if (attachmentEl) {
+            if (message.attachment && message.attachment.url) {
+                const att = message.attachment;
+                const fileSize = att.size ? ' (' + (att.size / 1024).toFixed(1) + ' KB)' : '';
+                
+                attachmentEl.innerHTML = '<strong>Attachment:</strong>' +
+                    '<a href="' + escapeHtml(att.url) + '" target="_blank" rel="noopener noreferrer">' +
+                    '<i class="fas fa-download"></i> ' + escapeHtml(att.filename || 'Download File') +
+                    '</a>' +
+                    '<span class="file-size">' + escapeHtml(fileSize) + '</span>';
+                
+                attachmentEl.classList.add('has-attachment');
+            } else {
+                attachmentEl.innerHTML = '';
+                attachmentEl.classList.remove('has-attachment');
+            }
+        }
+        
+        if (dateEl) {
+            const formattedDate = formatForDisplay(message.createdAt || message.timestamp || message.sentAt);
+            dateEl.textContent = formattedDate;
+        }
+        
+        // Show modal
+        overlay.style.display = 'flex';
+        
+        // Set up close handlers
+        setupViewMessageModalCloseHandlers();
+    }
+    
+    // Close message modal
+    function closeViewMessageModal() {
+        const overlay = document.getElementById('viewMessageModalOverlay');
+        if (overlay) {
+            overlay.style.display = 'none';
+        }
+    }
+    
+    // Setup message modal close handlers
+    function setupViewMessageModalCloseHandlers() {
+        const overlay = document.getElementById('viewMessageModalOverlay');
+        const closeBtn = document.getElementById('viewMessageModalClose');
+        
+        // Close button click
+        if (closeBtn) {
+            closeBtn.onclick = closeViewMessageModal;
+        }
+        
+        // Click outside modal (on overlay)
+        if (overlay) {
+            overlay.onclick = function(e) {
+                if (e.target === overlay) {
+                    closeViewMessageModal();
+                }
+            };
+        }
+        
+        // ESC key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeViewMessageModal();
+            }
         });
     }
 

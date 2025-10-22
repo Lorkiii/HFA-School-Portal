@@ -1647,26 +1647,51 @@ section:target {
 }
 .announcement-modal[aria-hidden="false"] { display:flex; }
 
+/* TASK 1: Scrollable & Responsive Posting Modal */
 #post-modal .announcement-modal-content {
   background: #fff;
-  padding: 32px 28px 24px 28px;
+  padding: 0; /* Remove padding - will be added to header/body/footer separately */
   border-radius: 16px;
-  width: 540px;
-  max-width: 98vw;
+  width: 600px;
+  max-width: 95vw;
+  max-height: 90vh; /* Limit height to viewport */
   box-sizing: border-box;
   box-shadow: 0 12px 40px rgba(30, 60, 90, 0.18), 0 2px 8px rgba(0,0,0,0.04);
   display: flex;
-  flex-direction: column;
-  gap: 18px;
+  flex-direction: column; /* Stack header, body, footer */
   position: fixed;
   left: 50%;
-  top: 8%;
-  transform: translate(-50%, 0);
+  top: 50%; /* Center vertically */
+  transform: translate(-50%, -50%); /* Center both axes */
   z-index: 120;
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   transition: box-shadow 0.18s, transform 0.18s;
   border: 1.5px solid #e5f3e9;
+  overflow: hidden; /* Hide overflow from modal itself */
 }
+
+/* Modal header - fixed at top */
+#post-modal .announcement-modal-content .modal-header {
+  padding: 24px 28px 16px 28px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0; /* Don't shrink */
+}
+
+/* Modal body - scrollable */
+#post-modal .announcement-modal-content .modal-body {
+  padding: 20px 28px;
+  overflow-y: auto; /* Enable scrolling */
+  flex: 1; /* Take remaining space */
+}
+
+/* Modal footer - fixed at bottom */
+#post-modal .announcement-modal-content .modal-footer {
+  padding: 16px 28px 24px 28px;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+  flex-shrink: 0; /* Don't shrink */
+}
+
 #post-modal .announcement-modal-content h3,
 #post-modal .announcement-modal-content .modal-title {
   font-size: 1.25rem;
@@ -1872,22 +1897,49 @@ button.post.posting::after {
   background:transparent; border:none; color:#fff; font-weight:700; margin-left:10px;
 }
 
-@media (max-width: 600px) {
+/* TASK 1: Responsive styles for scrollable posting modal */
+
+/* Tablet (481-768px) */
+@media (max-width: 768px) {
   #post-modal .announcement-modal-content {
-    width: 98vw;
-    padding: 16px 6vw 18px 6vw;
-    border-radius: 10px;
-    top: 2%;
-    gap: 12px;
+    width: 90vw;
+    max-width: 600px;
   }
-  #post-modal .announcement-modal-content .modal-actions {
-    flex-direction: column;
-    gap: 8px;
+  
+  /* Adjust padding for tablet */
+  #post-modal .announcement-modal-content .modal-header {
+    padding: 20px 24px 14px 24px;
+  }
+  
+  #post-modal .announcement-modal-content .modal-body {
+    padding: 18px 24px;
+  }
+  
+  #post-modal .announcement-modal-content .modal-footer {
+    padding: 14px 24px 20px 24px;
   }
 }
 
-/* Small phones - Stack radio buttons and optimize spacing */
+/* Mobile (max-width: 480px) */
 @media (max-width: 480px) {
+  #post-modal .announcement-modal-content {
+    width: 95vw;
+    max-height: 85vh; /* Leave more room for mobile keyboard */
+  }
+  
+  /* Tighter padding on mobile */
+  #post-modal .announcement-modal-content .modal-header {
+    padding: 16px 20px 12px 20px;
+  }
+  
+  #post-modal .announcement-modal-content .modal-body {
+    padding: 15px 20px;
+  }
+  
+  #post-modal .announcement-modal-content .modal-footer {
+    padding: 12px 20px 16px 20px;
+  }
+  
   /* Stack radio buttons vertically */
   .ann-type-selection {
     flex-direction: column;
@@ -1920,10 +1972,214 @@ button.post.posting::after {
     font-size: 0.85rem;
   }
   
-  /* Tighter modal padding on very small screens */
-  #post-modal .announcement-modal-content {
-    padding: 14px 5vw 16px 5vw;
+  /* Stack action buttons on mobile */
+  .announcement-modal-actions {
+    flex-direction: column;
     gap: 10px;
+  }
+  
+  .announcement-modal-actions button {
+    width: 100%; /* Full-width buttons on mobile */
+  }
+}
+
+/* TASK 2: View Modal Styles (Read-only modal) */
+
+/* View modal uses same structure as posting modal */
+#view-modal .announcement-modal-content {
+  background: #fff;
+  padding: 0;
+  border-radius: 16px;
+  width: 650px; /* Slightly wider for content display */
+  max-width: 95vw;
+  max-height: 90vh;
+  box-sizing: border-box;
+  box-shadow: 0 12px 40px rgba(30, 60, 90, 0.18), 0 2px 8px rgba(0,0,0,0.04);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 120;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  border: 1.5px solid #e5f3e9;
+  overflow: hidden;
+}
+
+/* View modal sections inherit header/body/footer styles from posting modal */
+#view-modal .modal-header {
+  padding: 24px 28px 16px 28px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+#view-modal .modal-body {
+  padding: 20px 28px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+#view-modal .modal-footer {
+  padding: 16px 28px 24px 28px;
+  border-top: 1px solid #e5e7eb;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+/* Badges container */
+.view-badges {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.view-type-badge,
+.view-category-badge {
+  padding: 6px 14px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+/* Type badges (announcement/news) */
+.view-type-badge.type-announcement {
+  background: #fff3e0;
+  color: #e65100;
+}
+
+.view-type-badge.type-news {
+  background: #e3f2fd;
+  color: #1565c0;
+}
+
+/* Category badges */
+.view-category-badge {
+  background: #f0f9f4;
+  color: #2e8b57;
+}
+
+/* Image container */
+.view-image-container {
+  margin-bottom: 20px;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.view-image-container img {
+  width: 100%;
+  height: auto;
+  max-height: 400px;
+  object-fit: cover;
+  display: block;
+}
+
+/* Content section */
+.view-content {
+  margin-bottom: 24px;
+}
+
+.view-content h4 {
+  font-size: 0.95rem;
+  color: #2e8b57;
+  margin: 0 0 12px 0;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.view-content p {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: #333;
+  margin: 0;
+  white-space: pre-wrap; /* Preserve line breaks */
+}
+
+/* Metadata section */
+.view-metadata {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.view-meta-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.view-meta-item i {
+  color: #2e8b57;
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.view-meta-item strong {
+  color: #2e8b57;
+  font-weight: 600;
+}
+
+/* Responsive View Modal - Tablet */
+@media (max-width: 768px) {
+  #view-modal .announcement-modal-content {
+    width: 90vw;
+  }
+  
+  #view-modal .modal-header {
+    padding: 20px 24px 14px 24px;
+  }
+  
+  #view-modal .modal-body {
+    padding: 18px 24px;
+  }
+  
+  #view-modal .modal-footer {
+    padding: 14px 24px 20px 24px;
+  }
+  
+  .view-image-container img {
+    max-height: 300px;
+  }
+}
+
+/* Responsive View Modal - Mobile */
+@media (max-width: 480px) {
+  #view-modal .announcement-modal-content {
+    width: 95vw;
+    max-height: 85vh;
+  }
+  
+  #view-modal .modal-header {
+    padding: 16px 20px 12px 20px;
+  }
+  
+  #view-modal .modal-body {
+    padding: 15px 20px;
+  }
+  
+  #view-modal .modal-footer {
+    padding: 12px 20px 16px 20px;
+  }
+  
+  .view-image-container img {
+    max-height: 200px;
+  }
+  
+  .view-content p {
+    font-size: 0.95rem;
+  }
+  
+  .view-meta-item {
+    font-size: 0.85rem;
   }
 }
 
@@ -4104,6 +4360,97 @@ button.post.posting::after {
   font-size: 0.8rem;
   color: #6b7280;
   margin-top: 0.5rem;
+}
+
+/* Attachment Upload Styling */
+.attachment-upload-area {
+  margin-top: 0.5rem;
+}
+
+.btn-upload-attachment {
+  padding: 0.6rem 1.2rem;
+  background: #f3f4f6;
+  border: 2px dashed #d1d5db;
+  border-radius: 8px;
+  color: #374151;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-upload-attachment:hover {
+  background: #e5e7eb;
+  border-color: #2e8b57;
+  color: #2e8b57;
+}
+
+.btn-upload-attachment i {
+  font-size: 1rem;
+}
+
+.attachment-preview {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 8px;
+}
+
+.attachment-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.attachment-info i {
+  color: #2e8b57;
+  font-size: 1.2rem;
+}
+
+.attachment-info span {
+  font-size: 0.9rem;
+  color: #374151;
+}
+
+#message-attachment-name {
+  font-weight: 600;
+}
+
+#message-attachment-size {
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.btn-remove-attachment {
+  padding: 0.4rem 0.6rem;
+  background: #fee2e2;
+  border: none;
+  border-radius: 6px;
+  color: #dc2626;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-remove-attachment:hover {
+  background: #fecaca;
+  transform: scale(1.05);
+}
+
+.attachment-hint {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+  font-style: italic;
 }
 
 #message-applicant-form .form-actions {
@@ -7291,3 +7638,183 @@ button:active {
     padding-top: 1rem;
   }
 }
+
+/* ========== Mail Section ========== */
+  #mail {
+    padding: 20px;
+    background: #f5f7fa;
+    min-height: calc(100vh - 80px);
+  }
+
+  /* Mail Tabs */
+  .mail-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    border-bottom: 2px solid #e5e7eb;
+  }
+
+  .mail-tab {
+    background: none;
+    border: none;
+    padding: 12px 20px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #6b7280;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+  }
+
+  .mail-tab:hover {
+    color: #2e8b57;
+  }
+
+  .mail-tab.active {
+    color: #2e8b57;
+    border-bottom-color: #2e8b57;
+  }
+
+  .mail-tab i {
+    margin-right: 6px;
+  }
+
+  /* Mail List */
+  .mail-list {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    overflow: hidden;
+  }
+
+  /* Mail Item */
+  .mail-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #f3f4f6;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .mail-item:hover {
+    background: #f9fafb;
+  }
+
+  .mail-item:last-child {
+    border-bottom: none;
+  }
+
+  .mail-item-content {
+    flex: 1;
+  }
+
+  .mail-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+
+  .mail-sender {
+    font-weight: 600;
+    color: #111827;
+    font-size: 14px;
+  }
+
+  .mail-date {
+    font-size: 12px;
+    color: #9ca3af;
+  }
+
+  .mail-subject {
+    font-size: 14px;
+    color: #374151;
+    font-weight: 500;
+    margin-bottom: 4px;
+  }
+
+  .mail-preview {
+    font-size: 13px;
+    color: #6b7280;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mail-item-actions {
+    display: flex;
+    gap: 8px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .mail-item:hover .mail-item-actions {
+    opacity: 1;
+  }
+
+  .btn-mail-archive {
+    background: none;
+    border: none;
+    padding: 8px 12px;
+    cursor: pointer;
+    color: #6b7280;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+
+  .btn-mail-archive:hover {
+    background: #f3f4f6;
+    color: #2e8b57;
+  }
+
+  /* Mail Empty State */
+  .mail-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: #9ca3af;
+  }
+
+  .mail-empty i {
+    font-size: 48px;
+    margin-bottom: 16px;
+    color: #d1d5db;
+  }
+
+  .mail-empty h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 8px;
+  }
+
+  .mail-empty p {
+    font-size: 14px;
+    color: #6b7280;
+  }
+
+  /* Compose Modal Styles - REMOVED */
+  /* Compose email functionality removed as part of Option 2 implementation */
+  /* Use Applicants → Message button to send messages to teacher applicants */
+
+  /* Mobile Responsive */
+  @media (max-width: 768px) {
+    .mail-item {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+    
+    .mail-item-header {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+    }
+    
+    .mail-item-actions {
+      opacity: 1;
+      align-self: flex-end;
+    }
+  }
