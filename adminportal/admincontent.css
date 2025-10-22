@@ -1528,10 +1528,9 @@ section:target {
   .records-table thead th:nth-child(2) { width: 34%; }
   .records-table thead th:nth-child(6) { width: 20%; }
   .records-table td { padding: 10px; }
-  #Student-management .search-box { max-width: 50%; }
 }
 @media (max-width: 700px) {
-  #Student-management .tracker-controls { flex-direction: column; align-items: stretch; gap: 8px; }
+  /* Student Management responsive rules moved to comprehensive breakpoints at lines 7841-7889 */
   .records-table { overflow-x: auto; }
 }
 .updates-feed {
@@ -7818,3 +7817,396 @@ button:active {
       align-self: flex-end;
     }
   }
+
+
+/* ============================================
+   STUDENT MANAGEMENT - TABLET/SMALL LAPTOP (700px-900px)
+   ============================================ */
+@media (max-width: 900px) and (min-width: 701px) {
+  /* Reduce padding slightly */
+  #Student-management {
+    padding: 25px;
+  }
+
+  /* Stats cards - stack at 2 columns max */
+  #Student-management .quick-stats,
+  #counts-row {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+  }
+}
+
+/* STUDENT MANAGEMENT - TABLET (577px-700px) */
+@media (max-width: 700px) and (min-width: 577px) {
+  /* Reduce padding for better space usage */
+  #Student-management {
+    padding: 20px;
+  }
+
+  /* Stats cards - stack vertically */
+  #Student-management .quick-stats,
+  #counts-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  #counts-row .stat-card {
+    padding: 15px;
+  }
+
+  /* Search controls - keep horizontal but adjust */
+  #Student-management .search-sort {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  #Student-management .search-box {
+    flex: 1 1 100%;
+    min-width: 100%;
+    max-width: 100%;
+  }
+
+  #Student-management .sort-select {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  /* View options adjust */
+  #Student-management .view-options {
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  /* Student modal - reduce width */
+  .hfa-stu-modal-content {
+    max-width: 95%;
+  }
+
+  .hfa-stu-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ============================================
+   STUDENT MANAGEMENT - MOBILE RESPONSIVE (576px and below)
+   Optimized for screens 525px-576px width
+   ============================================ */
+@media (max-width: 576px) {
+  /* Reduce section padding to maximize content space */
+  #Student-management {
+    padding: 15px;
+    border-radius: 0;
+  }
+
+  /* Section header - reduce spacing */
+  #Student-management .section-header {
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+  }
+
+  #Student-management .section-header h2 {
+    font-size: 1.25rem;
+  }
+
+  /* Tabs - enable horizontal scroll with better touch support */
+  .content-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .content-tabs::-webkit-scrollbar {
+    height: 3px;
+  }
+
+  .content-tabs::-webkit-scrollbar-track {
+    background: #f1f1f1;
+  }
+
+  .content-tabs::-webkit-scrollbar-thumb {
+    background: #2e8b57;
+    border-radius: 3px;
+  }
+
+  .tab-btn {
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  /* Stats cards - stack vertically */
+  #Student-management .quick-stats,
+  #counts-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  #counts-row .stat-card {
+    min-width: auto;
+    padding: 12px 15px;
+  }
+
+  #counts-row .stat-card h3 {
+    font-size: 0.9rem;
+  }
+
+  #counts-row .stat-card p {
+    font-size: 1.5rem;
+  }
+
+  /* Search and filter controls - stack vertically */
+  #Student-management .tracker-controls {
+    flex-direction: column;
+    gap: 10px;
+    margin: 10px 0 15px;
+  }
+
+  #Student-management .search-sort {
+    flex-direction: column;
+    width: 100%;
+    gap: 10px;
+    min-width: auto;
+  }
+
+  /* Search box - full width */
+  #Student-management .search-box {
+    width: 100%;
+    max-width: 100%;
+    padding: 10px 12px;
+  }
+
+  #Student-management .search-box input {
+    font-size: 0.9rem;
+  }
+
+  /* Sort selects - full width */
+  #Student-management .sort-select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 0.9rem;
+  }
+
+  /* View options - full width */
+  #Student-management .view-options {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  #Student-management .view-option {
+    flex: 1;
+    text-align: center;
+    padding: 10px 8px;
+    font-size: 0.85rem;
+  }
+
+  /* Table container - enable smooth horizontal scroll */
+  .records-table,
+  .applicant-table {
+    margin-top: 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Ensure table has minimum width for proper layout */
+  .records-table table {
+    min-width: 600px;
+    font-size: 0.85rem;
+  }
+
+  /* Reduce table cell padding */
+  .records-table thead th {
+    padding: 8px 6px;
+    font-size: 0.8rem;
+  }
+
+  .records-table tbody td {
+    padding: 8px 6px;
+    font-size: 0.85rem;
+  }
+
+  /* Action buttons - smaller on mobile */
+  .student-btn {
+    min-width: 30px;
+    height: 30px;
+    padding: 5px;
+    font-size: 0.8rem;
+  }
+
+  .student-actions {
+    display: flex;
+    gap: 4px;
+    justify-content: flex-start;
+  }
+
+  /* Enroll button text */
+  .student-btn.student-enroll {
+    font-size: 0.75rem;
+    padding: 5px 8px;
+  }
+
+  /* Pagination controls - already handled but ensure proper stacking */
+  .pagination-controls {
+    margin-top: 15px;
+    padding: 10px 0;
+  }
+
+  .pagination-info {
+    font-size: 0.85rem;
+  }
+
+  .pagination-count {
+    display: block;
+    margin-top: 4px;
+  }
+
+  /* Student modal adjustments */
+  .hfa-stu-modal-overlay {
+    padding: 0.5rem;
+  }
+
+  .hfa-stu-modal-content {
+    max-width: 100%;
+    border-radius: 8px;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .hfa-stu-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .hfa-stu-header h2 {
+    font-size: 1.1rem;
+  }
+
+  .hfa-stu-subtitle {
+    font-size: 0.85rem;
+  }
+
+  .hfa-stu-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .hfa-stu-actions button {
+    font-size: 0.85rem;
+    padding: 6px 10px;
+  }
+
+  .hfa-stu-body {
+    padding: 12px;
+  }
+
+  .hfa-stu-section-title {
+    font-size: 0.95rem;
+    margin-bottom: 10px;
+  }
+
+  .hfa-stu-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .hfa-stu-info-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .hfa-stu-info-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .hfa-stu-label {
+    font-size: 0.85rem;
+  }
+
+  .hfa-stu-value {
+    font-size: 0.9rem;
+  }
+
+  .hfa-stu-footer {
+    padding: 12px;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .hfa-stu-footer button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Extra small screens - 480px and below */
+@media (max-width: 480px) {
+  /* Further reduce padding */
+  #Student-management {
+    padding: 10px;
+  }
+
+  /* Smaller section header */
+  #Student-management .section-header h2 {
+    font-size: 1.1rem;
+  }
+
+  /* Smaller tabs */
+  .tab-btn {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  /* Even more compact stats cards */
+  #counts-row .stat-card {
+    padding: 10px 12px;
+  }
+
+  #counts-row .stat-card h3 {
+    font-size: 0.85rem;
+  }
+
+  #counts-row .stat-card p {
+    font-size: 1.3rem;
+  }
+
+  /* Smaller search box */
+  #Student-management .search-box {
+    padding: 8px 10px;
+  }
+
+  #Student-management .search-box input {
+    font-size: 0.85rem;
+  }
+
+  /* Smaller table text */
+  .records-table thead th {
+    padding: 6px 4px;
+    font-size: 0.75rem;
+  }
+
+  .records-table tbody td {
+    padding: 6px 4px;
+    font-size: 0.8rem;
+  }
+
+  /* Smaller action buttons */
+  .student-btn {
+    min-width: 28px;
+    height: 28px;
+    padding: 4px;
+  }
+
+  .student-btn.student-enroll {
+    font-size: 0.7rem;
+    padding: 4px 6px;
+  }
+}

@@ -73,9 +73,20 @@ function revokeToken(token) {
 }
 
 // --- LOAD FIREBASE SERVICE ACCOUNT (server-side only) ---
-const serviceAccount = JSON.parse(
-  fs.readFileSync(new URL('./serviceAccountKey.json', import.meta.url), 'utf8')
-);
+// Support both file-based (local) and base64-encoded (Render/cloud) credentials
+let serviceAccount;
+if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+  // For Render/cloud deployment: decode from base64 environment variable
+  const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf8');
+  serviceAccount = JSON.parse(decoded);
+  console.log('✅ Firebase credentials loaded from environment variable (base64)');
+} else {
+  // For local development: read from file
+  serviceAccount = JSON.parse(
+    fs.readFileSync(new URL('./serviceAccountKey.json', import.meta.url), 'utf8')
+  );
+  console.log('✅ Firebase credentials loaded from serviceAccountKey.json file');
+}
 
 // --- EXPRESS APP SETUP ---
 const app = express();
@@ -83,6 +94,7 @@ const app = express();
 // Enable CORS for development origins — update as necessary for production
 app.use(
   cors({
+    
     origin: ["http://127.0.0.1:5500", "http://localhost:3000", "http://localhost:5500"],
     credentials: true,
   })
