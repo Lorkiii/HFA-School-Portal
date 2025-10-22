@@ -132,11 +132,19 @@ if (!SMTP_USER || !SMTP_PASS) {
 
 // create transporter (nodemailer)
 const mailTransporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false, // use STARTTLS
   auth: {
     user: SMTP_USER,
     pass: SMTP_PASS,
   },
+  tls: {
+    rejectUnauthorized: false // Allow self-signed certificates (Railway compatibility)
+  },
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000,
+  socketTimeout: 10000
 });
 
 // Helper to generate 6-digit OTP
@@ -1306,6 +1314,17 @@ cron.schedule('0 2 * * *', async () => {
 });
 
 console.log('✅ Cron job scheduled: Archived messages auto-deletion (daily at 2:00 AM, 60+ days old)');
+
+// --- TEST SMTP ENDPOINT (for debugging) ---
+app.get('/test-smtp', async (req, res) => {
+  try {
+    await mailTransporter.verify();
+    res.json({ success: true, message: 'SMTP connection successful' });
+  } catch (error) {
+    console.error('SMTP test failed:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // --- START SERVER ---
 const PORT = process.env.PORT || 3000;

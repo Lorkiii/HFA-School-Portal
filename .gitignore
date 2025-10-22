@@ -61,3 +61,4 @@ node_modules/
 # dataconnect generated files
 .dataconnect
 serviceAccountKey.json
+firebase-base64.txt
