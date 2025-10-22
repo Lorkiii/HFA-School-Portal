@@ -26,7 +26,6 @@
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.5",
     "pdfjs-dist": "^5.4.54",
-    "resend": "^4.0.1",
     "sharp": "^0.34.4",
     "tesseract.js": "^6.0.1"
   },
