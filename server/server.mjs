@@ -36,6 +36,7 @@ import createAnnouncementsRouter from "./routes/announcements.js";
 import createTeacherMessagesRouter from "./routes/teacher-messages.js";
 import createTeacherNotificationsRouter from "./routes/teacher-notifications.js";
 import createTeacherDecisionRouter from "./routes/teacher-decision.js";
+import createDemoScheduleRouter from "./routes/demo-schedule.js";
 import createAdminMailRouter from "./routes/admin-mail.js";
 
 import { deleteExpiredAccounts } from "./utils/teacherDecision.js";
@@ -1226,6 +1227,14 @@ app.use("/api/teacher-applicants", createTeacherDecisionRouter({
   mailTransporter, 
   requireAdmin,
   writeActivityLog 
+}));
+
+// Demo Teaching Schedule Routes
+app.use("/api/teacher-applicants", createDemoScheduleRouter({
+  db,
+  mailTransporter,
+  requireAdmin,
+  writeActivityLog
 }));
 
 // Admin Mail Routes - handles admin inbox, sent messages, and compose functionality

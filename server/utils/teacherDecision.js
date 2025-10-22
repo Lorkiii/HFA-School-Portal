@@ -38,13 +38,39 @@ export async function processFinalDecision({ applicantId, applicantData, decisio
       updatedAt: now
     };
 
-    // If approved, set status to archived
+    // If approved, set status to onboarding (not archived yet)
     if (decision === 'approved') {
-      updateData.status = 'archived';
+      updateData.status = 'onboarding';
+      updateData.archived = false; // Keep visible until onboarding complete
+    } else {
+      updateData.status = 'rejected';
     }
 
     // Update Firestore
     await db.collection('teacherApplicants').doc(applicantId).update(updateData);
+
+    // Create notification for applicant
+    const notificationMessage = decision === 'approved' 
+      ? 'Congratulations! Your teaching application has been approved. Welcome to Holy Family Academy! Our HR team will contact you soon for the onboarding process.'
+      : 'Thank you for your interest in Holy Family Academy. After careful review, we have decided not to proceed with your application at this time. We appreciate the time you invested in the application process.';
+
+    try {
+      await db.collection('applicant_notifications').add({
+        applicantId: applicantId,
+        applicantEmail: applicantData.email,
+        title: decision === 'approved' ? 'Application Approved!' : 'Application Status Update',
+        message: notificationMessage,
+        type: 'progress',
+        category: 'decision',
+        read: false,
+        createdAt: now,
+        fromAdmin: true
+      });
+      console.log(`✅ Notification created for ${decision} decision`);
+    } catch (notifError) {
+      console.error('Failed to create notification:', notifError);
+      // Don't throw - continue even if notification fails
+    }
 
     // Send email
     const emailSent = await sendDecisionEmail({

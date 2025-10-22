@@ -1014,18 +1014,37 @@ async function handleFinalDecision(decision) {
     });
 
     if (response.ok) {
-      // Update local data
+      // Update local data with correct status flow
       const applicant = allApplicants.find((x) => x.id === selectedApplicantId);
       if (applicant) {
         applicant.finalDecision = decision;
-        applicant.status = decision === 'approved' ? 'archived' : applicant.status;
+        // Update status: approved → onboarding, rejected → rejected
+        if (decision === 'approved') {
+          applicant.status = 'onboarding';
+          applicant.archived = false; // Not archived yet, still in onboarding
+        } else {
+          applicant.status = 'rejected';
+        }
+      }
+
+      // Send progress notification for the decision
+      try {
+        const notifStep = decision === 'approved' ? 'approved' : 'rejected';
+        await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/notify-progress`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ step: notifStep })
+        });
+        console.log(`[admin] Decision notification sent: ${notifStep}`);
+      } catch (notifErr) {
+        console.warn('[admin] Failed to send progress notification:', notifErr);
       }
 
       // Show success message
       if (decision === "approved") {
-        showApproveToast("✅ Applicant approved! Email sent & account archived.");
+        showApproveToast("✅ Applicant approved! Moving to onboarding phase. Email & notification sent.");
       } else {
-        showRejectToast("❌ Applicant rejected. Email sent & deletion scheduled.");
+        showRejectToast("❌ Applicant rejected. Email sent & account marked for deletion in 30 days.");
       }
 
       // Close modal and refresh
@@ -1042,16 +1061,17 @@ async function handleFinalDecision(decision) {
     console.error("[admin] handleFinalDecision error:", err);
     showErrorToast("Failed to process decision: " + (err.message || "Unknown error"));
     
-    // Reset buttons
+    // Restore buttons to original state after error
     const approveBtn = document.getElementById("hfa-progress-approve-btn");
     const rejectBtn = document.getElementById("hfa-progress-reject-btn");
+    
     if (approveBtn) {
       approveBtn.disabled = false;
-      approveBtn.textContent = "Approve";
+      approveBtn.textContent = originalApproveText || "Approve";
     }
     if (rejectBtn) {
       rejectBtn.disabled = false;
-      rejectBtn.textContent = "Reject";
+      rejectBtn.textContent = originalRejectText || "Reject";
     }
   }
 }
@@ -1508,26 +1528,79 @@ function timeToMinutes(timeStr) {
   return hours * 60 + minutes;
 }
 
-// Schedule interview (client calls server endpoint first; fallback to client update)
-async function openScheduleModal() {
+// Schedule interview or demo teaching - reuse same modal with dynamic content
+async function openScheduleModal(type = 'interview') {
   const modal = document.getElementById("schedule-interview-modal");
-  if (modal) modal.style.display = "flex";
+  if (!modal) return;
+  
+  // Store the type for save function
+  modal.dataset.scheduleType = type;
+  
+  // Update modal title based on type
+  const title = modal.querySelector('h3');
+  if (title) {
+    if (type === 'demo' || type === 'demo-reschedule') {
+      title.textContent = 'Schedule Demo Teaching';
+    } else {
+      title.textContent = 'Schedule Interview';
+    }
+  }
+  
+  // Show modal
+  modal.style.display = "flex";
+  
+  // Load existing data if available
   const a = allApplicants.find((x) => x.id === selectedApplicantId);
   if (!a) return;
-  if (a.interview) {
-    document.getElementById("interview-input-date") && (document.getElementById("interview-input-date").value = a.interview.date || "");
-    document.getElementById("interview-input-time") && (document.getElementById("interview-input-time").value = a.interview.time || "");
-    document.getElementById("interview-input-mode") && (document.getElementById("interview-input-mode").value = a.interview.mode || "");
-    document.getElementById("interview-input-location") && (document.getElementById("interview-input-location").value = a.interview.location || "");
-    document.getElementById("interview-input-notes") && (document.getElementById("interview-input-notes").value = a.interview.notes || "");
+  
+  // Clear fields first - use correct field IDs from HTML modal
+  const dateField = document.getElementById("interview-input-date");
+  const timeField = document.getElementById("interview-input-time");
+  const locationField = document.getElementById("interview-input-location");
+  const modeField = document.getElementById("interview-input-mode");
+  const notesField = document.getElementById("interview-input-notes");
+  
+  // Reset all fields safely with null checks
+  if (dateField) dateField.value = "";
+  if (timeField) timeField.value = "";
+  if (locationField) locationField.value = "";
+  if (modeField) modeField.value = "";
+  if (notesField) notesField.value = "";
+  
+  // Load data based on type (demo or interview)
+  if (type === 'demo' || type === 'demo-reschedule') {
+    // Load demo teaching data if exists
+    if (a.demoTeaching) {
+      if (dateField) dateField.value = a.demoTeaching.date || "";
+      if (timeField) timeField.value = a.demoTeaching.time || "";
+      if (locationField) locationField.value = a.demoTeaching.location || "";
+      if (modeField) modeField.value = a.demoTeaching.mode || "In-Person";
+      if (notesField) notesField.value = a.demoTeaching.notes || "";
+    }
+  } else {
+    // Load interview data if exists
+    if (a.interview) {
+      if (dateField) dateField.value = a.interview.date || "";
+      if (timeField) timeField.value = a.interview.time || "";
+      if (locationField) locationField.value = a.interview.location || "";
+      if (modeField) modeField.value = a.interview.mode || "In-Person";
+      if (notesField) notesField.value = a.interview.notes || "";
+    }
   }
 }
 
 async function handleScheduleInterview(e) {
   e.preventDefault();
   if (!selectedApplicantId) return;
- const dateVal = (document.getElementById("interview-input-date")?.value || "").trim(); // expected YYYY-MM-DD
-const timeVal = (document.getElementById("interview-input-time")?.value || "").trim(); // expected HH:MM (24h) or "HH:MM AM/PM"
+  
+  // Check if this is for demo or interview
+  const modal = document.getElementById("schedule-interview-modal");
+  const scheduleType = modal?.dataset?.scheduleType || 'interview';
+  const isDemo = scheduleType === 'demo' || scheduleType === 'demo-reschedule';
+  
+  // Get values using correct field IDs from modal
+  const dateVal = (document.getElementById("interview-input-date")?.value || "").trim(); // expected YYYY-MM-DD
+  const timeVal = (document.getElementById("interview-input-time")?.value || "").trim(); // expected HH:MM (24h)
 let datetimeISO = "";
 
 // Try best-effort parse to ISO
@@ -1550,19 +1623,35 @@ if (dateVal) {
   }
 }
 
-const interviewData = {
+// Prepare schedule data (works for both interview and demo)
+const scheduleData = {
   date: dateVal,
   time: timeVal,
-  mode: document.getElementById("interview-input-mode")?.value || "",
-  location: document.getElementById("interview-input-location")?.value || "",
-  notes: document.getElementById("interview-input-notes")?.value || "",
+  mode: document.getElementById("interview-input-mode")?.value || "In-Person",  // Fixed field ID
+  location: document.getElementById("interview-input-location")?.value || "",    // Fixed field ID
+  notes: document.getElementById("interview-input-notes")?.value || "",         // Fixed field ID
   datetimeISO: datetimeISO, // server requires this
   scheduledAt: serverTimestamp(),
   scheduledBy: "admin",
 };
 
-if (!interviewData.datetimeISO) {
-  showErrorToast("Please provide a valid date and time for the interview.");
+// Add subject field for demo teaching (can use notes field content)
+if (isDemo) {
+  scheduleData.subject = document.getElementById("interview-input-notes")?.value || ""; // Use notes for subject
+}
+
+// Validate date is in the future
+const selectedDate = new Date(dateVal);
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+if (selectedDate < today) {
+  showErrorToast(`${isDemo ? 'Demo teaching' : 'Interview'} date must be in the future`);
+  return;
+}
+
+if (!scheduleData.datetimeISO) {
+  showErrorToast(`Please provide a valid date and time for the ${isDemo ? 'demo teaching' : 'interview'}.`);
   return;
 }
 
@@ -1573,13 +1662,54 @@ if (!availability.valid) {
   return;
 }
 
-  // Try server-side authoritative endpoint
+  // Handle Demo Teaching scheduling separately
+  if (isDemo) {
+    try {
+      const endpoint = scheduleType === 'demo-reschedule' 
+        ? `/api/teacher-applicants/${selectedApplicantId}/reschedule-demo`
+        : `/api/teacher-applicants/${selectedApplicantId}/schedule-demo`;
+      
+      const response = await apiFetch(endpoint, {
+        method: scheduleType === 'demo-reschedule' ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(scheduleData)
+      });
+      
+      if (response.ok) {
+        // Update local state
+        const a = allApplicants.find((x) => x.id === selectedApplicantId);
+        if (a) {
+          a.demoTeaching = scheduleData;
+          a.status = 'demo_scheduled';
+        }
+        
+        showScheduleToast(`Demo teaching ${scheduleType === 'demo-reschedule' ? 'rescheduled' : 'scheduled'} successfully`);
+        closeScheduleModal();
+        
+        // Refresh progress modal if open
+        if (document.getElementById("hfa-progress-modal")?.style.display === "flex") {
+          renderProgressSteps(a);
+        }
+        
+        filterAndRenderApplicants();
+        updateStatsOverview();
+      } else {
+        throw new Error(response.error || 'Failed to schedule demo teaching');
+      }
+    } catch (err) {
+      console.error('[admin] Demo scheduling error:', err);
+      showErrorToast('Failed to schedule demo teaching: ' + err.message);
+    }
+    return; // Exit here for demo scheduling
+  }
+  
+  // Original interview scheduling code continues here
   try {
     const res = await fetch("/api/scheduleInterview", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ applicantId: selectedApplicantId, interview: interviewData }),
+      body: JSON.stringify({ applicantId: selectedApplicantId, interview: scheduleData }),
     });
 
     if (res.status === 200 || res.status === 201) {
@@ -1704,6 +1834,146 @@ function closeScheduleModal() {
   if (form) form.reset();
 }
 
+// Mark interview as completed and move to next step
+async function markInterviewCompleted() {
+  if (!selectedApplicantId) return;
+  
+  try {
+    // Update status to interview_completed
+    await updateDoc(doc(db, "teacherApplicants", selectedApplicantId), {
+      'interview.completed': true,
+      'interview.completedAt': serverTimestamp(),
+      status: 'interview_completed',
+      statusUpdatedAt: serverTimestamp(),
+      statusUpdatedBy: 'admin'
+    });
+    
+    // Update local state
+    const a = allApplicants.find((x) => x.id === selectedApplicantId);
+    if (a) {
+      a.status = 'interview_completed';
+      if (a.interview) a.interview.completed = true;
+    }
+    
+    // Send notification
+    try {
+      await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/notify-progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step: 'interview_completed' })
+      });
+    } catch (notifErr) {
+      console.warn('[admin] Failed to send notification:', notifErr);
+    }
+    
+    showToast('Interview marked as completed');
+    renderProgressSteps(a); // Refresh progress view
+    filterAndRenderApplicants();
+    
+  } catch (err) {
+    console.error('[admin] Error marking interview completed:', err);
+    showErrorToast('Failed to update interview status');
+  }
+}
+
+// Mark demo teaching as completed and move to decision step
+async function markDemoCompleted() {
+  if (!selectedApplicantId) return;
+  
+  try {
+    // Call API endpoint
+    const response = await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/complete-demo`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (response.ok) {
+      // Update local state
+      const a = allApplicants.find((x) => x.id === selectedApplicantId);
+      if (a) {
+        a.status = 'demo_completed';
+        if (a.demoTeaching) a.demoTeaching.completed = true;
+      }
+      
+      // Send notification
+      try {
+        await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/notify-progress`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ step: 'demo_completed' })
+        });
+      } catch (notifErr) {
+        console.warn('[admin] Failed to send notification:', notifErr);
+      }
+      
+      showToast('Demo teaching marked as completed');
+      renderProgressSteps(a); // Refresh progress view
+      filterAndRenderApplicants();
+    }
+    
+  } catch (err) {
+    console.error('[admin] Error marking demo completed:', err);
+    showErrorToast('Failed to update demo status');
+  }
+}
+
+// Complete onboarding and archive account
+async function completeOnboarding() {
+  if (!selectedApplicantId) return;
+  
+  if (!confirm('Complete onboarding?\n\nThis will:\n• Mark onboarding as complete\n• Archive the applicant account\n• Send welcome notification')) {
+    return;
+  }
+  
+  try {
+    // Update status to archived
+    await updateDoc(doc(db, "teacherApplicants", selectedApplicantId), {
+      status: 'archived',
+      archived: true,
+      archivedAt: serverTimestamp(),
+      archivedBy: 'admin',
+      onboardingCompletedAt: serverTimestamp()
+    });
+    
+    // Update local state
+    const a = allApplicants.find((x) => x.id === selectedApplicantId);
+    if (a) {
+      a.status = 'archived';
+      a.archived = true;
+    }
+    
+    // Send welcome notification
+    try {
+      await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/notify-progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ step: 'archived' })
+      });
+    } catch (notifErr) {
+      console.warn('[admin] Failed to send notification:', notifErr);
+    }
+    
+    showApproveToast('🎉 Onboarding complete! Welcome to Holy Family Academy!');
+    
+    // Close modals and refresh
+    setTimeout(() => {
+      closeProgressModal();
+      filterAndRenderApplicants();
+      updateStatsOverview();
+    }, 1500);
+    
+  } catch (err) {
+    console.error('[admin] Error completing onboarding:', err);
+    showErrorToast('Failed to complete onboarding');
+  }
+}
+
+// Make functions globally accessible
+window.markInterviewCompleted = markInterviewCompleted;
+window.markDemoCompleted = markDemoCompleted;
+window.completeOnboarding = completeOnboarding;
+window.openScheduleModal = openScheduleModal;
+
 // -------------------- Progress modal implementation --------------------
 function openProgressModal(id) {
   if (id) selectedApplicantId = id;
@@ -1750,20 +2020,26 @@ function renderProgressSteps(applicant) {
   if (!container) return;
   container.innerHTML = "";
 
-  // PHASE 2: Unified 6-step progress aligned with teacher portal
+  // Updated progress steps with interview and demo completion states
   const order = [
-    { key: "submitted", label: "Application Submitted", desc: "Your application documents have been received." },
+    { key: "submitted", label: "Application Submitted", desc: "Application documents have been received." },
     { key: "screening", label: "Initial Screening", desc: "Qualifications are being reviewed." },
-    { key: "interview_scheduled", label: "Interview Scheduled", desc: "Interview will be scheduled." },
-    { key: "demo", label: "Demo Teaching", desc: "Demo teaching (if applicable)." },
-    { key: "result", label: "Pass or Fail", desc: "Evaluation results after demo teaching." },
-    { key: "onboarding", label: "Onboarding", desc: "Final onboarding process and document upload." }
+    { key: "interview_scheduled", label: "Interview Scheduled", desc: "Interview has been scheduled." },
+    { key: "interview_completed", label: "Interview Completed", desc: "Interview successfully completed." },
+    { key: "demo_scheduled", label: "Demo Teaching Scheduled", desc: "Demo teaching session scheduled." },
+    { key: "demo_completed", label: "Demo Teaching Completed", desc: "Demo teaching successfully completed." },
+    { key: "result", label: "Pass or Fail", desc: "Final evaluation and decision." },
+    { key: "onboarding", label: "Onboarding", desc: "Onboarding process and document submission." },
+    { key: "archived", label: "Onboarding Complete", desc: "Welcome to Holy Family Academy!" }
   ];
 
   // Backward compatibility: map old status names to new ones
   let currentStatus = applicant.status || "submitted";
   if (currentStatus === "reviewing") currentStatus = "screening";
   if (currentStatus === "decision") currentStatus = "result";
+  if (currentStatus === "approved") currentStatus = "result"; // Show at Pass/Fail stage
+  if (currentStatus === "rejected") currentStatus = "result"; // Show at Pass/Fail stage
+  if (currentStatus === "demo") currentStatus = "demo_scheduled"; // Map old demo to demo_scheduled
   
   let curIndex = order.findIndex((s) => s.key === currentStatus);
   if (curIndex === -1) curIndex = 0;
@@ -1802,21 +2078,74 @@ function renderProgressSteps(applicant) {
     desc.textContent = step.desc;
 
     item.appendChild(main);
-    // PHASE 2: Show Approve/Reject when step is "result" (Pass or Fail)
+    
+    // Add action buttons based on step and status
+    if (step.key === "interview_scheduled" && applicant.interview && currentStatus === "interview_scheduled") {
+      // Add button to mark interview as completed
+      const completeBtn = document.createElement("button");
+      completeBtn.className = "btn btn-sm btn-primary";
+      completeBtn.textContent = "Mark Interview Completed";
+      completeBtn.style.marginTop = "8px";
+      completeBtn.style.marginLeft = "26px";
+      completeBtn.onclick = () => markInterviewCompleted();
+      item.appendChild(completeBtn);
+    }
+    
+    if (step.key === "interview_completed" && currentStatus === "interview_completed") {
+      // Add button to schedule demo teaching
+      const scheduleBtn = document.createElement("button");
+      scheduleBtn.className = "btn btn-sm btn-success";
+      scheduleBtn.textContent = "Schedule Demo Teaching";
+      scheduleBtn.style.marginTop = "8px";
+      scheduleBtn.style.marginLeft = "26px";
+      scheduleBtn.onclick = () => openScheduleModal('demo');
+      item.appendChild(scheduleBtn);
+    }
+    
+    if (step.key === "demo_scheduled" && applicant.demoTeaching && currentStatus === "demo_scheduled") {
+      // Show demo details and mark completed button
+      const demoInfo = document.createElement("div");
+      demoInfo.style.marginLeft = "26px";
+      demoInfo.style.marginTop = "8px";
+      demoInfo.innerHTML = `
+        <small>Date: ${applicant.demoTeaching.date} at ${applicant.demoTeaching.time}</small><br>
+        <button class="btn btn-sm btn-primary" onclick="markDemoCompleted()" style="margin-top:4px;">Mark Demo Completed</button>
+        <button class="btn btn-sm btn-warning" onclick="openScheduleModal('demo-reschedule')" style="margin-top:4px;">Reschedule</button>
+      `;
+      item.appendChild(demoInfo);
+    }
+    
     if (step.key === "result") {
-      // static decision area already exists; we won't duplicate buttons here.
-      // simply append a small notice and then show the static #hfa-progress-decision when appropriate
-      const decisionNotice = document.createElement("div");
-      decisionNotice.className = "hfa-progress-decision-notice";
-      decisionNotice.textContent = "Use the decision controls below to Approve or Reject.";
-      item.appendChild(decisionNotice);
-
-      // show static decision container if applicant is at/after result step
+      // Show decision controls only if not in onboarding
+      if (applicant.status !== "onboarding" && applicant.status !== "archived") {
+        const decisionNotice = document.createElement("div");
+        decisionNotice.className = "hfa-progress-decision-notice";
+        decisionNotice.textContent = "Use the decision controls below to Approve or Reject.";
+        item.appendChild(decisionNotice);
+      }
+      
+      // Hide/show decision container based on status
       const decisionBlock = document.getElementById("hfa-progress-decision");
       if (decisionBlock) {
-        if (i <= curIndex) decisionBlock.style.display = "block";
-        else decisionBlock.style.display = "none";
+        if (applicant.status === "onboarding" || applicant.status === "archived") {
+          decisionBlock.style.display = "none"; // Hide during onboarding
+        } else if (i <= curIndex) {
+          decisionBlock.style.display = "block";
+        } else {
+          decisionBlock.style.display = "none";
+        }
       }
+    }
+    
+    if (step.key === "onboarding" && currentStatus === "onboarding") {
+      // Add button to complete onboarding
+      const completeBtn = document.createElement("button");
+      completeBtn.className = "btn btn-sm btn-success";
+      completeBtn.textContent = "Complete Onboarding";
+      completeBtn.style.marginTop = "8px";
+      completeBtn.style.marginLeft = "26px";
+      completeBtn.onclick = () => completeOnboarding();
+      item.appendChild(completeBtn);
     }
 
     item.appendChild(desc);
@@ -1827,6 +2156,24 @@ function renderProgressSteps(applicant) {
   // ensure interview actions visibility correct
   const openInterviewBtn = document.getElementById("hfa-progress-open-interview-btn");
   if (openInterviewBtn) openInterviewBtn.style.display = "inline-block";
+  
+  // Add event delegation for checkboxes (they're dynamically created)
+  const stepsContainer = document.getElementById("hfa-progress-steps");
+  if (stepsContainer && !stepsContainer.hasAttribute("data-listener-attached")) {
+    stepsContainer.setAttribute("data-listener-attached", "true");
+    stepsContainer.addEventListener("change", async (e) => {
+      if (e.target.classList.contains("hfa-progress-step-checkbox")) {
+        const stepIndex = parseInt(e.target.dataset.stepIndex);
+        const stepKey = e.target.dataset.stepKey;
+        const isChecked = e.target.checked;
+        
+        if (isChecked) {
+          console.log(`[admin] Step ${stepKey} checked, updating progress...`);
+          await handleProgressSave(e);
+        }
+      }
+    });
+  }
 }
 
 // Save progress checks and update

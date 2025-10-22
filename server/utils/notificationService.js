@@ -21,6 +21,18 @@ const PROGRESS_MESSAGES = {
     title: 'Interview Scheduled',
     message: 'Your interview has been scheduled. Please check your application portal for date and time details.'
   },
+  interview_completed: {
+    title: 'Interview Completed',
+    message: 'Your interview has been successfully completed. We will proceed to the next step of your application.'
+  },
+  demo_scheduled: {
+    title: 'Demo Teaching Scheduled',
+    message: 'Your demo teaching session has been scheduled. Please check the details and prepare your lesson.'
+  },
+  demo_completed: {
+    title: 'Demo Teaching Completed',
+    message: 'Your demo teaching has been successfully completed. We will evaluate your performance and notify you of the results.'
+  },
   demo: {
     title: 'Demo Teaching Session',
     message: 'Demo teaching session has been scheduled. Prepare to showcase your teaching skills.'
@@ -31,15 +43,19 @@ const PROGRESS_MESSAGES = {
   },
   onboarding: {
     title: 'Welcome to Onboarding',
-    message: 'Congratulations! Your onboarding process has begun. We look forward to having you on our team.'
+    message: 'Congratulations! Your onboarding process has begun. Admin will contact you soon with the next steps. Please prepare your documents for submission.'
   },
   approved: {
-    title: 'Application Approved',
-    message: 'Congratulations! Your application has been approved. Welcome to Holy Family Academy!'
+    title: 'Application Approved! 🎉',
+    message: 'Congratulations! Your teaching application has been approved. Welcome to Holy Family Academy! You will now proceed to the onboarding phase. Admin will contact you within 2-3 business days.'
   },
   rejected: {
     title: 'Application Status Update',
-    message: 'Thank you for your interest in Holy Family Academy. We appreciate the time you invested in the application process.'
+    message: 'Thank you for your interest in Holy Family Academy. After careful review, we have decided not to proceed with your application at this time. We appreciate the time and effort you invested in the application process and wish you the best in your future endeavors.'
+  },
+  archived: {
+    title: 'Welcome to Holy Family Academy! 🎊',
+    message: 'Congratulations! Your onboarding is complete and you are now officially part of our teaching staff. Welcome to the Holy Family Academy family! We look forward to working with you.'
   }
 };
 

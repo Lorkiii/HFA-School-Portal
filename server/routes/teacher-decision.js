@@ -14,12 +14,13 @@ export default function createTeacherDecisionRouter({ db, mailTransporter, requi
 
   async function handleFinalDecision(req, res) {
     try {
-      // Extract applicant ID from path
+      // Extract applicant ID from relative path pattern: /:id/final-decision
+      // Since route is mounted at /api/teacher-applicants, req.path is relative
       const pathParts = req.path.split('/');
-      const idIndex = pathParts.indexOf('teacher-applicants') + 1;
-      const id = pathParts[idIndex];
+      const id = pathParts[1]; // ID is at index 1 in pattern "/:id/final-decision"
 
-      if (!id) {
+      if (!id || id === 'final-decision') {
+        console.error('[teacher-decision] Failed to extract ID from path:', req.path);
         return res.status(400).json({ ok: false, error: 'Applicant ID is required' });
       }
 

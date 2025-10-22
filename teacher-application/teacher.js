@@ -347,10 +347,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         renderAttachments();
                         renderNotes();
                         renderNotifications();
-                        updateTimeline(applicantState.status);
+                        updateTimeline(applicantState.status, applicantState.interview, applicantState.demoTeaching);
                         updateAttachmentsUploadVisibility();
                         populateApplicationStatus(applicantState);
-                        updateApplicationStatusTimeline(applicantState.status, applicantState.interview);
+                        updateApplicationStatusTimeline(applicantState.status, applicantState.interview, applicantState.demoTeaching);
                     } catch (uiErr) {
                         console.warn('Realtime UI update error', uiErr);
                     }
@@ -943,6 +943,91 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Update timeline 'completed' classes based on status
+    function updateTimeline(statusKey, interview, demoTeaching) {
+        // Simple mapping for main timeline
+        const mapping = {
+            submitted: 0,
+            reviewing: 1,
+            screening: 1,
+            interview_scheduled: 2,
+            interview_confirmed: 2,
+            interview_completed: 2,
+            demo_scheduled: 3,
+            demo_completed: 3,
+            demo: 3,
+            result: 4,
+            decision: 4,
+            approved: 4,
+            rejected: 4,
+            onboarding: 5,
+            archived: 5,
+            hired: 5
+        };
+        const currentIdx = (mapping.hasOwnProperty(statusKey) ? mapping[statusKey] : 0);
+
+        const items = document.querySelectorAll('#status-timeline .timeline-item');
+        for (let i = 0; i < items.length; i++) {
+            // Remove all status classes first
+            items[i].classList.remove('completed', 'current', 'pending');
+            
+            // Apply appropriate status class
+            if (i < currentIdx) {
+                items[i].classList.add('completed');
+            } else if (i === currentIdx) {
+                items[i].classList.add('current');
+            } else {
+                items[i].classList.add('pending');
+            }
+            
+            // Update descriptions on main timeline too
+            const stepType = items[i].dataset.step;
+            const descEl = items[i].querySelector('p');
+            
+            if (stepType === 'interview' && descEl) {
+                if (statusKey === 'interview_completed') {
+                    descEl.innerHTML = '<strong style="color: green;">✓ Completed</strong>';
+                } else if (interview && interview.date) {
+                    descEl.innerHTML = `${interview.date} at ${interview.time || 'TBA'}`;
+                } else {
+                    descEl.textContent = 'No interview scheduled.';
+                }
+            }
+            
+            if (stepType === 'demo' && descEl) {
+                if (statusKey === 'demo_completed') {
+                    descEl.innerHTML = '<strong style="color: green;">✓ Completed</strong>';
+                } else if (demoTeaching && demoTeaching.date) {
+                    descEl.innerHTML = `${demoTeaching.date} at ${demoTeaching.time || 'TBA'}`;
+                } else if (statusKey === 'interview_completed') {
+                    descEl.textContent = 'Pending';
+                } else {
+                    descEl.textContent = 'Pending';
+                }
+            }
+            
+            if (stepType === 'result' && descEl) {
+                if (statusKey === 'approved' || statusKey === 'onboarding') {
+                    descEl.innerHTML = '<strong style="color: green;">APPROVED</strong>';
+                } else if (statusKey === 'rejected') {
+                    descEl.innerHTML = '<strong style="color: red;">Not approved</strong>';
+                } else {
+                    descEl.textContent = 'Pending';
+                }
+            }
+            
+            if (stepType === 'decision' && descEl) {
+                if (statusKey === 'archived') {
+                    descEl.innerHTML = '<strong style="color: green;">✓ Complete</strong>';
+                } else if (statusKey === 'onboarding') {
+                    descEl.textContent = 'In progress';
+                } else {
+                    descEl.textContent = 'Pending';
+                }
+            }
+        }
+    }
+
     // Open notification detail modal
     function openNotificationModal(notification) {
         const overlay = document.getElementById('notificationModalOverlay');
@@ -1124,45 +1209,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function stopNotificationPolling() {
         if (notificationPollTimer) {
             clearInterval(notificationPollTimer);
-            notificationPollTimer = null;
-            console.log('[Notifications] Polling stopped');
-        }
-    }
-    // Update timeline 'completed' classes based on status
-    function updateTimeline(statusKey) {
-        // UNIFIED 6-STEP SYSTEM (matches admin and Application Status timeline)
-        const mapping = {
-            submitted: 0,
-            reviewing: 1,
-            screening: 1,
-            interview_scheduled: 2,
-            interview_confirmed: 2,
-            interview: 2,
-            approved: 2, // Approved means passed initial review, now scheduling interview
-            demo: 3,
-            result: 4,
-            decision: 4,
-            onboarding: 5,
-            hired: 5
-        };
-        const currentIdx = (mapping.hasOwnProperty(statusKey) ? mapping[statusKey] : 0);
-
-        const items = document.querySelectorAll('#status-timeline .timeline-item');
-        for (let i = 0; i < items.length; i++) {
-            // Remove all status classes first
-            items[i].classList.remove('completed', 'current', 'pending');
-            
-            // Mark steps appropriately
-            if (i < currentIdx) {
-                // Past steps are completed (green)
-                items[i].classList.add('completed');
-            } else if (i === currentIdx) {
-                // Current step is active (blue with pulse)
-                items[i].classList.add('completed'); // Dashboard uses 'completed' for active too
-            } else {
-                // Future steps remain pending (default/gray)
-                // No class needed, default styling applies
-            }
         }
     }
     // ----------------- Application Status population helpers -----------------
@@ -1251,26 +1297,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // expose for convenience/debugging
     try { window.populateApplicationStatus = populateApplicationStatus; } catch (e) {}
 
-    function updateApplicationStatusTimeline(statusKey, interview) {
-        // Map status to timeline steps - UNIFIED 6-STEP SYSTEM (matches admin)
+    function updateApplicationStatusTimeline(statusKey, interview, demoTeaching) {
+        // Simple 6-step mapping to keep UI clean
         const statusToStep = {
             'submitted': 0,
             'reviewing': 1,
             'screening': 1,
             'interview_scheduled': 2,
             'interview_confirmed': 2,
-            'interview': 2,
-            'approved': 2, // Approved = passed screening, now at interview scheduling stage
-            'demo': 3,
+            'interview_completed': 2,  // Keep at interview step but update text
+            'demo_scheduled': 3,        // Move to demo step
+            'demo_completed': 3,        // Stay at demo step but show completed
+            'demo': 3,                  
             'result': 4,
             'decision': 4,
+            'approved': 4,              // Show at result step
+            'rejected': 4,              // Show at result step
             'onboarding': 5,
+            'archived': 5,              // Stay at onboarding but show completed
             'hired': 5
         };
         
         const currentStepIndex = statusToStep[statusKey] !== undefined ? statusToStep[statusKey] : 0;
         const items = document.querySelectorAll('#app-status-timeline .timeline-item');
         
+        // Update each timeline item
         items.forEach((item, index) => {
             // Remove all state classes first
             item.classList.remove('completed', 'current', 'pending');
@@ -1286,18 +1337,101 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Future steps - pending (gray/default)
                 item.classList.add('pending');
             }
+            
+            // Update step descriptions dynamically based on actual status
+            const stepType = item.dataset.step;
+            const descEl = item.querySelector('p');
+            
+            if (stepType === 'interview' && descEl) {
+                // Update interview step description
+                if (statusKey === 'interview_completed') {
+                    descEl.innerHTML = '<strong style="color: green;">✓ Interview completed successfully</strong>';
+                } else if (interview && interview.date) {
+                    descEl.innerHTML = `Scheduled: <strong>${interview.date} at ${interview.time || 'TBA'}</strong>`;
+                } else {
+                    descEl.textContent = 'No interview scheduled.';
+                }
+            }
+            
+            if (stepType === 'demo' && descEl) {
+                // Update demo teaching step description
+                if (statusKey === 'demo_completed') {
+                    descEl.innerHTML = '<strong style="color: green;">✓ Demo teaching completed</strong>';
+                } else if (statusKey === 'demo_scheduled' && demoTeaching && demoTeaching.date) {
+                    descEl.innerHTML = `Scheduled: <strong>${demoTeaching.date} at ${demoTeaching.time || 'TBA'}</strong><br>Location: ${demoTeaching.location || 'TBA'}`;
+                } else if (statusKey === 'interview_completed') {
+                    descEl.innerHTML = '<em>Awaiting demo schedule</em>';
+                } else {
+                    descEl.textContent = 'Will be scheduled after successful interview.';
+                }
+            }
+            
+            if (stepType === 'result' && descEl) {
+                // Update result step description
+                if (statusKey === 'approved' || statusKey === 'onboarding') {
+                    descEl.innerHTML = '<strong style="color: green;">✓ Application APPROVED!</strong>';
+                } else if (statusKey === 'rejected') {
+                    descEl.innerHTML = '<strong style="color: red;">Application not approved</strong>';
+                } else if (statusKey === 'demo_completed') {
+                    descEl.innerHTML = '<em>Evaluation in progress...</em>';
+                } else {
+                    descEl.textContent = 'Will be determined after the demo teaching.';
+                }
+            }
+            
+            if (stepType === 'decision' && descEl) {
+                // Update onboarding step description
+                if (statusKey === 'archived') {
+                    descEl.innerHTML = '<strong style="color: green;">✓ Onboarding complete! Welcome to HFA!</strong>';
+                } else if (statusKey === 'onboarding') {
+                    descEl.innerHTML = '<em>Onboarding in progress...</em>';
+                } else {
+                    descEl.textContent = 'Administration will review all evaluation results.';
+                }
+            }
         });
 
         // Interview info
-        const meta = document.getElementById('status-interview-info');
+        const interviewMeta = document.getElementById('status-interview-info');
         if (interview && (interview.date || interview.location)) {
             const dateEl = document.getElementById('status-interview-date');
             const detailsEl = document.getElementById('status-interview-details');
             if (dateEl) dateEl.textContent = interview.date || '—';
             if (detailsEl) detailsEl.textContent = interview.location || '—';
-            if (meta) meta.style.display = 'block';
+            if (interviewMeta) interviewMeta.style.display = 'block';
         } else {
-            if (meta) meta.style.display = 'none';
+            if (interviewMeta) interviewMeta.style.display = 'none';
+        }
+        
+        // Demo teaching info (if available)
+        const demoMeta = document.getElementById('status-demo-info');
+        if (demoTeaching && (demoTeaching.date || demoTeaching.location)) {
+            // Create demo info element if it doesn't exist
+            if (!demoMeta) {
+                const demoInfoHtml = `
+                    <div id="status-demo-info" class="timeline-meta" style="margin-top: 10px;">
+                        <h4>Demo Teaching Scheduled</h4>
+                        <p><strong>Date:</strong> <span id="status-demo-date">${demoTeaching.date || '—'}</span> at ${demoTeaching.time || '—'}</p>
+                        <p><strong>Location:</strong> <span id="status-demo-location">${demoTeaching.location || 'TBA'}</span></p>
+                        ${demoTeaching.subject ? `<p><strong>Subject:</strong> ${demoTeaching.subject}</p>` : ''}
+                        ${demoTeaching.notes ? `<p><strong>Notes:</strong> ${demoTeaching.notes}</p>` : ''}
+                    </div>
+                `;
+                // Insert after interview info or at the end of timeline
+                const timelineContainer = document.querySelector('#app-status-timeline');
+                if (timelineContainer) {
+                    timelineContainer.insertAdjacentHTML('afterend', demoInfoHtml);
+                }
+            } else {
+                // Update existing demo info
+                const dateEl = document.getElementById('status-demo-date');
+                const locationEl = document.getElementById('status-demo-location');
+                if (dateEl) dateEl.textContent = `${demoTeaching.date || '—'} at ${demoTeaching.time || '—'}`;
+                if (locationEl) locationEl.textContent = demoTeaching.location || 'TBA';
+                demoMeta.style.display = 'block';
+            }
+        } else {
+            if (demoMeta) demoMeta.style.display = 'none';
         }
     }
 
@@ -1555,13 +1689,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 await loadApplicantMessages();
                 // populate the static status panel
 
-                updateApplicationStatusTimeline(applicantState.status, applicantState.interview);
+                updateApplicationStatusTimeline(applicantState.status, applicantState.interview, applicantState.demoTeaching);
                 // refresh other UI
                 renderOverviewCards();
                 renderAttachments();
                 renderNotes();
                 fetchNotifications(); // Refresh notifications from API
-                updateTimeline(applicantState.status); // existing dashboard timeline
+                updateTimeline(applicantState.status, applicantState.interview, applicantState.demoTeaching); // existing dashboard timeline
                 updateAttachmentsUploadVisibility();
             } catch (err) {
                 console.error('status refresh failed', err);
@@ -1614,7 +1748,7 @@ document.addEventListener('DOMContentLoaded', () => {
         startNotificationPolling();
 
         // update dashboard timeline
-        updateTimeline(applicantState.status);
+        updateTimeline(applicantState.status, applicantState.interview, applicantState.demoTeaching);
         
         // update upload button visibility based on status
         updateAttachmentsUploadVisibility();
@@ -1622,7 +1756,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // populate the static Application Status panel (left fields) and its timeline (right)
         try {
             populateApplicationStatus(applicantState);
-            updateApplicationStatusTimeline(applicantState.status, applicantState.interview);
+            updateApplicationStatusTimeline(applicantState.status, applicantState.interview, applicantState.demoTeaching);
         } catch (e) {
             console.warn('populateApplicationStatus failed', e);
         }
