@@ -1264,6 +1264,43 @@
                         </div>
                     </div>
 
+                    <!-- Demo Teaching panel -->
+                    <div id="hfa-progress-demo-panel" class="hfa-progress-demo-panel" style="display:none;">
+                        <h4>Demo Teaching</h4>
+                        <div id="hfa-progress-demo-info" class="hfa-progress-demo-info">
+                            <!-- default no-demo view -->
+                            <div class="hfa-no-demo" id="hfa-progress-no-demo">
+                                <p>No demo teaching scheduled</p>
+                                <button id="hfa-progress-schedule-demo-btn" class="btn btn-success" type="button">
+                                    <i class="fas fa-chalkboard-teacher"></i> Schedule Demo Teaching
+                                </button>
+                            </div>
+
+                            <!-- scheduled view -->
+                            <div class="hfa-progress-demo-scheduled" id="hfa-progress-demo-scheduled" style="display:none;">
+                                <div class="hfa-demo-details">
+                                    <div><strong>Date:</strong> <span id="hfa-progress-demo-date">—</span></div>
+                                    <div><strong>Time:</strong> <span id="hfa-progress-demo-time">—</span></div>
+                                    <div><strong>Mode:</strong> <span id="hfa-progress-demo-mode">—</span></div>
+                                    <div><strong>Location:</strong> <span id="hfa-progress-demo-location">—</span></div>
+                                </div>
+
+                                <!-- action buttons (Reschedule / Cancel / Mark Complete) -->
+                                <div class="hfa-demo-actions" id="hfa-progress-demo-actions">
+                                    <button id="hfa-progress-reschedule-demo-btn" class="btn btn-secondary" type="button">
+                                        <i class="fas fa-edit"></i> Reschedule
+                                    </button>
+                                    <button id="hfa-progress-cancel-demo-btn" class="btn btn-danger" type="button">
+                                        <i class="fas fa-times"></i> Cancel Demo
+                                    </button>
+                                    <button id="hfa-progress-complete-demo-btn" class="btn btn-primary" type="button">
+                                        <i class="fas fa-check"></i> Mark Completed
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Decision area (static) — JS will show this when appropriate -->
                     <div id="hfa-progress-decision" class="hfa-progress-decision" style="display:none;">
                         <h4>Final Decision</h4>
@@ -1325,7 +1362,11 @@
                                 <option>Administrator</option>
                                 <option>Teacher</option>
                             </select>
-
+                            
+                            <!-- Sync Teacher Names Button -->
+                            <button id="sync-teacher-names-btn" class="btn btn-secondary" style="margin-left: 10px;">
+                                <i class="fas fa-sync"></i> Sync Teacher Names
+                            </button>
 
                         </div>
                         

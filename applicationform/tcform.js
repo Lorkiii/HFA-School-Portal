@@ -1,7 +1,6 @@
-/* tcform.js - Updated full client script
+/* tcform.js 
    Flow:
    - Submit -> /applicants/create -> keep files in memory -> open modal
-   - Modal: Get code / Resend / Countdown
    - Confirm code -> /applicants/confirm-email -> on success upload files -> /applicants/:id/attach-files
    - Success OK clears form and hides modal
 */
@@ -685,9 +684,15 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      // show success UI
-      if (successCard) successCard.style.display = 'block';
+      // Hide confirmation modal FIRST before showing success
+      hideModal();
       
+      // show success UI
+      if (successCard) {
+        successCard.style.display = 'block';
+        // Ensure success card has higher z-index
+        successCard.style.zIndex = '10000';
+      }
       else alert('Application submitted and credentials emailed.');
 
       // if server indicated emailed:false, surface a note

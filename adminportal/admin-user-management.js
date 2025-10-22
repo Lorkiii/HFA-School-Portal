@@ -93,6 +93,37 @@ function openAdminCreate() {
   userMgmtModals.showModal('#um-admin-create-modal');
 }
 
+// Sync all teacher applicant names from user displayNames
+async function syncAllTeacherNames() {
+  const btn = document.getElementById('sync-teacher-names-btn');
+  if (!btn) return;
+  
+  // Disable button and show loading
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Syncing...';
+  
+  try {
+    const response = await apiFetch('/admin/users/sync-all-teacher-names', {
+      method: 'POST'
+    });
+    
+    if (response.success) {
+      userMgmtModals.showNotification('Success', 
+        `Sync complete! Updated ${response.synced} records, skipped ${response.skipped} out of ${response.total} total.`);
+    } else {
+      throw new Error('Sync failed');
+    }
+  } catch (error) {
+    console.error('Sync error:', error);
+    userMgmtModals.showNotification('Error', 'Failed to sync teacher names: ' + error.message);
+  } finally {
+    // Restore button
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
+}
+
 // validate phone number
 function validatePhilippinePhone(digits) {
   // Must be empty (optional) OR valid PH mobile
@@ -326,9 +357,9 @@ async function handleUserEditSave() {
       method: 'PUT',
       body: JSON.stringify({ displayName: displayName.trim() })
     });
-    // show success modal
+    // show success modal with sync note
     userMgmtModals.hideModal('#user-mgmt-edit-modal');
-    userMgmtModals.showNotification('Success', 'User updated successfully');
+    userMgmtModals.showNotification('Success', 'User updated successfully. Teacher applicant name synced if applicable.');
     // Reload current tab
     reloadCurrentTab();
   } catch (err) {
@@ -1167,6 +1198,12 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Initialize activity log
   initActivityLog();
+  
+  // Add sync button listener
+  const syncBtn = document.getElementById('sync-teacher-names-btn');
+  if (syncBtn) {
+    syncBtn.addEventListener('click', syncAllTeacherNames);
+  }
   
   // Initialize dropdown auto-close
   initDropdownAutoClose();

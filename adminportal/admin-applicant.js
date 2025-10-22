@@ -7,6 +7,7 @@ import {
   serverTimestamp,
   onSnapshot,
   query,
+  where,
   getDocs
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
@@ -66,13 +67,21 @@ async function initApplicantsRealtime() {
   try {
     if (typeof applicantsUnsubscribe === "function") applicantsUnsubscribe();
 
-    const q = query(collection(db, "teacherApplicants"));
+    // Filter out 'pending' status applicants (not email verified yet)
+    // Only show submitted, reviewing, screening, etc.
+    const q = query(
+      collection(db, "teacherApplicants"),
+      where("status", "!=", "pending")
+    );
     applicantsUnsubscribe = onSnapshot(
       q,
       (snap) => {
         const arr = [];
         snap.forEach((d) => {
           const data = d.data() || {};
+          // Skip pending status applicants (double check in case query fails)
+          if (data.status === 'pending') return;
+          
           let appliedDate = new Date();
           if (data.createdAt) {
             if (typeof data.createdAt.toDate === "function")
@@ -91,7 +100,7 @@ async function initApplicantsRealtime() {
         allApplicants = arr;
         filterAndRenderApplicants();
         updateStatsOverview();
-        console.log("[admin] realtime applicants updated", allApplicants.length);
+        console.log("[admin] realtime applicants updated (excluding pending)", allApplicants.length);
       },
       (err) => {
         console.error("[admin] applicants onSnapshot error", err);
@@ -162,6 +171,54 @@ function wireProgressModalHandlers() {
       console.error("[admin] cancel interview error", err);
       showErrorToast("Failed to cancel interview");
     }
+  });
+
+  // Demo Teaching Buttons
+  // Schedule Demo from panel
+  document.getElementById("hfa-progress-schedule-demo-btn")?.addEventListener("click", () => {
+    openedFromProgress = true;
+    const pm = document.getElementById("hfa-progress-modal");
+    if (pm) pm.style.display = "none";
+    openScheduleModal('demo');
+  });
+
+  // Reschedule Demo
+  document.getElementById("hfa-progress-reschedule-demo-btn")?.addEventListener("click", () => {
+    openedFromProgress = true;
+    const pm = document.getElementById("hfa-progress-modal");
+    if (pm) pm.style.display = "none";
+    openScheduleModal('demo-reschedule');
+  });
+
+  // Cancel Demo
+  document.getElementById("hfa-progress-cancel-demo-btn")?.addEventListener("click", async () => {
+    if (!selectedApplicantId) return showInfoToast("No applicant selected");
+    if (!confirm("Cancel this demo teaching? This will remove the scheduled demo.")) return;
+    try {
+      await updateDoc(doc(db, "teacherApplicants", selectedApplicantId), {
+        demoTeaching: null,
+        status: "interview_completed",
+        statusUpdatedAt: serverTimestamp(),
+        statusUpdatedBy: "admin",
+      });
+      const a = allApplicants.find((x) => x.id === selectedApplicantId);
+      if (a) { 
+        a.demoTeaching = null; 
+        a.status = "interview_completed"; 
+      }
+      showInfoToast("Demo teaching cancelled");
+      renderProgressSteps(allApplicants.find((x) => x.id === selectedApplicantId) || {});
+      filterAndRenderApplicants();
+      updateStatsOverview();
+    } catch (err) {
+      console.error("[admin] cancel demo error", err);
+      showErrorToast("Failed to cancel demo teaching");
+    }
+  });
+
+  // Mark Demo Complete
+  document.getElementById("hfa-progress-complete-demo-btn")?.addEventListener("click", () => {
+    markDemoCompleted();
   });
 
   // Approve / Reject inside decision - Now uses new final decision API
@@ -1686,9 +1743,20 @@ if (!availability.valid) {
         showScheduleToast(`Demo teaching ${scheduleType === 'demo-reschedule' ? 'rescheduled' : 'scheduled'} successfully`);
         closeScheduleModal();
         
-        // Refresh progress modal if open
-        if (document.getElementById("hfa-progress-modal")?.style.display === "flex") {
-          renderProgressSteps(a);
+        // If the schedule modal was opened from progress modal, reopen and refresh
+        if (openedFromProgress) {
+          openedFromProgress = false;
+          const pm = document.getElementById("hfa-progress-modal");
+          if (pm) {
+            pm.style.display = "flex";
+            pm.style.justifyContent = "center";
+            pm.style.alignItems = "center";
+          }
+          // Re-open the progress modal with updated demo info
+          openProgressModal(selectedApplicantId);
+        } else if (document.getElementById("hfa-progress-modal")?.style.display === "flex") {
+          // If progress modal is already open, just refresh it
+          openProgressModal(selectedApplicantId);
         }
         
         filterAndRenderApplicants();
@@ -1714,7 +1782,7 @@ if (!availability.valid) {
 
     if (res.status === 200 || res.status === 201) {
       const json = await res.json().catch(() => ({}));
-      const storedInterview = (json && json.interview) ? json.interview : interviewData;
+      const storedInterview = (json && json.interview) ? json.interview : scheduleData;
       // update applicant doc referencing the stored interview
       await updateDoc(doc(db, "teacherApplicants", selectedApplicantId), {
         interview: storedInterview,
@@ -1771,14 +1839,14 @@ if (!availability.valid) {
   // Fallback local update
   try {
     await updateDoc(doc(db, "teacherApplicants", selectedApplicantId), {
-      interview: interviewData,
+      interview: scheduleData,
       status: "interview_scheduled",
       statusUpdatedAt: serverTimestamp(),
       statusUpdatedBy: "admin",
     });
     const a = allApplicants.find((x) => x.id === selectedApplicantId);
     if (a) {
-      a.interview = interviewData;
+      a.interview = scheduleData;
       a.status = "interview_scheduled";
     }
     showScheduleToast("Interview scheduled (client-side)");
@@ -1798,7 +1866,7 @@ if (!availability.valid) {
     }
 
     if (document.getElementById("teacher-detail-modal")?.style.display === "block") {
-      showInterviewDetails(allApplicants.find((x) => x.id === selectedApplicantId)?.interview || interviewData);
+      showInterviewDetails(allApplicants.find((x) => x.id === selectedApplicantId)?.interview || scheduleData);
     }
 
     filterAndRenderApplicants();
@@ -1917,19 +1985,19 @@ async function markDemoCompleted() {
   }
 }
 
-// Complete onboarding and archive account
+// Complete onboarding - marks hiring process as complete
 async function completeOnboarding() {
   if (!selectedApplicantId) return;
   
-  if (!confirm('Complete onboarding?\n\nThis will:\n• Mark onboarding as complete\n• Archive the applicant account\n• Send welcome notification')) {
+  if (!confirm('Complete onboarding?\n\nThis will:\n• Mark the hiring process as complete\n• Finalize the applicant account\n• Send welcome notification\n\nNote: Account will be auto-deleted 30 days after approval.')) {
     return;
   }
   
   try {
-    // Update status to archived
+    // Update status to completed (renamed from "archived")
     await updateDoc(doc(db, "teacherApplicants", selectedApplicantId), {
-      status: 'archived',
-      archived: true,
+      status: 'completed',
+      archived: true, // Keep this for backward compatibility with deletion system
       archivedAt: serverTimestamp(),
       archivedBy: 'admin',
       onboardingCompletedAt: serverTimestamp()
@@ -1938,22 +2006,22 @@ async function completeOnboarding() {
     // Update local state
     const a = allApplicants.find((x) => x.id === selectedApplicantId);
     if (a) {
-      a.status = 'archived';
+      a.status = 'completed';
       a.archived = true;
     }
     
-    // Send welcome notification
+    // Send welcome notification (use "completed" for new notification, fallback to "archived" for old system)
     try {
       await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/notify-progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ step: 'archived' })
+        body: JSON.stringify({ step: 'completed' })
       });
     } catch (notifErr) {
       console.warn('[admin] Failed to send notification:', notifErr);
     }
     
-    showApproveToast('🎉 Onboarding complete! Welcome to Holy Family Academy!');
+    showApproveToast('🎉 Hiring process complete! Welcome to Holy Family Academy!');
     
     // Close modals and refresh
     setTimeout(() => {
@@ -1975,6 +2043,42 @@ window.completeOnboarding = completeOnboarding;
 window.openScheduleModal = openScheduleModal;
 
 // -------------------- Progress modal implementation --------------------
+/**
+ * PROGRESS FLOW DOCUMENTATION:
+ * The application follows this 9-step progression:
+ * 1. submitted           - Application received
+ * 2. screening          - Initial review of qualifications
+ * 3. interview_scheduled - Interview has been scheduled
+ * 4. interview_completed - Interview has been conducted
+ * 5. demo_scheduled     - Demo teaching scheduled
+ * 6. demo_completed     - Demo teaching completed
+ * 7. result             - Pass/Fail decision made (Approve/Reject)
+ * 8. onboarding         - Approved applicant in onboarding process
+ * 9. completed          - Hiring process complete (renamed from "archived")
+ * 
+ * IMPORTANT: Both renderProgressSteps and handleProgressSave MUST use the same order array
+ * 
+ * AUTO-DELETION: Accounts are deleted 30 days after step 7 (approval/rejection decision),
+ * NOT 30 days after step 9 (completion). The countdown starts when admin clicks Approve/Reject.
+ */
+
+/**
+ * Helper function to get the standard progress order
+ * This ensures consistency across all progress-related functions
+ */
+function getProgressOrder() {
+  return [
+    "submitted",
+    "screening", 
+    "interview_scheduled",
+    "interview_completed",
+    "demo_scheduled",
+    "demo_completed",
+    "result",
+    "onboarding",
+    "completed"  // Renamed from "archived" - indicates successful onboarding completion
+  ];
+}
 function openProgressModal(id) {
   if (id) selectedApplicantId = id;
   const a = allApplicants.find((x) => x.id === selectedApplicantId);
@@ -2007,6 +2111,41 @@ function openProgressModal(id) {
     }
   }
 
+  // Demo Teaching info in progress modal
+  const demoPanel = document.getElementById("hfa-progress-demo-panel");
+  const demoScheduled = !!a.demoTeaching;
+  const demoScheduledView = document.getElementById("hfa-progress-demo-scheduled");
+  const noDemo = document.getElementById("hfa-progress-no-demo");
+  
+  // Show demo panel for relevant statuses
+  const showDemoPanel = ['interview_completed', 'demo_scheduled', 'demo_completed'].includes(a.status);
+  
+  if (demoPanel) {
+    demoPanel.style.display = showDemoPanel ? "block" : "none";
+  }
+  
+  if (demoScheduledView && noDemo) {
+    if (demoScheduled && a.demoTeaching) {
+      noDemo.style.display = "none";
+      demoScheduledView.style.display = "block";
+      
+      // Update demo details
+      const setTextContent = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value || '—';
+      };
+      
+      setTextContent("hfa-progress-demo-date", a.demoTeaching.date);
+      setTextContent("hfa-progress-demo-time", a.demoTeaching.time);
+      setTextContent("hfa-progress-demo-mode", a.demoTeaching.mode);
+      setTextContent("hfa-progress-demo-location", a.demoTeaching.location);
+
+    } else {
+      noDemo.style.display = "block";
+      demoScheduledView.style.display = "none";
+    }
+  }
+
   renderProgressSteps(a);
 }
 
@@ -2030,7 +2169,7 @@ function renderProgressSteps(applicant) {
     { key: "demo_completed", label: "Demo Teaching Completed", desc: "Demo teaching successfully completed." },
     { key: "result", label: "Pass or Fail", desc: "Final evaluation and decision." },
     { key: "onboarding", label: "Onboarding", desc: "Onboarding process and document submission." },
-    { key: "archived", label: "Onboarding Complete", desc: "Welcome to Holy Family Academy!" }
+    { key: "completed", label: "Completed", desc: "Hiring process complete! Welcome to Holy Family Academy!" }
   ];
 
   // Backward compatibility: map old status names to new ones
@@ -2040,6 +2179,7 @@ function renderProgressSteps(applicant) {
   if (currentStatus === "approved") currentStatus = "result"; // Show at Pass/Fail stage
   if (currentStatus === "rejected") currentStatus = "result"; // Show at Pass/Fail stage
   if (currentStatus === "demo") currentStatus = "demo_scheduled"; // Map old demo to demo_scheduled
+  if (currentStatus === "archived") currentStatus = "completed"; // Map old archived to new completed
   
   let curIndex = order.findIndex((s) => s.key === currentStatus);
   if (curIndex === -1) curIndex = 0;
@@ -2102,6 +2242,17 @@ function renderProgressSteps(applicant) {
       item.appendChild(scheduleBtn);
     }
     
+    // Show schedule button for demo_scheduled status if no demo data exists (fallback)
+    if (step.key === "demo_scheduled" && currentStatus === "demo_scheduled" && !applicant.demoTeaching) {
+      const scheduleBtn = document.createElement("button");
+      scheduleBtn.className = "btn btn-sm btn-success";
+      scheduleBtn.textContent = "Schedule Demo Teaching";
+      scheduleBtn.style.marginTop = "8px";
+      scheduleBtn.style.marginLeft = "26px";
+      scheduleBtn.onclick = () => openScheduleModal('demo');
+      item.appendChild(scheduleBtn);
+    }
+    
     if (step.key === "demo_scheduled" && applicant.demoTeaching && currentStatus === "demo_scheduled") {
       // Show demo details and mark completed button
       const demoInfo = document.createElement("div");
@@ -2116,8 +2267,8 @@ function renderProgressSteps(applicant) {
     }
     
     if (step.key === "result") {
-      // Show decision controls only if not in onboarding
-      if (applicant.status !== "onboarding" && applicant.status !== "archived") {
+      // Show decision controls only if not in onboarding or completed
+      if (applicant.status !== "onboarding" && applicant.status !== "completed" && applicant.status !== "archived") {
         const decisionNotice = document.createElement("div");
         decisionNotice.className = "hfa-progress-decision-notice";
         decisionNotice.textContent = "Use the decision controls below to Approve or Reject.";
@@ -2127,8 +2278,9 @@ function renderProgressSteps(applicant) {
       // Hide/show decision container based on status
       const decisionBlock = document.getElementById("hfa-progress-decision");
       if (decisionBlock) {
-        if (applicant.status === "onboarding" || applicant.status === "archived") {
-          decisionBlock.style.display = "none"; // Hide during onboarding
+        // Hide decision controls during onboarding and after completion
+        if (applicant.status === "onboarding" || applicant.status === "completed" || applicant.status === "archived") {
+          decisionBlock.style.display = "none";
         } else if (i <= curIndex) {
           decisionBlock.style.display = "block";
         } else {
@@ -2182,27 +2334,49 @@ async function handleProgressSave(ev) {
   const a = allApplicants.find((x) => x.id === selectedApplicantId);
   if (!a) return showErrorToast("Applicant not found");
 
-  // Updated to 6-step unified progress order
-  const order = ["submitted", "screening", "interview_scheduled", "demo", "result", "onboarding"];
+  // Use the centralized progress order to ensure consistency
+  const order = getProgressOrder();
   
-  // Backward compatibility: map old statuses to new ones
+  // Backward compatibility: map old status names to current ones
   let currentStatus = a.status || "submitted";
-  if (currentStatus === "reviewing") currentStatus = "screening"; // old → new
-  if (currentStatus === "decision") currentStatus = "result"; // old → new
+  if (currentStatus === "reviewing") currentStatus = "screening";
+  if (currentStatus === "decision") currentStatus = "result";
+  if (currentStatus === "demo") currentStatus = "demo_scheduled"; // Map old demo status
+  if (currentStatus === "approved") currentStatus = "result";
+  if (currentStatus === "rejected") currentStatus = "result";
+  if (currentStatus === "archived") currentStatus = "completed"; // Map old archived to new completed
   
+  // Find current position in the progress order
   const curIdx = Math.max(0, order.indexOf(currentStatus));
   const checkbox = document.querySelector(`.hfa-progress-step-checkbox[data-step-index="${curIdx}"]`);
 
   if (checkbox && checkbox.checked) {
-    const nextStatus = order[curIdx + 1] || order[curIdx];
-    const completedStep = order[curIdx]; // The step that was just completed
+    // Get the next status in the progression
+    const nextStatus = order[curIdx + 1];
     
+    // If there's no next status (we're at the end), stay at current
+    if (!nextStatus) {
+      console.log("[admin] Already at final step:", currentStatus);
+      return;
+    }
+    
+    // Validation: Check prerequisites before allowing progression
     if (nextStatus === "interview_scheduled" && !a.interview) {
       showErrorToast("Please schedule interview before marking this step done.");
+      checkbox.checked = false; // Uncheck the box
+      return;
+    }
+    
+    // Validation: Can't skip to demo_scheduled without interview
+    if (nextStatus === "demo_scheduled" && !a.interview) {
+      showErrorToast("Interview must be completed before scheduling demo teaching.");
+      checkbox.checked = false; // Uncheck the box
       return;
     }
 
     try {
+      console.log(`[admin] Progressing from ${currentStatus} to ${nextStatus}`);
+      
       // Update status in Firestore
       await updateDoc(doc(db, "teacherApplicants", selectedApplicantId), {
         status: nextStatus,
@@ -2210,18 +2384,20 @@ async function handleProgressSave(ev) {
         statusUpdatedBy: "admin",
       });
 
+      // Update local state
       if (a) a.status = nextStatus;
       
-      //  Send notification for completed step
+      // Send notification for the step we're moving TO (not from)
+      // This ensures the applicant gets notified about their new status
       try {
         const data = await apiFetch(`/api/teacher-applicants/${selectedApplicantId}/notify-progress`, {
           method: 'POST',
-          body: JSON.stringify({ step: completedStep })
+          body: JSON.stringify({ step: nextStatus }) // Changed from completedStep to nextStatus
         });
         
         if (data.success) {
-          console.log(`[admin] Notification sent for step: ${completedStep}`);
-          showToast(`Progress updated & applicant notified`);
+          console.log(`[admin] Notification sent for new status: ${nextStatus}`);
+          showToast(`Progress updated to: ${formatStatus(nextStatus)}`);
         } else {
           console.warn(`[admin] Notification failed:`, data.error);
           showToast("Progress updated (notification failed)");
@@ -2231,7 +2407,8 @@ async function handleProgressSave(ev) {
         showToast("Progress updated (notification failed)");
       }
       
-      closeProgressModal();
+      // Refresh the progress modal to show the new status
+      renderProgressSteps(a); // Re-render steps with updated status
       filterAndRenderApplicants();
       updateStatsOverview();
     } catch (err) {
@@ -2338,15 +2515,21 @@ function formatDate(d) {
 function formatStatus(s) {
   const status = {
     new: "New",
+    submitted: "Submitted",
     reviewing: "Under Review", // backward compatibility
     screening: "Initial Screening",
     interview_scheduled: "Interview Scheduled",
-    interviewed: "Interviewed",
-    demo: "Demo Teaching",
+    interview_completed: "Interview Completed",
+    interviewed: "Interviewed", // backward compatibility
+    demo: "Demo Teaching", // backward compatibility
+    demo_scheduled: "Demo Teaching Scheduled",
+    demo_completed: "Demo Teaching Completed",
     result: "Pass or Fail",
     onboarding: "Onboarding",
     approved: "Approved",
     rejected: "Rejected",
+    completed: "Completed", // New status
+    archived: "Completed", // Backward compatibility - display as "Completed"
   };
   return status[s] || s || "Unknown";
 }

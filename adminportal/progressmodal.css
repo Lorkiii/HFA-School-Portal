@@ -135,6 +135,47 @@
   color: #6b7280;
 }
 
+/* demo teaching panel */
+#hfa-progress-modal .hfa-progress-demo-panel {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #fafafa;
+  border: 1px solid #f1f5f9;
+}
+#hfa-progress-modal .hfa-progress-demo-info .hfa-no-demo {
+  color: #6b7280;
+  text-align: center;
+}
+#hfa-progress-modal .hfa-progress-demo-info .hfa-no-demo button {
+  margin-top: 10px;
+}
+#hfa-progress-modal .hfa-demo-details {
+  padding: 10px;
+  background: white;
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+#hfa-progress-modal .hfa-demo-details > div {
+  margin-bottom: 8px;
+  font-size: 0.95rem;
+}
+#hfa-progress-modal .hfa-demo-details strong {
+  color: #475569;
+  display: inline-block;
+  width: 80px;
+}
+.hfa-progress-demo-scheduled .hfa-demo-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.hfa-progress-demo-scheduled .hfa-demo-actions .btn {
+  padding: 6px 10px;
+  font-size: 0.9rem;
+}
+
 /* notes */
 #hfa-progress-modal textarea#hfa-progress-notes {
   width: 100%;

@@ -8,8 +8,17 @@ export async function apiFetch(path, opts = {}) {
     headers["Content-Type"] = "application/json";
   }
   
+  // Simple fix: If in development (localhost:5500), prepend API server URL
+  let url = path;
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    // Development: Add the API server base URL if path is relative
+    if (!path.startsWith('http')) {
+      url = 'http://localhost:3000' + path;
+    }
+  }
+  
   // Make request with credentials to send cookie
-  const res = await fetch(path, { credentials: "include", ...opts, headers });
+  const res = await fetch(url, { credentials: "include", ...opts, headers });
   const text = await res.text().catch(() => "");
   
   if (!res.ok) {

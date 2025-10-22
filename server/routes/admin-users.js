@@ -31,6 +31,59 @@ export default function createAdminUsersRouter(deps = {}) {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
+  // Helper: Parse displayName into firstName, middleName, lastName
+  function parseDisplayName(displayName) {
+    if (!displayName) return { firstName: '', middleName: '', lastName: '' };
+    
+    const parts = displayName.trim().split(/\s+/); // Split by whitespace
+    
+    if (parts.length === 0) {
+      return { firstName: '', middleName: '', lastName: '' };
+    } else if (parts.length === 1) {
+      // Single name - use as firstName
+      return { firstName: parts[0], middleName: '', lastName: '' };
+    } else if (parts.length === 2) {
+      // Two names - firstName and lastName
+      return { firstName: parts[0], middleName: '', lastName: parts[1] };
+    } else {
+      // Three or more - first is firstName, last is lastName, middle is everything between
+      return { 
+        firstName: parts[0], 
+        middleName: parts.slice(1, -1).join(' '), 
+        lastName: parts[parts.length - 1] 
+      };
+    }
+  }
+
+  // Helper: Sync displayName to teacher applicant record
+  async function syncTeacherApplicantName(db, uid, displayName) {
+    // Find teacher applicant by uid
+    const applicantsQuery = await db.collection('teacherApplicants')
+      .where('uid', '==', uid)
+      .limit(1)
+      .get();
+    
+    if (applicantsQuery.empty) {
+      // No teacher applicant record found - that's ok
+      console.log(`No teacher applicant found for uid: ${uid}`);
+      return;
+    }
+    
+    // Parse the display name
+    const { firstName, middleName, lastName } = parseDisplayName(displayName);
+    
+    // Update the teacher applicant record
+    const applicantDoc = applicantsQuery.docs[0];
+    await applicantDoc.ref.update({
+      firstName: firstName || '',
+      middleName: middleName || '',
+      lastName: lastName || '',
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    });
+    
+    console.log(`✅ Synced teacher applicant name for uid: ${uid}`, { firstName, middleName, lastName });
+  }
+
   // Helper: produce temporary admin password
   function generateTempPassword() {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$%";
@@ -467,12 +520,20 @@ export default function createAdminUsersRouter(deps = {}) {
         { merge: true }
       );
 
-      // if displayName changed, propagate to auth profile
+      // if displayName changed, propagate to auth profile AND teacher applicant record
       if (sanitized.displayName) {
         try {
           await admin.auth().updateUser(targetUid, { displayName: sanitized.displayName });
         } catch (e) {
           console.warn("PUT /admin/users: failed to update displayName in Auth", targetUid, e && e.message);
+        }
+        
+        // Sync displayName to teacher applicant record if it exists
+        try {
+          await syncTeacherApplicantName(db, targetUid, sanitized.displayName);
+        } catch (e) {
+          console.warn("PUT /admin/users: failed to sync teacher applicant name", targetUid, e && e.message);
+          // Don't fail the request if sync fails - this is a best-effort operation
         }
       }
 
@@ -618,6 +679,79 @@ export default function createAdminUsersRouter(deps = {}) {
       return res.json({ success: true, message: "User permanently deleted" });
     } catch (err) {
       console.error("DELETE /admin/users/:uid error", err);
+      return res.status(500).json({ error: err.message || "Server error" });
+    }
+  });
+  // POST /admin/users/sync-all-teacher-names - One-time sync all teacher applicant names
+  router.post("/admin/users/sync-all-teacher-names", requireAdmin, async (req, res) => {
+    try {
+      console.log('✅ Sync route called! Starting bulk teacher name sync...');
+      
+      let syncedCount = 0;
+      let skippedCount = 0;
+      
+      // Get all teacher applicants with uid
+      const applicantsSnapshot = await db.collection('teacherApplicants')
+        .where('uid', '!=', null)
+        .get();
+      
+      // Process each applicant
+      for (const applicantDoc of applicantsSnapshot.docs) {
+        const applicantData = applicantDoc.data();
+        const uid = applicantData.uid;
+        
+        try {
+          // Get user record
+          const userDoc = await db.collection('users').doc(uid).get();
+          
+          if (!userDoc.exists || !userDoc.data().displayName) {
+            skippedCount++;
+            continue;
+          }
+          
+          const displayName = userDoc.data().displayName;
+          const { firstName, middleName, lastName } = parseDisplayName(displayName);
+          
+          // Check if update is needed
+          if (applicantData.firstName === firstName && 
+              applicantData.middleName === middleName && 
+              applicantData.lastName === lastName) {
+            skippedCount++;
+            continue;
+          }
+          
+          // Update the teacher applicant
+          await applicantDoc.ref.update({
+            firstName: firstName || '',
+            middleName: middleName || '',
+            lastName: lastName || '',
+            updatedAt: admin.firestore.FieldValue.serverTimestamp()
+          });
+          
+          syncedCount++;
+        } catch (error) {
+          console.error(`Error syncing applicant ${applicantDoc.id}:`, error.message);
+          skippedCount++;
+        }
+      }
+      
+      // Log the bulk sync action
+      await writeActivityLog?.({
+        actorUid: req.adminUser.uid,
+        actorEmail: req.adminUser.email,
+        action: "bulk-sync-teacher-names",
+        detail: `Synced ${syncedCount} records, skipped ${skippedCount}`,
+      });
+      
+      return res.json({ 
+        success: true, 
+        synced: syncedCount, 
+        skipped: skippedCount,
+        total: applicantsSnapshot.size 
+      });
+      
+    } catch (err) {
+      console.error("POST /admin/users/sync-all-teacher-names error", err);
       return res.status(500).json({ error: err.message || "Server error" });
     }
   });
