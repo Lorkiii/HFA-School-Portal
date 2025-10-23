@@ -199,13 +199,14 @@ app.post("/auth/login", async (req, res) => {
       const otp = generateOtp();
       const expiresAt = Date.now() + 5 * 60 * 1000; // 5 minutes
       // store by uid (new OTP session or overwrite)
+      // Set lastSentAt to 0 so first resend is allowed immediately
       otpStore.set(uid, {
         otp,
         expiresAt,
         email: userEmail,
-        lastSentAt: Date.now(),
+        lastSentAt: 0,  // Don't block first resend
         resendCount: 0,
-        firstResendAt: Date.now()
+        firstResendAt: 0
       });
 
       // send it via your mailTransporter - different email based on role
@@ -410,6 +411,15 @@ app.post("/auth/resend-otp", async (req, res) => {
 
     const now = Date.now();
 
+    // Debug logging
+    console.log('[resend-otp] Entry state:', {
+      uid,
+      lastSentAt: entry.lastSentAt,
+      resendCount: entry.resendCount,
+      firstResendAt: entry.firstResendAt,
+      email: entry.email
+    });
+
     // Rate limit window reset if firstResendAt older than window
     if (!entry.firstResendAt || (now - (entry.firstResendAt || 0) > RESEND_WINDOW_MS)) {
       entry.firstResendAt = now;
@@ -419,13 +429,22 @@ app.post("/auth/resend-otp", async (req, res) => {
     // Check overall rate limit (max resends in window)
     if ((entry.resendCount || 0) >= MAX_RESENDS) {
       const retryAfter = Math.ceil(((entry.firstResendAt || 0) + RESEND_WINDOW_MS - now) / 1000);
+      console.log('[resend-otp] BLOCKED: Max resends reached');
       return res.status(429).json({ error: "Resend limit reached. Try later.", retryAfter });
     }
 
     // Check cooldown (3 minutes between sends)
     const sinceLast = now - (entry.lastSentAt || 0);
+    console.log('[resend-otp] Cooldown check:', {
+      lastSentAt: entry.lastSentAt,
+      sinceLast,
+      cooldownMs: RESEND_COOLDOWN_MS,
+      shouldBlock: entry.lastSentAt && sinceLast < RESEND_COOLDOWN_MS
+    });
+    
     if (entry.lastSentAt && sinceLast < RESEND_COOLDOWN_MS) {
       const retryAfter = Math.ceil((RESEND_COOLDOWN_MS - sinceLast) / 1000);
+      console.log('[resend-otp] BLOCKED: Cooldown active, retry in', retryAfter, 'seconds');
       return res.status(429).json({ error: "Cooldown active. Try again later.", retryAfter });
     }
 
