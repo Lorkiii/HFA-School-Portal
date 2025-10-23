@@ -12,6 +12,47 @@ import { firebaseConfig } from "../firebase-config.js";
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 
+// Helper: Validate password (same rules as backend)
+function validatePassword(password) {
+  if (!password || password.length < 8) {
+    return { valid: false, error: 'Password must be at least 8 characters long' };
+  }
+  
+  if (!/[a-zA-Z]/.test(password)) {
+    return { valid: false, error: 'Password must contain letters (a-z, A-Z)' };
+  }
+  
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, error: 'Password must contain numbers (0-9)' };
+  }
+  
+  return { valid: true };
+}
+
+// Show error message below input
+function showError(elementId, message) {
+  const errorDiv = document.getElementById(elementId);
+  if (errorDiv) {
+    errorDiv.textContent = message;
+    errorDiv.style.display = 'block';
+  }
+}
+
+// Clear error message
+function clearError(elementId) {
+  const errorDiv = document.getElementById(elementId);
+  if (errorDiv) {
+    errorDiv.textContent = '';
+    errorDiv.style.display = 'none';
+  }
+}
+
+// Clear all error messages
+function clearAllErrors() {
+  clearError('new-pass-error');
+  clearError('confirm-pass-error');
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   const form = document.getElementById("pass-form");
   const newPassEl = document.getElementById("new-pass");
@@ -50,6 +91,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   form?.addEventListener("submit", async (ev) => {
     ev.preventDefault();
+    
+    // Clear previous errors
+    clearAllErrors();
+    
     if (!newPassEl || !confirmPassEl) {
       alert("Missing form fields.");
       return;
@@ -57,19 +102,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const newPass = newPassEl.value || "";
     const confirmPass = confirmPassEl.value || "";
+    
+    let hasError = false;
 
-    if (!newPass || !confirmPass) {
-      alert("Please fill both password fields.");
-      return;
+    // Validate new password
+    if (!newPass) {
+      showError('new-pass-error', 'New password is required');
+      hasError = true;
+    } else {
+      const validation = validatePassword(newPass);
+      if (!validation.valid) {
+        showError('new-pass-error', validation.error);
+        hasError = true;
+      }
     }
-    if (newPass !== confirmPass) {
-      alert("Passwords do not match.");
-      return;
+
+    // Validate confirm password
+    if (!confirmPass) {
+      showError('confirm-pass-error', 'Please confirm your new password');
+      hasError = true;
+    } else if (newPass !== confirmPass) {
+      showError('confirm-pass-error', 'Passwords do not match');
+      hasError = true;
     }
-    if (newPass.length < 8) {
-      // enforce minimum length if you want
-      const ok = confirm("Password is short (less than 8 characters). Continue?");
-      if (!ok) return;
+
+    // If there are validation errors, stop here
+    if (hasError) {
+      return;
     }
 
     setLoading(true, "Updating password…");

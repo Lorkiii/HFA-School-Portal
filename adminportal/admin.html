@@ -351,6 +351,15 @@
                                             <span id="jhs-status-badge" class="status-badge">Loading...</span>
                                             <span id="jhs-days-info" class="days-info"></span>
                                         </div>
+                                        <!-- Start/Close buttons for JHS -->
+                                        <div class="enrollment-actions">
+                                            <button id="jhs-start-btn" class="enrollment-action-btn start-btn" type="button" style="display:none;">
+                                                Start Enrollment
+                                            </button>
+                                            <button id="jhs-close-btn" class="enrollment-action-btn close-btn" type="button" style="display:none;">
+                                                Close Enrollment
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <!-- SHS Status -->
@@ -362,6 +371,15 @@
                                         <div class="status-info">
                                             <span id="shs-status-badge" class="status-badge">Loading...</span>
                                             <span id="shs-days-info" class="days-info"></span>
+                                        </div>
+                                        <!-- Start/Close buttons for SHS -->
+                                        <div class="enrollment-actions">
+                                            <button id="shs-start-btn" class="enrollment-action-btn start-btn" type="button" style="display:none;">
+                                                Start Enrollment
+                                            </button>
+                                            <button id="shs-close-btn" class="enrollment-action-btn close-btn" type="button" style="display:none;">
+                                                Close Enrollment
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -2247,13 +2265,68 @@
         </div>
     </div>
 
-    <!-- Compose Mail Modal - REMOVED -->
-    <!-- Use Applicants → Message button to send messages to teacher applicants -->
-    <!-- Modal removed as part of Option 2 implementation -->
+    <!-- Start Enrollment Modal -->
+    <div id="start-enrollment-modal" class="announcement-modal" role="dialog" aria-modal="true" aria-hidden="true" style="display: none;">
+        <div class="announcement-modal-content enrollment-modal-content" role="document" style="max-width: 500px;">
+            <h3 class="ann-modal-title" id="start-modal-title">📅 Start Enrollment</h3>
+            
+            <p style="color: #666; margin-bottom: 20px;">Select the enrollment period dates:</p>
+            
+            <!-- Date inputs -->
+            <div style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px;">
+                <label class="ann-field">
+                    <span class="ann-label">Start Date</span>
+                    <input id="start-enrollment-start-date" class="ann-input" type="date" required />
+                </label>
+                <label class="ann-field">
+                    <span class="ann-label">End Date</span>
+                    <input id="start-enrollment-end-date" class="ann-input" type="date" required />
+                </label>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="announcement-modal-actions">
+                <button class="post" id="confirm-start-btn" type="button">Confirm Start</button>
+                <button class="btn-cancel" id="cancel-start-btn" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Close Enrollment Modal -->
+    <div id="close-enrollment-modal" class="announcement-modal" role="dialog" aria-modal="true" aria-hidden="true" style="display: none;">
+        <div class="announcement-modal-content enrollment-modal-content" role="document" style="max-width: 450px;">
+            <h3 class="ann-modal-title" id="close-modal-title">⚠️ Close Enrollment</h3>
+            
+            <p style="color: #666; margin-bottom: 16px;">Are you sure you want to close <strong id="close-level-name"></strong> enrollment?</p>
+            <p style="color: #888; font-size: 14px; margin-bottom: 24px;">
+                This will immediately disable enrollment regardless of the end date. Students will not be able to enroll until you start it again.
+            </p>
+
+            <!-- Action Buttons -->
+            <div class="announcement-modal-actions">
+                <button class="post" id="confirm-close-btn" type="button" style="background: #dc2626;">Confirm Close</button>
+                <button class="btn-cancel" id="cancel-close-btn" type="button">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Modal (replaces alert) -->
+    <div id="notification-modal" class="announcement-modal" role="dialog" aria-modal="true" aria-hidden="true" style="display: none;">
+        <div class="announcement-modal-content enrollment-modal-content" role="document" style="max-width: 400px;">
+            <div id="notification-icon" style="text-align: center; font-size: 3rem; margin-bottom: 16px;">✅</div>
+            <h3 id="notification-title" class="ann-modal-title" style="text-align: center; margin-bottom: 16px;">Success</h3>
+            <p id="notification-message" style="color: #666; text-align: center; margin-bottom: 24px;">Operation completed successfully</p>
+            
+            <!-- Action Button -->
+            <div class="announcement-modal-actions" style="justify-content: center;">
+                <button class="post" id="notification-ok-btn" type="button" style="min-width: 100px;">OK</button>
+            </div>
+        </div>
+    </div>
 
     <!-- API Helper (must load first) -->
     <script type="module" src="../api-fetch.js"></script>
-    
+
     <script type="module" src="admin.js"></script>
     <script type="module" src="admin-student.js"></script>
     <script type="module" src="admin-applicant.js"></script>

@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load enrollment status on page load
   await loadEnrollmentStatus();
 
-  // ===== MAIN FUNCTION =====
+
   async function loadEnrollmentStatus() {
     try {
       // Fetch public enrollment status (no authentication needed)
@@ -19,14 +19,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       if (!response.ok) {
         throw new Error('Failed to load enrollment status');
-      }
-      
+      }  
       const data = await response.json();
       
-      // Update JHS enrollment button and badge
+      // Update JHS enrollment button and badge - Check isOpen field
       updateEnrollmentButton('jhs', data.jhs, jhsButton, jhsBadge);
       
-      // Update SHS enrollment button and badge
+      // Update SHS enrollment button and badge - Check isOpen field
       updateEnrollmentButton('shs', data.shs, shsButton, shsBadge);
       
     } catch (err) {
@@ -45,41 +44,48 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   // ===== UPDATE BUTTON & BADGE =====
-  function updateEnrollmentButton(level, statusData, button, badge) {
+  function updateEnrollmentButton(level, enrollmentData, button, badge) {
     if (!button || !badge) return;
     
-    const status = statusData.status;
-    const daysRemaining = statusData.daysRemaining;
+    const status = enrollmentData.status;
+    const isOpen = enrollmentData.isOpen;
     
-    // Remove loading class
-    badge.classList.remove('loading');
+    // Update badge
+    badge.classList.remove('open', 'closed', 'upcoming');
     
-    if (status === 'open') {
-      // ✅ OPEN - Show "Enroll Now" button going to form
-      button.textContent = 'Enroll Now';
-      button.href = level === 'jhs' ? 'applicationform/jhsform.html' : 'applicationform/shsform.html';
-      button.classList.remove('disabled');
-      button.style.pointerEvents = 'auto';
-      button.style.opacity = '1';
-      button.style.cursor = 'pointer';
+    // Check isOpen field first - if manually closed by admin, override everything
+    if (isOpen === false || status === 'closed') {
+      badge.classList.add('closed');
+      badge.innerHTML = '<i class="fas fa-times-circle"></i> Closed';
       
-      // Update badge - Green
-      badge.className = 'enrollment-status-badge open';
-      const daysText = daysRemaining === 1 ? '1 day left' : `${daysRemaining} days left`;
-      badge.innerHTML = `<i class="fas fa-check-circle"></i> Open · ${daysText}`;
-      
-    } else {
-      // ❌ CLOSED (covers 'closed' and 'upcoming') - Show "Learn More" button going to info page
+      // Change button to "Learn More" and link to info page
       button.textContent = 'Learn More';
       button.href = level === 'jhs' ? 'applicationform/jhs-info.html' : 'applicationform/shs-info.html';
       button.classList.remove('disabled');
-      button.style.pointerEvents = 'auto';
-      button.style.opacity = '1';
-      button.style.cursor = 'pointer';
+      // Keep button enabled so users can learn more
       
-      // Update badge - Red
-      badge.className = 'enrollment-status-badge closed';
-      badge.innerHTML = '<i class="fas fa-times-circle"></i> Closed';
+      return;
+    }
+    
+    // If isOpen is true (or not set), check date-based status
+    if (status === 'open') {
+      badge.classList.add('open');
+      badge.innerHTML = '<i class="fas fa-check-circle"></i> Open Now';
+      
+      // Change button to "Enroll Now" and link to enrollment form
+      button.textContent = 'Enroll Now';
+      button.href = level === 'jhs' ? 'applicationform/jhsform.html' : 'applicationform/shsform.html';
+      button.classList.remove('disabled');
+      
+    } else if (status === 'upcoming') {
+      badge.classList.add('upcoming');
+      const days = enrollmentData.daysRemaining || 0;
+      badge.innerHTML = `<i class="fas fa-clock"></i> Opens in ${days} ${days === 1 ? 'day' : 'days'}`;
+      
+      // Change button to "Learn More" while waiting
+      button.textContent = 'Learn More';
+      button.href = level === 'jhs' ? 'applicationform/jhs-info.html' : 'applicationform/shs-info.html';
+      button.classList.remove('disabled');
     }
   }
 });

@@ -8,11 +8,42 @@ document.addEventListener('DOMContentLoaded', async () => {
   const jhsDaysInfo = document.getElementById('jhs-days-info');
   const shsDaysInfo = document.getElementById('shs-days-info');
   
+  // Start/Close buttons
+  const jhsStartBtn = document.getElementById('jhs-start-btn');
+  const jhsCloseBtn = document.getElementById('jhs-close-btn');
+  const shsStartBtn = document.getElementById('shs-start-btn');
+  const shsCloseBtn = document.getElementById('shs-close-btn');
+  
   // Modal elements
   const manageBtn = document.getElementById('manage-enrollment-btn');
   const enrollmentModal = document.getElementById('enrollment-modal');
   const cancelBtn = document.getElementById('enrollment-cancel-btn');
   const saveBtn = document.getElementById('enrollment-save-btn');
+  
+  // Start enrollment modal elements
+  const startModal = document.getElementById('start-enrollment-modal');
+  const startModalTitle = document.getElementById('start-modal-title');
+  const startDateInput = document.getElementById('start-enrollment-start-date');
+  const startEndDateInput = document.getElementById('start-enrollment-end-date');
+  const confirmStartBtn = document.getElementById('confirm-start-btn');
+  const cancelStartBtn = document.getElementById('cancel-start-btn');
+  
+  // Close enrollment modal elements
+  const closeModal = document.getElementById('close-enrollment-modal');
+  const closeModalTitle = document.getElementById('close-modal-title');
+  const closeLevelName = document.getElementById('close-level-name');
+  const confirmCloseBtn = document.getElementById('confirm-close-btn');
+  const cancelCloseBtn = document.getElementById('cancel-close-btn');
+  
+  // Track which level is being modified
+  let currentLevel = null;
+  
+  // Notification modal elements
+  const notificationModal = document.getElementById('notification-modal');
+  const notificationIcon = document.getElementById('notification-icon');
+  const notificationTitle = document.getElementById('notification-title');
+  const notificationMessage = document.getElementById('notification-message');
+  const notificationOkBtn = document.getElementById('notification-ok-btn');
   
   // Date inputs
   const jhsStartInput = document.getElementById('jhs-start-date');
@@ -64,6 +95,58 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // Start enrollment button listeners
+  if (jhsStartBtn) {
+    jhsStartBtn.addEventListener('click', () => openStartModal('jhs'));
+  }
+  if (shsStartBtn) {
+    shsStartBtn.addEventListener('click', () => openStartModal('shs'));
+  }
+
+  // Close enrollment button listeners
+  if (jhsCloseBtn) {
+    jhsCloseBtn.addEventListener('click', () => openCloseModal('jhs'));
+  }
+  if (shsCloseBtn) {
+    shsCloseBtn.addEventListener('click', () => openCloseModal('shs'));
+  }
+
+  // Start modal handlers
+  if (cancelStartBtn) {
+    cancelStartBtn.addEventListener('click', closeStartModal);
+  }
+  if (confirmStartBtn) {
+    confirmStartBtn.addEventListener('click', confirmStartEnrollment);
+  }
+  if (startModal) {
+    startModal.addEventListener('click', (e) => {
+      if (e.target === startModal) closeStartModal();
+    });
+  }
+
+  // Close modal handlers
+  if (cancelCloseBtn) {
+    cancelCloseBtn.addEventListener('click', closeCloseModal);
+  }
+  if (confirmCloseBtn) {
+    confirmCloseBtn.addEventListener('click', confirmCloseEnrollment);
+  }
+  if (closeModal) {
+    closeModal.addEventListener('click', (e) => {
+      if (e.target === closeModal) closeCloseModal();
+    });
+  }
+
+  // Notification modal handlers
+  if (notificationOkBtn) {
+    notificationOkBtn.addEventListener('click', closeNotification);
+  }
+  if (notificationModal) {
+    notificationModal.addEventListener('click', (e) => {
+      if (e.target === notificationModal) closeNotification();
+    });
+  }
+
   // ===== FUNCTIONS =====
 
   async function loadEnrollmentStatus() {
@@ -73,13 +156,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       const data = await response.json();
       
-      // Update JHS status
+      // Update JHS status and buttons
       updateStatusBadge(jhsStatusBadge, data.jhs.status);
       updateDaysInfo(jhsDaysInfo, data.jhs);
+      updateActionButtons('jhs', data.jhs.isOpen, data.jhs.status);
       
-      // Update SHS status
+      // Update SHS status and buttons
       updateStatusBadge(shsStatusBadge, data.shs.status);
       updateDaysInfo(shsDaysInfo, data.shs);
+      updateActionButtons('shs', data.shs.isOpen, data.shs.status);
       
     } catch (err) {
       console.error('Error loading enrollment status:', err);
@@ -148,7 +233,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       
     } catch (err) {
       console.error('Error opening enrollment modal:', err);
-      alert('Failed to load enrollment settings');
+      showNotification('error', 'Failed to Load', 'Failed to load enrollment settings');
     }
   }
 
@@ -220,19 +305,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       
       // Validation
       if (!jhsStart || !jhsEnd || !shsStart || !shsEnd) {
-        alert('Please fill in all dates');
+        showNotification('error', 'Missing Dates', 'Please fill in all dates');
         return;
       }
       
       // Validate date order
       if (new Date(jhsStart) > new Date(jhsEnd)) {
-        alert('JHS start date must be before end date');
+        showNotification('error', 'Invalid Dates', 'JHS start date must be before end date');
         jhsStartInput?.focus();
         return;
       }
       
       if (new Date(shsStart) > new Date(shsEnd)) {
-        alert('SHS start date must be before end date');
+        showNotification('error', 'Invalid Dates', 'SHS start date must be before end date');
         shsStartInput?.focus();
         return;
       }
@@ -260,7 +345,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
       
       // Success
-      alert('✅ Enrollment periods updated successfully!');
+      showNotification('success', 'Settings Updated', 'Enrollment periods updated successfully!');
       
       // Reload status on dashboard
       await loadEnrollmentStatus();
@@ -270,13 +355,225 @@ document.addEventListener('DOMContentLoaded', async () => {
       
     } catch (err) {
       console.error('Error saving enrollment settings:', err);
-      alert('Failed to save settings: ' + err.message);
+      showNotification('error', 'Failed to Save', 'Failed to save settings: ' + err.message);
     } finally {
       // Re-enable button
       if (saveBtn) {
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save Changes';
       }
+    }
+  }
+
+  // Update action buttons based on enrollment status
+  function updateActionButtons(level, isOpen, status) {
+    const startBtn = level === 'jhs' ? jhsStartBtn : shsStartBtn;
+    const closeBtn = level === 'jhs' ? jhsCloseBtn : shsCloseBtn;
+    
+    if (!startBtn || !closeBtn) return;
+    
+    // Show Start button if enrollment is closed, hide Close button
+    // Show Close button if enrollment is open, hide Start button
+    if (isOpen === false || status === 'closed') {
+      startBtn.style.display = 'inline-block';
+      closeBtn.style.display = 'none';
+    } else {
+      startBtn.style.display = 'none';
+      closeBtn.style.display = 'inline-block';
+    }
+  }
+
+  // Open Start Enrollment Modal
+  function openStartModal(level) {
+    currentLevel = level;
+    const levelName = level === 'jhs' ? 'Junior High School' : 'Senior High School';
+    
+    if (startModalTitle) {
+      startModalTitle.textContent = `📅 Start ${levelName} Enrollment`;
+    }
+    
+    // Set default dates (today and 30 days from now)
+    const today = new Date();
+    const endDate = new Date(today);
+    endDate.setDate(endDate.getDate() + 30);
+    
+    if (startDateInput) startDateInput.value = today.toISOString().split('T')[0];
+    if (startEndDateInput) startEndDateInput.value = endDate.toISOString().split('T')[0];
+    
+    if (startModal) {
+      startModal.style.display = 'flex';
+      startModal.setAttribute('aria-hidden', 'false');
+    }
+  }
+
+  // Close Start Enrollment Modal
+  function closeStartModal() {
+    if (startModal) {
+      startModal.style.display = 'none';
+      startModal.setAttribute('aria-hidden', 'true');
+    }
+    currentLevel = null;
+  }
+
+  // Confirm Start Enrollment
+  async function confirmStartEnrollment() {
+    if (!currentLevel) return;
+    
+    const startDate = startDateInput?.value;
+    const endDate = startEndDateInput?.value;
+    
+    // Validate dates
+    if (!startDate || !endDate) {
+      showNotification('error', 'Invalid Dates', 'Please select both start and end dates');
+      return;
+    }
+    
+    if (new Date(startDate) > new Date(endDate)) {
+      showNotification('error', 'Invalid Dates', 'Start date must be before end date');
+      return;
+    }
+    
+    try {
+      // Disable button
+      if (confirmStartBtn) {
+        confirmStartBtn.disabled = true;
+        confirmStartBtn.textContent = 'Starting...';
+      }
+      
+      // Call API to start enrollment
+      const response = await apiFetch('/api/enrollment/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          level: currentLevel,
+          startDate: startDate,
+          endDate: endDate
+        })
+      });
+      
+      // Success
+      showNotification('success', 'Enrollment Started', `${currentLevel.toUpperCase()} enrollment has been started successfully!`);
+      
+      // Reload status
+      await loadEnrollmentStatus();
+      
+      // Close modal
+      closeStartModal();
+      
+    } catch (err) {
+      console.error('Error starting enrollment:', err);
+      showNotification('error', 'Failed to Start', 'Failed to start enrollment: ' + err.message);
+    } finally {
+      // Re-enable button
+      if (confirmStartBtn) {
+        confirmStartBtn.disabled = false;
+        confirmStartBtn.textContent = 'Confirm Start';
+      }
+    }
+  }
+
+  // Open Close Enrollment Modal
+  function openCloseModal(level) {
+    currentLevel = level;
+    const levelName = level === 'jhs' ? 'Junior High School' : 'Senior High School';
+    
+    if (closeLevelName) {
+      closeLevelName.textContent = levelName;
+    }
+    
+    if (closeModal) {
+      closeModal.style.display = 'flex';
+      closeModal.setAttribute('aria-hidden', 'false');
+    }
+  }
+
+  // Close Close Enrollment Modal
+  function closeCloseModal() {
+    if (closeModal) {
+      closeModal.style.display = 'none';
+      closeModal.setAttribute('aria-hidden', 'true');
+    }
+    currentLevel = null;
+  }
+
+  // Confirm Close Enrollment
+  async function confirmCloseEnrollment() {
+    if (!currentLevel) return;
+    
+    try {
+      // Disable button
+      if (confirmCloseBtn) {
+        confirmCloseBtn.disabled = true;
+        confirmCloseBtn.textContent = 'Closing...';
+      }
+      
+      // Call API to close enrollment
+      const response = await apiFetch('/api/enrollment/close', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          level: currentLevel
+        })
+      });
+      
+      // Success
+      showNotification('success', 'Enrollment Closed', `${currentLevel.toUpperCase()} enrollment has been closed successfully!`);
+      
+      // Reload status
+      await loadEnrollmentStatus();
+      
+      // Close modal
+      closeCloseModal();
+      
+    } catch (err) {
+      console.error('Error closing enrollment:', err);
+      showNotification('error', 'Failed to Close', 'Failed to close enrollment: ' + err.message);
+    } finally {
+      // Re-enable button
+      if (confirmCloseBtn) {
+        confirmCloseBtn.disabled = false;
+        confirmCloseBtn.textContent = 'Confirm Close';
+      }
+    }
+  }
+
+  // Show notification modal (replaces alert)
+  function showNotification(type, title, message) {
+    if (!notificationModal || !notificationIcon || !notificationTitle || !notificationMessage) return;
+    
+    // Set icon and color based on type
+    if (type === 'success') {
+      notificationIcon.textContent = '✅';
+      notificationIcon.style.color = '#2e8b57';
+      notificationTitle.style.color = '#2e8b57';
+    } else if (type === 'error') {
+      notificationIcon.textContent = '❌';
+      notificationIcon.style.color = '#dc2626';
+      notificationTitle.style.color = '#dc2626';
+    } else if (type === 'warning') {
+      notificationIcon.textContent = '⚠️';
+      notificationIcon.style.color = '#f59e0b';
+      notificationTitle.style.color = '#f59e0b';
+    } else {
+      notificationIcon.textContent = 'ℹ️';
+      notificationIcon.style.color = '#3b82f6';
+      notificationTitle.style.color = '#3b82f6';
+    }
+    
+    // Set title and message
+    notificationTitle.textContent = title;
+    notificationMessage.textContent = message;
+    
+    // Show modal
+    notificationModal.style.display = 'flex';
+    notificationModal.setAttribute('aria-hidden', 'false');
+  }
+
+  // Close notification modal
+  function closeNotification() {
+    if (notificationModal) {
+      notificationModal.style.display = 'none';
+      notificationModal.setAttribute('aria-hidden', 'true');
     }
   }
 });

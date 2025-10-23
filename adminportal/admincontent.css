@@ -6977,6 +6977,46 @@ button:active {
   color: #6b7280;
 }
 
+/* Enrollment Action Buttons */
+.enrollment-actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.enrollment-action-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.enrollment-action-btn.start-btn {
+  background: #2e8b57;
+  color: white;
+}
+
+.enrollment-action-btn.start-btn:hover {
+  background: #27724a;
+}
+
+.enrollment-action-btn.close-btn {
+  background: #dc2626;
+  color: white;
+}
+
+.enrollment-action-btn.close-btn:hover {
+  background: #b91c1c;
+}
+
+.enrollment-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Enrollment Modal Specific Styles */
 #enrollment-modal.announcement-modal {
   background: rgba(0, 0, 0, 0.6);

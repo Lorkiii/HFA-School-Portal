@@ -16,10 +16,8 @@ export default function createAdminUsersRouter(deps = {}) {
   // OTP window, throttling, and tracking caps
   const OTP_EXPIRY_MS = 5 * 60 * 1000;
   const RESEND_COOLDOWN_MS = 2 * 60 * 1000;
-  const MAX_SENDS_PER_HOUR = 5;
   const MAX_ATTEMPTS = 3;
   const adminOtpStore = new Map(); // keyed by "actorUid::email"
-  const otpSendHistory = new Map(); // per-admin send timestamps
 
   // Helper: create key for otp store
   function buildOtpKey(actorUid, email) {
@@ -90,20 +88,7 @@ export default function createAdminUsersRouter(deps = {}) {
     return Array.from({ length: 12 }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join("");
   }
 
-  // Helper: check hourly send limit
-  function checkAndRecordSendQuota(uid) {
-    const now = Date.now();
-    const hourAgo = now - 60 * 60 * 1000;
-    const history = otpSendHistory.get(uid) || [];
-    const recent = history.filter((ts) => ts >= hourAgo);
-    if (recent.length >= MAX_SENDS_PER_HOUR) {
-      otpSendHistory.set(uid, recent);
-      return false;
-    }
-    recent.push(now);
-    otpSendHistory.set(uid, recent);
-    return true;
-  }
+
 
   // Helper: fail response with message
   function sendError(res, status, message, extra = {}) {
@@ -116,6 +101,11 @@ export default function createAdminUsersRouter(deps = {}) {
     try {
       const rawEmail = (req.body?.email || "").trim().toLowerCase();
       if (!rawEmail) return sendError(res, 400, "Email is required");
+      
+      // Validate email must be @gmail.com
+      if (!rawEmail.endsWith('@gmail.com')) {
+        return sendError(res, 400, "Email must be a Gmail address (@gmail.com)");
+      }
 
       try {
         await admin.auth().getUserByEmail(rawEmail);
@@ -144,6 +134,41 @@ export default function createAdminUsersRouter(deps = {}) {
     }
   });
 
+  // Route: check if phone number is available
+  router.post("/admin/create-admin/check-phone", requireAdmin, async (req, res) => {
+    try {
+      const phoneNumber = (req.body?.phoneNumber || "").trim();
+      if (!phoneNumber) return sendError(res, 400, "Phone number is required");
+
+      // Check Firebase Auth
+      try {
+        await admin.auth().getUserByPhoneNumber(phoneNumber);
+        return sendError(res, 400, "Phone number already in use");
+      } catch (lookupErr) {
+        if (!lookupErr?.code || lookupErr.code !== "auth/user-not-found") {
+          console.error("/admin/create-admin/check-phone auth lookup failed", lookupErr && lookupErr.message);
+          return sendError(res, 500, "Failed to verify phone number availability");
+        }
+      }
+
+      // Check Firestore
+      try {
+        const dupSnap = await db.collection("users").where("phoneNumber", "==", phoneNumber).limit(1).get();
+        if (!dupSnap.empty) {
+          return sendError(res, 400, "Phone number already in use");
+        }
+      } catch (fsErr) {
+        console.log("/admin/create-admin/check-phone firestore lookup failed", fsErr && fsErr.message);
+        return sendError(res, 500, "Failed to verify phone number availability");
+      }
+
+      return res.json({ available: true });
+    } catch (err) {
+      console.log("/admin/create-admin/check-phone error", err && (err.stack || err));
+      return sendError(res, 500, "Server error");
+    }
+  });
+
   // Route: email an OTP so another admin can create a new admin
   router.post("/admin/create-admin/send-otp", requireAdmin, async (req, res) => {
     try {
@@ -159,11 +184,13 @@ export default function createAdminUsersRouter(deps = {}) {
 
       if (!rawEmail) return sendError(res, 400, "Email is required");
       if (!displayName) return sendError(res, 400, "Display name is required");
-
-      if (!checkAndRecordSendQuota(requester.uid)) {
-        // throttle repeated requests within one hour to reduce abuse
-        return sendError(res, 429, "OTP send limit reached. Try again later.");
+      
+      // Validate email must be @gmail.com
+      if (!rawEmail.endsWith('@gmail.com')) {
+        return sendError(res, 400, "Email must be a Gmail address (@gmail.com)");
       }
+
+      // OTP send limit removed - no restrictions on sending OTP
 
       const key = buildOtpKey(requester.uid, rawEmail);
       const existing = adminOtpStore.get(key);

@@ -27,9 +27,25 @@
             </div>
             <form id="pass-form" class="pass-form">
                 <label for="pass">Enter new password here:</label>
-                <input type="password" id="new-pass" placeholder="New password" required><br>
+                <input type="password" id="new-pass" placeholder="New password" required>
+                <div class="password-error" id="new-pass-error"></div>
+                
                 <label for="confirm-pass">Confirm new password here:</label>
                 <input type="password" id="confirm-pass" placeholder="Confirm password" required>
+                <div class="password-error" id="confirm-pass-error"></div>
+                
+                <!-- Password Requirements -->
+                <div class="password-requirements">
+                    <div class="requirements-title">
+                        <i class="fas fa-info-circle"></i> Password Requirements:
+                    </div>
+                    <ul class="requirements-list">
+                        <li>At least 8 characters long</li>
+                        <li>Must contain letters (a-z, A-Z)</li>
+                        <li>Must contain numbers (0-9)</li>
+                    </ul>
+                </div>
+                
                 <button type="submit" id="confirm-btn" class="confirm-btn">Confirm</button>
             </form>
         </div>

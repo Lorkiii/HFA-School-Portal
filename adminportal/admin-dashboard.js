@@ -39,10 +39,7 @@ import { apiFetch } from '../api-fetch.js';
     }
   }
 
-  // ============================================
   // UI STATE MANAGEMENT
-  // ============================================
-
   function showLoadingState() {
     // Update quick stats to show loading
     const statStudent = document.getElementById('stat-total-students');

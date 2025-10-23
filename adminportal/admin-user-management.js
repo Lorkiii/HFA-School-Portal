@@ -175,6 +175,12 @@ async function handleAdminSendOtp() {
     return;
   }
 
+  // Validate email must be @gmail.com
+  if (!email.endsWith('@gmail.com')) {
+    showAdminError('#um-admin-create-error', 'Email must be a Gmail address (@gmail.com)');
+    return;
+  }
+
   // Validate phone number format if provided
   if (!phoneValidation.valid) {
     showAdminError('#um-admin-create-error', phoneValidation.error);
@@ -183,11 +189,22 @@ async function handleAdminSendOtp() {
   // send otp
   try {
     showAdminError('#um-admin-create-error', '');
+    
+    // Check if email is available
     await apiFetch('/admin/create-admin/check-email', {
       method: 'POST',
       body: JSON.stringify({ email })
     });
-    // send otp
+    
+    // Check if phone number is available (only if provided)
+    if (phone) {
+      await apiFetch('/admin/create-admin/check-phone', {
+        method: 'POST',
+        body: JSON.stringify({ phoneNumber: phone })
+      });
+    }
+    
+    // Send OTP if both checks pass
     const payload = { displayName: name, email, phoneNumber: phone || undefined };
     const res = await apiFetch('/admin/create-admin/send-otp', {
       method: 'POST',

@@ -74,6 +74,7 @@ function friendlyFirebaseError(err) {
     case "auth/user-disabled": return "This account has been disabled. Contact admin.";
     case "auth/user-not-found": return "No account found with that email.";
     case "auth/wrong-password": return "Incorrect email or password.";
+    case "auth/invalid-credential": return "Incorrect email or password."; // Firebase's newer error code
     case "auth/too-many-requests": return "Too many attempts. Try again later or reset your password.";
     case "auth/network-request-failed": return "Network error. Check your connection.";
     default:
@@ -111,36 +112,23 @@ async function loginUserWithRole(email, password, expectedRole, redirectUrl, err
 
   try {
     // Firebase sign-in
-    let userCredential;
-    try {
-      userCredential = await signInWithEmailAndPassword(auth, email, password);
-    } catch (authErr) {
-      const friendly = friendlyFirebaseError(authErr);
-      if (errorBox) errorBox.textContent = friendly;
-      else alert(friendly);
-      return;
-    }
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
 
     // Quick Firestore role check (optional, local quick feedback)
     const uid = userCredential.user.uid;
-    try {
-      const docRef = doc(db, "users", uid);
-      const userDoc = await getDoc(docRef);
-      if (!userDoc.exists()) {
-        if (errorBox) errorBox.textContent = "Account not configured in the application database. Contact admin.";
-        else alert("Account not configured. Contact admin.");
-        return;
-      }
-      const actualRole = userDoc.data().role;
-      if (actualRole !== expectedRole) {
-        if (errorBox) errorBox.textContent = `Access denied: You are not an ${expectedRole}.`;
-        else alert(`Access denied: You are not an ${expectedRole}.`);
-        return;
-      }
-    } catch (e) {
-      console.error("Error reading user doc:", e);
-      if (errorBox) errorBox.textContent = "Unable to verify user role. Try again later.";
-      else alert("Unable to verify user role. Try again later.");
+    const docRef = doc(db, "users", uid);
+    const userDoc = await getDoc(docRef);
+    
+    if (!userDoc.exists()) {
+      if (errorBox) errorBox.textContent = "Account not configured in the application database. Contact admin.";
+      else alert("Account not configured. Contact admin.");
+      return;
+    }
+    
+    const actualRole = userDoc.data().role;
+    if (actualRole !== expectedRole) {
+      if (errorBox) errorBox.textContent = `Access denied: You are not an ${expectedRole}.`;
+      else alert(`Access denied: You are not an ${expectedRole}.`);
       return;
     }
 
@@ -195,9 +183,14 @@ async function loginUserWithRole(email, password, expectedRole, redirectUrl, err
 
   } catch (err) {
     console.error("Login error:", err);
-    if (errorBox) errorBox.textContent = "Network or server error. Try again.";
-    else alert("Network error. Try again.");
+    
+    // Use friendly error messages for Firebase auth errors
+    const friendlyMsg = friendlyFirebaseError(err);
+    
+    if (errorBox) errorBox.textContent = friendlyMsg;
+    else alert(friendlyMsg);
   } finally {
+    // Always reset form state (button text, enable inputs)
     setFormLoading(formEl, false);
   }
 }

@@ -53,7 +53,7 @@ export default function createAdminMessagesRouter(deps = {}) {
       const fromAddress = (process.env.RESEND_FROM_EMAIL || "noreply@alphfabet.com");
 
       const mailOptions = {
-        from: `"Holy Family Academy" <${fromAddress}>`,
+        from: `"AlpHFAbet: Holy Family Academy" <${fromAddress}>`,
         to: email,
         subject: subject,
         html

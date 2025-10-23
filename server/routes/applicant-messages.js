@@ -212,12 +212,6 @@ export default function createApplicantMessagesRouter({
           details: dbErr && dbErr.message,
         });
       }
-
-      console.log(`[applicant-messages:get] 📤 Returning ${messages.length} messages to client`);
-      if (messages.length > 0) {
-        console.log(`[applicant-messages:get] Message subjects:`, messages.map(m => m.subject));
-      }
-      console.log(`[applicant-messages:get] ===============================================`);
       
       return res.json({ ok: true, messages });
     } catch (err) {

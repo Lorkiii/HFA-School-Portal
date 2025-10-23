@@ -151,7 +151,7 @@ const mailTransporter = {
     const { from, to, subject, html, text } = mailOptions;
     
     return await resend.emails.send({
-      from: from || RESEND_FROM_EMAIL,
+      from: from || `"AlpHFAbet: Holy Family Academy"<${RESEND_FROM_EMAIL}>`,
       to: to,
       subject: subject,
       html: html || text || '',
@@ -241,7 +241,7 @@ app.post("/auth/login", async (req, res) => {
       try {
         console.log(`[/auth/login] 📤 Attempting to send OTP email to ${userEmail} from ${RESEND_FROM_EMAIL}`);
         const emailResult = await resend.emails.send({
-          from: RESEND_FROM_EMAIL,
+          from: `"AlpHFAbet: Holy Family Academy"<${RESEND_FROM_EMAIL}>`,
           to: userEmail,
           subject: emailSubject,
           html: emailBody
@@ -796,7 +796,6 @@ const requirementMap = {
   clearance: "Clearance Certificate",
 };
 
-const defaultSlots = Object.keys(requirementMap);
 function defaultRequirementsObject() {
   const out = {};
   for (const [slot, label] of Object.entries(requirementMap)) {
@@ -899,7 +898,7 @@ app.post('/applicants/send-code', async (req, res) => {
     // Send OTP email via Resend API
     try {
       await resend.emails.send({
-        from: RESEND_FROM_EMAIL,
+        from: `"AlpHFAbet: Holy Family Academy"<${RESEND_FROM_EMAIL}>`,
         to: email,
         subject: "Your application confirmation code",
         html: `<p>Your confirmation code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`
@@ -1060,7 +1059,7 @@ app.post('/applicants/confirm-email', async (req, res) => {
     // Try to send credentials email via Resend API
     try {
       await resend.emails.send({
-        from: RESEND_FROM_EMAIL,
+        from: `"AlpHFAbet: Holy Family Academy"<${RESEND_FROM_EMAIL}>`,
         to: lowerEmail,
         subject: "Your application account is ready",
         html: `
