@@ -271,7 +271,7 @@ async function sendDemoNotification(db, mailTransporter, applicantData, demoTeac
   // Send email (optional - can fail without breaking flow)
   try {
     const mailOptions = {
-      from: `"Holy Family Academy" <${process.env.SMTP_USER || 'noreply@hfa.edu'}>`,
+      from: `"Holy Family Academy" <${process.env.RESEND_FROM_EMAIL || 'noreply@alphfabet.com'}>`,
       to: applicantData.email,
       subject: subject,
       html: `

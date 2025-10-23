@@ -374,12 +374,14 @@ export default function createAdminMailRouter(deps = {}) {
             </div>
           `;
           
-          // Send email via nodemailer
+          // Send email via Resend - use verified domain with admin name in display
+          const fromAddress = process.env.RESEND_FROM_EMAIL || 'noreply@alphfabet.com';
           await mailTransporter.sendMail({
-            from: currentAdminEmail,
+            from: `"${adminName}" <${fromAddress}>`,
             to: recipient.email,
             subject: subject,
-            html: emailHtml
+            html: emailHtml,
+            replyTo: currentAdminEmail // Allow recipients to reply to admin's actual email
           });
           
           emailsSentCount++;

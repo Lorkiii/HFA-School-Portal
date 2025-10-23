@@ -191,7 +191,7 @@ export default function createAdminUsersRouter(deps = {}) {
 
     //   sends an otp in email
       const mailOptions = {
-        from: `"Holy Family Academy" <${process.env.SMTP_USER}>`,
+        from: `"Holy Family Academy" <${process.env.RESEND_FROM_EMAIL || 'noreply@alphfabet.com'}>`,
         to: rawEmail,
         subject: "HFA Portal admin verification code",
         text: `Use this code to confirm creation of your admin account: ${otp}.\n\nThis code expires in 5 minutes.`
@@ -297,7 +297,7 @@ export default function createAdminUsersRouter(deps = {}) {
 
       if (mailTransporter) {
         const mailOptions = {
-          from: process.env.SMTP_FROM || process.env.SMTP_USER,
+          from: process.env.RESEND_FROM_EMAIL || 'noreply@alphfabet.com',
           to: rawEmail,
           subject: "Your HFA admin account",
           text: `An admin account was created for you.\n\nEmail: ${rawEmail}\nTemporary password: ${tempPassword}\n\nPlease sign in and change your password immediately.`
@@ -445,7 +445,7 @@ export default function createAdminUsersRouter(deps = {}) {
         }
 
         const mailOptions = {
-          from: process.env.SMTP_FROM || process.env.SMTP_USER,
+          from: process.env.RESEND_FROM_EMAIL || 'noreply@alphfabet.com',
           to: email,
           subject: "HFA Portal Password Reset",
           text: `A password reset link was generated for your account. Use the link below to set a new password:\n\n${resetLink}\n\nIf you did not request this, please contact support immediately.`,

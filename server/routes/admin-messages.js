@@ -49,7 +49,8 @@ export default function createAdminMessagesRouter(deps = {}) {
         </div>
       `;
 
-      const fromAddress = (process.env.SMTP_USER || process.env.SMTP_EMAIL || "no-reply@example.com");
+      // Use Resend FROM email (must be from verified domain)
+      const fromAddress = (process.env.RESEND_FROM_EMAIL || "noreply@alphfabet.com");
 
       const mailOptions = {
         from: `"Holy Family Academy" <${fromAddress}>`,
@@ -58,10 +59,21 @@ export default function createAdminMessagesRouter(deps = {}) {
         html
       };
 
+      console.log(`📤 [admin-messages] Attempting to send email to ${email}`);
+      console.log(`📧 From: ${fromAddress}`);
+      console.log(`📋 Subject: ${subject}`);
+
       try {
-        await mailTransporter.sendMail(mailOptions);
+        const result = await mailTransporter.sendMail(mailOptions);
+        console.log(`✅ [admin-messages] Email sent successfully!`, result);
       } catch (mailErr) {
-        console.error("/api/admin/send-message sendMail failed", mailErr && (mailErr.stack || mailErr));
+        console.error("❌ [admin-messages] sendMail failed");
+        console.error("Error details:", {
+          message: mailErr?.message,
+          code: mailErr?.code,
+          statusCode: mailErr?.statusCode,
+          stack: mailErr?.stack
+        });
         return res.status(500).json({ ok: false, error: "Failed to send email", detail: mailErr && (mailErr.message || String(mailErr)) });
       }
 
