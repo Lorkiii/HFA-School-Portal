@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 import express from "express";
 import admin from "firebase-admin";
-import nodemailer from "nodemailer";
+import { Resend } from 'resend';
 import bodyParser from "body-parser";
 import fs from "fs";
 import path from "path";
@@ -122,30 +122,49 @@ if (!JWT_SECRET) {
 }
 
 
-// SMTP credentials: support SMTP_USER or SMTP_EMAIL env var names
-const SMTP_USER = process.env.SMTP_USER || process.env.SMTP_EMAIL;
-const SMTP_PASS = process.env.SMTP_PASS;
+// Resend API configuration
+const RESEND_API_KEY = process.env.RESEND_API_KEY;
+const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 
-if (!SMTP_USER || !SMTP_PASS) {
-  console.warn("Warning: SMTP_USER or SMTP_PASS not set. Email sending (OTP, notifications) may fail.");
+if (!RESEND_API_KEY) {
+  console.warn("Warning: RESEND_API_KEY not set. Email sending (OTP, notifications) may fail.");
 }
 
-// create transporter (nodemailer)
-const mailTransporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false, // use STARTTLS
-  auth: {
-    user: SMTP_USER,
-    pass: SMTP_PASS,
-  },
-  tls: {
-    rejectUnauthorized: false // Allow self-signed certificates (Railway compatibility)
-  },
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,
-  socketTimeout: 10000
+// Initialize Resend client with timeout configuration
+const resend = new Resend(RESEND_API_KEY, {
+  timeout: 10000, // 10 second timeout
 });
+
+// Verify Resend on startup
+if (RESEND_API_KEY) {
+  console.log('✅ Resend API initialized and ready to send emails');
+  console.log(`📧 Emails will be sent from: ${RESEND_FROM_EMAIL}`);
+  console.log(`🔑 API Key configured: ${RESEND_API_KEY.substring(0, 8)}...`);
+} else {
+  console.error('❌ Resend API key missing. Set RESEND_API_KEY in environment variables.');
+}
+
+// Create nodemailer-compatible wrapper for Resend (for router compatibility)
+const mailTransporter = {
+  async sendMail(mailOptions) {
+    // Convert nodemailer format to Resend format
+    const { from, to, subject, html, text } = mailOptions;
+    
+    return await resend.emails.send({
+      from: from || RESEND_FROM_EMAIL,
+      to: to,
+      subject: subject,
+      html: html || text || '',
+    });
+  },
+  // Mock verify method for compatibility
+  async verify() {
+    if (!RESEND_API_KEY) {
+      throw new Error('RESEND_API_KEY not configured');
+    }
+    return true;
+  }
+};
 
 // Helper to generate 6-digit OTP
 function generateOtp() {
@@ -209,7 +228,7 @@ app.post("/auth/login", async (req, res) => {
         firstResendAt: 0
       });
 
-      // send it via your mailTransporter - different email based on role
+      // Send OTP email via Resend API - different content based on role
       let emailSubject, emailBody;
       if (role === "admin") {
         emailSubject = "Your login code";
@@ -219,16 +238,24 @@ app.post("/auth/login", async (req, res) => {
         emailBody = `<p>Your teacher applicant login code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`;
       }
 
-      const mailOptions = {
-        from: `"Holy Family Academy" <${SMTP_USER}>`,
-        to: userEmail,
-        subject: emailSubject,
-        html: emailBody
-      };
       try {
-        await mailTransporter.sendMail(mailOptions);
+        console.log(`[/auth/login] 📤 Attempting to send OTP email to ${userEmail} from ${RESEND_FROM_EMAIL}`);
+        const emailResult = await resend.emails.send({
+          from: RESEND_FROM_EMAIL,
+          to: userEmail,
+          subject: emailSubject,
+          html: emailBody
+        });
+        console.log(`[/auth/login] ✅ OTP email sent successfully!`, emailResult);
       } catch (mailErr) {
-        console.warn("/auth/login: failed to send OTP email:", mailErr && mailErr.message);
+        console.error("/auth/login: ❌ Failed to send OTP email");
+        console.error("Error details:", {
+          message: mailErr?.message,
+          code: mailErr?.code,
+          statusCode: mailErr?.statusCode,
+          name: mailErr?.name,
+          stack: mailErr?.stack
+        });
         // proceed: return needsOtp even if email failed (client may ask admin to check)
       }
 
@@ -459,16 +486,15 @@ app.post("/auth/resend-otp", async (req, res) => {
     // persist back to otpStore
     otpStore.set(uid, entry);
 
-    // Prepare email
-    const mailOptions = {
-      from: `"Holy Family Academy" <${SMTP_USER}>`,
-      to: entry.email,
-      subject: "Your admin login code (resend)",
-      html: `<p>Your admin login code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`
-    };
-
+    // Send OTP email via Resend API
     try {
-      await mailTransporter.sendMail(mailOptions);
+      await resend.emails.send({
+        from: RESEND_FROM_EMAIL,
+        to: entry.email,
+        subject: "Your admin login code (resend)",
+        html: `<p>Your admin login code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`
+      });
+      console.log(`[/auth/resend-otp] ✅ OTP email resent to ${entry.email}`);
       const nextAllowedIn = Math.ceil(RESEND_COOLDOWN_MS / 1000);
       return res.json({
         ok: true,
@@ -477,7 +503,7 @@ app.post("/auth/resend-otp", async (req, res) => {
         emailed: true
       });
     } catch (mailErr) {
-      console.warn("/auth/resend-otp: sendMail failed:", mailErr && (mailErr.message || mailErr));
+      console.error("/auth/resend-otp: ❌ Failed to resend OTP email:", mailErr?.message || mailErr);
       const nextAllowedIn = Math.ceil(RESEND_COOLDOWN_MS / 1000);
       return res.json({
         ok: false,
@@ -870,20 +896,19 @@ app.post('/applicants/send-code', async (req, res) => {
 
     await CONF.set(entry, { merge: true });
 
-    // send email
-    const mailOptions = {
-      from: `"Holy Family Academy" <${SMTP_USER}>`,
-      to: email,
-      subject: "Your application confirmation code",
-      html: `<p>Your confirmation code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`
-    };
-    // resend functions
+    // Send OTP email via Resend API
     try {
-      await mailTransporter.sendMail(mailOptions);
+      await resend.emails.send({
+        from: RESEND_FROM_EMAIL,
+        to: email,
+        subject: "Your application confirmation code",
+        html: `<p>Your confirmation code is <strong>${otp}</strong>. It expires in 5 minutes.</p>`
+      });
+      console.log(`[/applicants/send-code] ✅ OTP sent to ${email}`);
       const nextAllowedIn = Math.ceil(cooldownMs / 1000);
       return res.json({ ok: true, message: 'Code sent', nextAllowedIn, emailed: true });
     } catch (mailErr) {
-      console.warn('/applicants/send-code mail fail', mailErr && mailErr.message);
+      console.error('[/applicants/send-code] ❌ Failed to send OTP:', mailErr?.message || mailErr);
       const nextAllowedIn = Math.ceil(cooldownMs / 1000);
       return res.json({ ok: false, message: 'Failed to send code. Try again later', nextAllowedIn, emailed: false });
     }
@@ -1032,25 +1057,24 @@ app.post('/applicants/confirm-email', async (req, res) => {
       return res.status(500).json({ ok: false, error: 'Failed to finalize account creation' });
     }
 
-    // Try to send credentials email 
-    const mailOptions = {
-      from: `"Holy Family Academy" <${SMTP_USER}>`,
-      to: lowerEmail,
-      subject: "Your application account is ready",
-      html: `
-        <h3>Your application account</h3>
-        <p>Your applicant account has been created. Use the credentials below to sign in:</p>
-        <p><strong>Email:</strong> ${lowerEmail}</p>
-        <p><strong>Temporary password:</strong> ${tempPassword}</p>
-        <p>On first login you will be required to change your password.</p>
-      `
-    };
-
+    // Try to send credentials email via Resend API
     try {
-      await mailTransporter.sendMail(mailOptions);
+      await resend.emails.send({
+        from: RESEND_FROM_EMAIL,
+        to: lowerEmail,
+        subject: "Your application account is ready",
+        html: `
+          <h3>Your application account</h3>
+          <p>Your applicant account has been created. Use the credentials below to sign in:</p>
+          <p><strong>Email:</strong> ${lowerEmail}</p>
+          <p><strong>Temporary password:</strong> ${tempPassword}</p>
+          <p>On first login you will be required to change your password.</p>
+        `
+      });
+      console.log(`[/applicants/confirm-email] ✅ Credentials sent to ${lowerEmail}`);
       return res.json({ ok: true, emailed: true, message: 'Account created and emailed' });
     } catch (mailErr) {
-      console.warn('/applicants/confirm-email: mail send failed', mailErr && mailErr.message);
+      console.error('[/applicants/confirm-email] ❌ Failed to send credentials:', mailErr?.message || mailErr);
       // Still a success (account created). Return emailed:false so client can show appropriate message.
       return res.json({ ok: true, emailed: false, message: 'Account created but emailing failed' });
     }
@@ -1334,14 +1358,44 @@ cron.schedule('0 2 * * *', async () => {
 
 console.log('✅ Cron job scheduled: Archived messages auto-deletion (daily at 2:00 AM, 60+ days old)');
 
-// --- TEST SMTP ENDPOINT (for debugging) ---
-app.get('/test-smtp', async (req, res) => {
+// --- TEST EMAIL ENDPOINT (for debugging Resend) ---
+app.get('/test-email', async (req, res) => {
+  const testEmail = req.query.to || 'test@example.com';
+  
   try {
-    await mailTransporter.verify();
-    res.json({ success: true, message: 'SMTP connection successful' });
+    console.log('🧪 Testing Resend API...');
+    console.log(`📧 From: ${RESEND_FROM_EMAIL}`);
+    console.log(`📧 To: ${testEmail}`);
+    console.log(`🔑 API Key: ${RESEND_API_KEY ? RESEND_API_KEY.substring(0, 8) + '...' : 'NOT SET'}`);
+    
+    // Attempt to send actual test email
+    const result = await resend.emails.send({
+      from: RESEND_FROM_EMAIL,
+      to: testEmail,
+      subject: 'Test Email from AlpHFAbet',
+      html: '<p>✅ If you received this email, Resend is working correctly!</p>'
+    });
+    
+    console.log('✅ Test email sent successfully:', result);
+    
+    res.json({ 
+      success: true, 
+      message: 'Test email sent successfully!',
+      provider: 'Resend',
+      from: RESEND_FROM_EMAIL,
+      to: testEmail,
+      emailId: result.id
+    });
   } catch (error) {
-    console.error('SMTP test failed:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Email service test failed:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      code: error.code,
+      statusCode: error.statusCode,
+      apiKeyConfigured: !!RESEND_API_KEY,
+      fromEmail: RESEND_FROM_EMAIL
+    });
   }
 });
 
