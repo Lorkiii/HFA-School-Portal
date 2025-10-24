@@ -2492,18 +2492,16 @@ function updatePagination() {
 
 function updateStatsOverview() {
   const active = allApplicants.filter((a) => !a.archived);
-  // PHASE 2: Include new status names with backward compatibility
-  const stats = { new: 0, screening: 0, interview_scheduled: 0, approved: 0 };
+
+  const stats = { new: 0, screening: 0, interview_scheduled: 0 };
   active.forEach((a) => {
     if (a.status === "new") stats.new++;
     else if (a.status === "reviewing" || a.status === "screening") stats.screening++;
     else if (a.status === "interview_scheduled") stats.interview_scheduled++;
-    else if (a.status === "approved") stats.approved++;
   });
   document.getElementById("new-teachers-count") && (document.getElementById("new-teachers-count").textContent = stats.new);
   document.getElementById("review-teachers-count") && (document.getElementById("review-teachers-count").textContent = stats.screening);
   document.getElementById("interview-teachers-count") && (document.getElementById("interview-teachers-count").textContent = stats.interview_scheduled);
-  document.getElementById("approved-teachers-count") && (document.getElementById("approved-teachers-count").textContent = stats.approved);
 }
 
 // utilities
