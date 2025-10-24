@@ -1,7 +1,7 @@
 import express from 'express';
 
 export default function createEnrollmentRouter(deps = {}) {
-  const { db, requireAdmin } = deps;
+  const { db, requireAdmin, writeActivityLog } = deps;
   const router = express.Router();
 
   // GET /api/enrollment/status - Public endpoint to check if enrollment is open
@@ -104,10 +104,23 @@ export default function createEnrollmentRouter(deps = {}) {
           isOpen: shs.isOpen ?? true // Preserve isOpen status or default to true
         },
         updatedAt: new Date().toISOString(),
-        updatedBy: req.user?.email || 'admin'
+        updatedBy: req.adminUser?.email || req.user?.email || 'admin'
       };
 
       await db.collection('settings').doc('enrollment').set(data, { merge: true });
+
+      // Log activity
+      if (writeActivityLog) {
+        await writeActivityLog({
+          actorUid: req.adminUser?.uid || req.user?.uid,
+          actorEmail: req.adminUser?.email || req.user?.email,
+          action: 'update-enrollment-settings',
+          detail: JSON.stringify({
+            jhs: { startDate: jhs.startDate, endDate: jhs.endDate },
+            shs: { startDate: shs.startDate, endDate: shs.endDate }
+          })
+        });
+      }
 
       return res.json({ ok: true, message: 'Enrollment settings updated successfully' });
     } catch (err) {
@@ -157,6 +170,21 @@ export default function createEnrollmentRouter(deps = {}) {
 
       console.log(`✅ Enrollment started for ${level.toUpperCase()}: ${startDate} to ${endDate}`);
 
+      // Log activity
+      if (writeActivityLog) {
+        await writeActivityLog({
+          actorUid: req.adminUser?.uid || req.user?.uid,
+          actorEmail: req.adminUser?.email || req.user?.email,
+          action: 'start-enrollment',
+          detail: JSON.stringify({
+            level: level.toUpperCase(),
+            startDate: startDate,
+            endDate: endDate,
+            action: 'opened'
+          })
+        });
+      }
+
       return res.json({ 
         ok: true, 
         message: `${level.toUpperCase()} enrollment started successfully`,
@@ -202,6 +230,21 @@ export default function createEnrollmentRouter(deps = {}) {
       await docRef.set(updateData, { merge: true });
 
       console.log(`❌ Enrollment closed for ${level.toUpperCase()}`);
+
+      // Log activity
+      if (writeActivityLog) {
+        await writeActivityLog({
+          actorUid: req.adminUser?.uid || req.user?.uid,
+          actorEmail: req.adminUser?.email || req.user?.email,
+          action: 'close-enrollment',
+          detail: JSON.stringify({
+            level: level.toUpperCase(),
+            startDate: levelData.startDate,
+            endDate: levelData.endDate,
+            action: 'closed'
+          })
+        });
+      }
 
       return res.json({ 
         ok: true, 

@@ -378,14 +378,36 @@ Firebase Firestore does **NOT use traditional SQL schemas**. Instead, the databa
   actorEmail: string,             // Admin's email
   actorName: string,              // Admin's display name
   targetUid: string,              // Target user affected (optional)
-  action: string,                 // Action type: "admin-send-message", "applicant-created", etc.
-  detail: string,                 // Additional details
+  action: string,                 // Action type (see list below)
+  detail: string,                 // Additional details (JSON string)
   timestamp: Timestamp,
   createdAt: Timestamp
 }
 ```
 
-**Used in**: `server/server.mjs` - Line 657
+**Logged Actions**:
+- `admin-send-message` - Message sent to applicant
+- `applicant-created` - New teacher account created
+- `send-admin-otp` - OTP sent for admin verification
+- `create-admin` - New admin account created
+- `update-user` - User profile updated
+- `archive-user` - User archived
+- `unarchive-user` - User restored from archive
+- `delete-user` - User permanently deleted
+- `reset-password` - Password reset link generated
+- `approve-application` - Application approved
+- `reject-application` - Application rejected
+- **`update-enrollment-settings`** - Enrollment dates updated ✨ NEW
+- **`start-enrollment`** - Enrollment opened (JHS/SHS) ✨ NEW
+- **`close-enrollment`** - Enrollment closed (JHS/SHS) ✨ NEW
+- `bulk-sync-teacher-names` - Teacher names synced
+- `clear-force-password` - Password change flag cleared
+
+**Used in**: 
+- `server/server.mjs` - Line 657
+- `server/routes/enrollment.js` - Lines 113, 174, 235
+- `server/routes/admin-users.js`
+- `server/routes/admin-actions.js`
 
 ---
 
