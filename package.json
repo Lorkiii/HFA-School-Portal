@@ -3,7 +3,12 @@
   "version": "1.0.0",
   "main": "script.js",
   "scripts": {
-    "start": "node server/server.mjs"
+    "start": "node server/server.mjs",
+    "test:rules": "firebase emulators:exec --only firestore 'jest firestore.rules.test.js'",
+    "test:rules-watch": "firebase emulators:exec --only firestore 'jest firestore.rules.test.js --watch'",
+    "emulator": "firebase emulators:start --only firestore",
+    "deploy:rules": "firebase deploy --only firestore:rules",
+    "validate:rules": "firebase firestore:rules:check"
   },
   "author": "",
   "license": "ISC",
