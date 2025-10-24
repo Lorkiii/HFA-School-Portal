@@ -75,13 +75,14 @@ document.addEventListener("DOMContentLoaded", () => {
       { id: "last-name", label: "Last Name" },
       { id: "birth-date", label: "Birth Date" },
       { id: "gender", label: "Gender" },
-      { id: "strand", label: "Strand" },
-      { id: "track", label: "Track" },
+      { id: "grade-level", label: "Grade Level" },
+      { id: "academic-track", label: "Academic Track" },
       { id: "barangay", label: "Barangay" },
       { id: "city", label: "City" },
       { id: "province", label: "Province" },
+      { id: "guardian", label: "Parent/Guardian Name" },
       { id: "contact-number", label: "Contact Number" },
-      { id: "email-address", label: " Email"}
+      { id: "email-address", label: "Email Address"}
     ];
 
     const missingFields = [];

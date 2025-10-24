@@ -262,8 +262,10 @@ document.addEventListener("DOMContentLoaded", () => {
       birthdate: getVal("birth-date"),
       gender: getVal("gender"),
       gradeLevel: getVal("grade-level"),
+      email: getVal("email-address"),
       address: fullAddress,
       contactNumber: contactNumber,
+      guardianName: getVal("guardian-name"),
       studentType: document.querySelector('input[name="student-type"]:checked')?.value || "",
       previousSchool: getVal("previous-school"),
       studentNumber: getVal("student-number")
