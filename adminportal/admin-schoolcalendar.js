@@ -55,6 +55,10 @@ async function fetchCalendarEvents(fetchInfo, successCallback, failureCallback) 
     const interviewData = await fetchInterviews();
     events.push(...interviewData);
 
+    // Fetch demo teaching schedules
+    const demoData = await fetchDemoSchedules();
+    events.push(...demoData);
+
     successCallback(events);
   } catch (error) {
     console.error('Error fetching calendar events:', error);
@@ -174,9 +178,17 @@ async function fetchInterviews() {
         // Combine date and time
         const dateTimeStr = `${interviewDate}T${interviewTime}:00`;
         
+        // Construct applicant name with proper fallback
+        let applicantName = data.fullName || data.displayName;
+        if (!applicantName && data.firstName && data.lastName) {
+          const parts = [data.firstName, data.middleName, data.lastName].filter(Boolean);
+          applicantName = parts.join(' ');
+        }
+        applicantName = applicantName || 'Applicant';
+        
         interviews.push({
           id: `interview-${doc.id}`,
-          title: `🎤 Interview: ${data.displayName || data.name || 'Applicant'}`,
+          title: `🎤 Interview: ${applicantName}`,
           start: dateTimeStr,
           allDay: false,
           backgroundColor: '#10b981',
@@ -184,7 +196,7 @@ async function fetchInterviews() {
           textColor: '#ffffff',
           extendedProps: {
             type: 'interview',
-            applicantName: data.displayName || data.name,
+            applicantName: applicantName,
             applicantEmail: data.contactEmail || data.email,
             mode: data.interview.mode,
             location: data.interview.location,
@@ -203,6 +215,72 @@ async function fetchInterviews() {
   }
 }
 
+// Fetch demo teaching schedules from Firestore
+async function fetchDemoSchedules() {
+  try {
+    if (!db) {
+      console.warn('Firestore not initialized');
+      return [];
+    }
+
+    // Fetch all teacher applicants from Firestore
+    const querySnapshot = await getDocs(collection(db, 'teacherApplicants'));
+    
+    const demos = [];
+    
+    querySnapshot.forEach((doc) => {
+      const data = doc.data();
+      
+      // Only include if demo teaching is scheduled and has date/time
+      if (data.demoTeaching && data.demoTeaching.date && data.demoTeaching.time) {
+        const demoDate = data.demoTeaching.date;
+        const demoTime = data.demoTeaching.time || '10:00';
+        
+        // Combine date and time
+        const dateTimeStr = `${demoDate}T${demoTime}:00`;
+        
+        // Construct applicant name with proper fallback
+        let applicantName = data.fullName || data.displayName;
+        if (!applicantName && data.firstName && data.lastName) {
+          const parts = [data.firstName, data.middleName, data.lastName].filter(Boolean);
+          applicantName = parts.join(' ');
+        }
+        applicantName = applicantName || 'Applicant';
+        
+        // Create title with applicant name and subject
+        const subject = data.demoTeaching.subject ? ` - ${data.demoTeaching.subject}` : '';
+        
+        demos.push({
+          id: `demo-${doc.id}`,
+          title: `🎯 Demo: ${applicantName}${subject}`,
+          start: dateTimeStr,
+          allDay: false,
+          backgroundColor: '#f97316',
+          borderColor: '#ea580c',
+          textColor: '#ffffff',
+          extendedProps: {
+            type: 'demo',
+            applicantName: applicantName,
+            applicantEmail: data.contactEmail || data.email,
+            subject: data.demoTeaching.subject,
+            mode: data.demoTeaching.mode,
+            location: data.demoTeaching.location,
+            notes: data.demoTeaching.notes,
+            scheduledBy: data.demoTeaching.scheduledBy,
+            status: data.status
+          }
+        });
+      }
+    });
+
+    console.log(`[Calendar] Found ${demos.length} scheduled demo teachings`);
+    return demos;
+  } catch (error) {
+    console.error('Error fetching demo schedules from Firestore:', error);
+    return [];
+  }
+}
+
 // Helper: Add days to a date string
 function addDays(dateStr, days) {
   const date = new Date(dateStr);
@@ -210,32 +288,77 @@ function addDays(dateStr, days) {
   return date.toISOString().split('T')[0];
 }
 
-// Show event details in a simple alert/modal
+// Show event details in modal
 function showEventDetails(event) {
   const props = event.extendedProps;
-  let message = `${event.title}\n\n`;
+  const modal = document.getElementById('calendar-event-modal');
+  const titleElement = document.getElementById('calendar-event-title');
+  const detailsElement = document.getElementById('calendar-event-details');
 
-  // Add type-specific details
+  // Set modal title
+  titleElement.textContent = event.title;
+
+  // Build details HTML based on event type
+  let detailsHTML = '';
+
   if (props.type === 'announcement' || props.type === 'news') {
-    message += `Type: ${props.type.toUpperCase()}\n`;
-    message += `Category: ${props.category || 'N/A'}\n`;
-    message += `Posted by: ${props.createdBy || 'Admin'}\n\n`;
-    message += `Content:\n${props.body || 'No content'}`;
+    detailsHTML = `
+      <p><strong>Type:</strong> ${props.type.toUpperCase()}</p>
+      <p><strong>Category:</strong> ${props.category || 'N/A'}</p>
+      <p><strong>Posted by:</strong> ${props.createdBy || 'Admin'}</p>
+      <p><strong>Date:</strong> ${formatDate(event.start)}</p>
+      <hr style="margin: 15px 0; border: none; border-top: 1px solid #e5e5e5;">
+      <p><strong>Content:</strong></p>
+      <p style="white-space: pre-wrap;">${props.body || 'No content'}</p>
+    `;
   } else if (props.type === 'enrollment') {
-    message += `Level: ${props.level}\n`;
-    message += `Start: ${formatDate(event.start)}\n`;
-    message += `End: ${formatDate(new Date(event.end.getTime() - 86400000))}`; // Subtract 1 day for display
+    detailsHTML = `
+      <p><strong>Level:</strong> ${props.level}</p>
+      <p><strong>Start Date:</strong> ${formatDate(event.start)}</p>
+      <p><strong>End Date:</strong> ${formatDate(new Date(event.end.getTime() - 86400000))}</p>
+    `;
   } else if (props.type === 'interview') {
-    message += `Applicant: ${props.applicantName || 'N/A'}\n`;
-    message += `Email: ${props.applicantEmail || 'N/A'}\n`;
-    message += `Time: ${formatDateTime(event.start)}\n`;
-    if (props.mode) message += `Mode: ${props.mode}\n`;
-    if (props.location) message += `Location: ${props.location}\n`;
-    if (props.notes) message += `\nNotes:\n${props.notes}`;
+    detailsHTML = `
+      <p><strong>Applicant:</strong> ${props.applicantName || 'N/A'}</p>
+      <p><strong>Email:</strong> ${props.applicantEmail || 'N/A'}</p>
+      <p><strong>Date & Time:</strong> ${formatDateTime(event.start)}</p>
+      ${props.mode ? `<p><strong>Mode:</strong> ${props.mode}</p>` : ''}
+      ${props.location ? `<p><strong>Location:</strong> ${props.location}</p>` : ''}
+      ${props.status ? `<p><strong>Status:</strong> ${props.status}</p>` : ''}
+      ${props.notes ? `<hr style="margin: 15px 0; border: none; border-top: 1px solid #e5e5e5;"><p><strong>Notes:</strong></p><p style="white-space: pre-wrap;">${props.notes}</p>` : ''}
+    `;
+  } else if (props.type === 'demo') {
+    detailsHTML = `
+      <p><strong>Applicant:</strong> ${props.applicantName || 'N/A'}</p>
+      <p><strong>Email:</strong> ${props.applicantEmail || 'N/A'}</p>
+      ${props.subject ? `<p><strong>Subject:</strong> ${props.subject}</p>` : ''}
+      <p><strong>Date & Time:</strong> ${formatDateTime(event.start)}</p>
+      ${props.mode ? `<p><strong>Mode:</strong> ${props.mode}</p>` : ''}
+      ${props.location ? `<p><strong>Location:</strong> ${props.location}</p>` : ''}
+      ${props.scheduledBy ? `<p><strong>Scheduled by:</strong> ${props.scheduledBy}</p>` : ''}
+      ${props.status ? `<p><strong>Status:</strong> ${props.status}</p>` : ''}
+      ${props.notes ? `<hr style="margin: 15px 0; border: none; border-top: 1px solid #e5e5e5;"><p><strong>Notes:</strong></p><p style="white-space: pre-wrap;">${props.notes}</p>` : ''}
+    `;
   }
 
-  alert(message);
+  // Set details and show modal
+  detailsElement.innerHTML = detailsHTML;
+  modal.style.display = 'flex';
 }
+
+// Close calendar event modal
+window.closeCalendarEventModal = function() {
+  const modal = document.getElementById('calendar-event-modal');
+  modal.style.display = 'none';
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('calendar-event-modal');
+  if (e.target === modal) {
+    closeCalendarEventModal();
+  }
+});
 
 // Format date for display
 function formatDate(date) {

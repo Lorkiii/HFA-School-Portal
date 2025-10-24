@@ -5108,6 +5108,36 @@ button.post.posting::after {
 @media (max-width:920px){
   .col-email{ width:32%; }
   .col-name{ width:28%; }
+  
+  /* Reduce section padding */
+  #User-management {
+    padding: 16px 12px;
+  }
+  
+  /* Make filters more compact */
+  .user-filters {
+    gap: 10px;
+  }
+  
+  /* Adjust button size */
+  #User-management .btn-add-user {
+    padding: 10px 16px;
+    font-size: 0.95rem;
+  }
+  
+  /* Table adjustments */
+  .users-table {
+    font-size: 0.95rem;
+  }
+  
+  .users-table thead th {
+    padding: 12px 8px;
+    font-size: 0.9rem;
+  }
+  
+  .users-table td {
+    padding: 10px 8px;
+  }
 }
 @keyframes highlight {
   0% {
@@ -5130,6 +5160,43 @@ button.post.posting::after {
   .col-email, .col-name { width:100%; }
   .col-role, .col-status { width:auto; }
   .users-table thead { display: none; }
+  
+  /* Section adjustments */
+  #User-management {
+    padding: 14px 10px;
+  }
+  
+  /* Tabs responsive */
+  .user-management-tabs {
+    gap: 6px;
+    margin-bottom: 14px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .tab-btn {
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    white-space: nowrap;
+  }
+  
+  /* Filters stack on mobile */
+  .user-filters {
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  
+  /* Full width add button */
+  #User-management .btn-add-user {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  /* Search box full width */
+  .search-box {
+    width: 100%;
+  }
 
 
   /* Card style for each row */
@@ -5259,26 +5326,193 @@ button.post.posting::after {
   }
 }
 
+/* Medium tablets and small screens */
+@media (max-width: 600px) {
+  #User-management {
+    padding: 12px 8px;
+  }
+  
+  /* Section header responsive */
+  #User-management .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  /* Tabs scrollable */
+  .user-management-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  
+  .user-management-tabs::-webkit-scrollbar {
+    height: 4px;
+  }
+  
+  .user-management-tabs::-webkit-scrollbar-thumb {
+    background: #cbd5e0;
+    border-radius: 4px;
+  }
+  
+  /* Compact user cards */
+  .users-table tr {
+    padding: 10px 8px;
+    margin: 8px 0;
+  }
+  
+  /* Responsive modals */
+  .user-mgmt-modal-content {
+    width: 94%;
+    max-width: 94vw;
+  }
+  
+  /* Activity log responsive */
+  .activity-controls {
+    gap: 12px;
+  }
+  
+  .activity-toggle-wrapper {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .activity-toggle-label {
+    margin-bottom: 6px;
+  }
+}
+
 /* Extra: For very small screens, reduce card width and padding */
 @media (max-width: 480px) {
+  /* Further reduce section padding */
+  #User-management {
+    padding: 12px 8px;
+  }
+  
+  /* Compact tabs */
+  .user-management-tabs {
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+  
+  .tab-btn {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+  
+  /* Compact filters */
+  .user-filters {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  
+  /* Smaller add button */
+  #User-management .btn-add-user {
+    padding: 8px 14px;
+    font-size: 0.9rem;
+  }
+  
+  /* Table cards more compact */
   .users-table tr {
-    padding: 6px 2px;
-    margin: 6px 0;
+    padding: 8px 6px;
+    margin: 8px 0;
     max-width: 99vw;
   }
+  
   .users-table td::before {
-    font-size: 14px;
+    font-size: 13px;
     margin-bottom: 1px;
   }
-  .users-table td, .users-table tr { font-size: 13px; }
+  
+  .users-table td, .users-table tr { 
+    font-size: 13px; 
+  }
+  
+  /* Smaller badges */
+  .badge {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    margin-right: 6px;
+  }
+  
+  /* Compact action buttons */
+  .users-table .table-action-btn {
+    min-width: 30px;
+    min-height: 30px;
+    font-size: 13px;
+  }
+  
+  /* Modal adjustments */
+  .user-mgmt-modal-content {
+    width: 96%;
+    max-width: 96vw;
+    padding: 16px;
+  }
+  
+  .user-mgmt-modal-header h3 {
+    font-size: 1.1rem;
+  }
+  
+  .user-mgmt-form-group {
+    margin-bottom: 12px;
+  }
+  
+  .user-mgmt-form-group label {
+    font-size: 0.9rem;
+  }
+  
+  .user-mgmt-form-group input,
+  .user-mgmt-form-group select {
+    font-size: 14px;
+    padding: 9px 10px;
+  }
+  
+  .user-mgmt-btn-save,
+  .user-mgmt-btn-cancel,
+  .user-mgmt-btn-ok {
+    padding: 9px 14px;
+    font-size: 0.9rem;
+  }
 }
 @media (max-width: 420px) {
+  /* Minimal section padding */
+  #User-management {
+    padding: 10px 6px;
+  }
+  
+  /* Very compact tabs */
+  .user-management-tabs {
+    gap: 3px;
+    margin-bottom: 10px;
+  }
+  
+  .tab-btn {
+    padding: 7px 10px;
+    font-size: 0.8rem;
+  }
+  
+  /* Minimal filters */
+  .user-filters {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  
+  /* Compact add button */
+  #User-management .btn-add-user {
+    padding: 7px 12px;
+    font-size: 0.85rem;
+  }
 
   /* reduce card width & padding to avoid long vertical scrolling */
   .users-table tr {
-    padding: 10px;
-    margin: 8px 0;
-    max-width: 420px;
+    padding: 8px;
+    margin: 6px 0;
+    max-width: 100%;
   }
 
   /* Remove the left-side labels to avoid clutter — values stack vertically */
@@ -5289,21 +5523,21 @@ button.post.posting::after {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    padding: 6px 6px;
-    gap: 6px;
+    padding: 5px 4px;
+    gap: 4px;
   }
 
   /* Name should be prominent */
-  .users-table .name-cell { font-weight: 600; font-size: 15px; }
+  .users-table .name-cell { font-weight: 600; font-size: 14px; }
 
   /* Email smaller, wrap */
-  .users-table .email-cell { font-size: 13px; color: #374151; word-break: break-word; }
+  .users-table .email-cell { font-size: 12px; color: #374151; word-break: break-word; }
 
   /* role/status/created: render inline small meta */
   .users-table .role-cell,
   .users-table .status-cell,
   .users-table .created-cell {
-    font-size: 12px;
+    font-size: 11px;
     color: #6b7280;
   }
 
@@ -5312,12 +5546,151 @@ button.post.posting::after {
 
   /* reduce mobile menu padding */
   .dropdown-details .dropdown-item,
-  .mobile-actions .mobile-item { padding: 9px 10px; font-size: 13px; }
+  .mobile-actions .mobile-item { padding: 8px 9px; font-size: 12px; }
 
   /* slightly reduce overall font on very small screens */
-  .users-table td, .users-table tr { font-size: 13px; }
+  .users-table td, .users-table tr { font-size: 12px; }
+  
+  /* Very compact badges */
+  .badge {
+    padding: 3px 6px;
+    font-size: 10px;
+  }
+  
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    margin-right: 4px;
+  }
+  
+  /* Smaller action buttons */
+  .users-table .table-action-btn {
+    min-width: 28px;
+    min-height: 28px;
+    font-size: 12px;
+  }
+  
+  /* Modal full width on very small screens */
+  .user-mgmt-modal-content {
+    width: 98%;
+    max-width: 98vw;
+    padding: 14px;
+  }
+  
+  .user-mgmt-modal-content.user-mgmt-modal-small {
+    width: 98%;
+  }
+  
+  .user-mgmt-modal-header h3 {
+    font-size: 1rem;
+  }
+  
+  .user-mgmt-modal-close {
+    width: 30px;
+    height: 30px;
+    font-size: 18px;
+  }
+  
+  .user-mgmt-form-group {
+    margin-bottom: 10px;
+  }
+  
+  .user-mgmt-form-group label {
+    font-size: 0.85rem;
+  }
+  
+  .user-mgmt-form-group input,
+  .user-mgmt-form-group select {
+    font-size: 13px;
+    padding: 8px 9px;
+  }
+  
+  .user-mgmt-btn-save,
+  .user-mgmt-btn-cancel,
+  .user-mgmt-btn-ok {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+  }
+  
+  /* Activity log adjustments */
+  .activity-controls {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .activity-settings-group,
+  .activity-actions-group {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+  
+  .btn-manual-clean,
+  .btn-refresh-logs {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .log-entry {
+    padding: 10px 8px;
+  }
+  
+  .log-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  
+  .log-message {
+    font-size: 12px;
+  }
+  
+  .log-meta {
+    font-size: 11px;
+  }
 }
 /* Calendar Styles */
+.calendar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 20px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #333;
+}
+
+.legend-color {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  display: inline-block;
+}
+
+@media (max-width: 600px) {
+  .calendar-legend {
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .legend-item {
+    font-size: 13px;
+  }
+
+  .legend-color {
+    width: 16px;
+    height: 16px;
+  }
+}
+
 .calendar-container {
   display: flex;
   gap: 2rem;
@@ -5414,6 +5787,128 @@ button.post.posting::after {
 [data-category="holiday"] .category-color {
   background: #ff8f00;
 }
+
+/* Calendar Event Details Modal */
+.calendar-event-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.calendar-event-modal-content {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  overflow: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.calendar-event-modal-header {
+  padding: 20px;
+  border-bottom: 1px solid #e5e5e5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8f9fa;
+}
+
+.calendar-event-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #2c3e50;
+}
+
+.calendar-event-modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #666;
+  cursor: pointer;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.calendar-event-modal-close:hover {
+  background: #e5e5e5;
+  color: #333;
+}
+
+.calendar-event-modal-body {
+  padding: 20px;
+}
+
+.calendar-event-modal-body p {
+  margin: 10px 0;
+  line-height: 1.6;
+  color: #555;
+}
+
+.calendar-event-modal-body strong {
+  color: #2c3e50;
+  display: inline-block;
+  min-width: 100px;
+}
+
+.calendar-event-modal-footer {
+  padding: 15px 20px;
+  border-top: 1px solid #e5e5e5;
+  display: flex;
+  justify-content: flex-end;
+  background: #f8f9fa;
+}
+
+.btn-calendar-ok {
+  background: #2e8b57;
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-calendar-ok:hover {
+  background: #27724a;
+}
+
+.btn-calendar-ok:active {
+  transform: scale(0.98);
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .calendar-event-modal-content {
+    width: 95%;
+    max-height: 90vh;
+  }
+
+  .calendar-event-modal-header,
+  .calendar-event-modal-body,
+  .calendar-event-modal-footer {
+    padding: 15px;
+  }
+
+  .calendar-event-modal-header h3 {
+    font-size: 1.1rem;
+  }
+}
+
 button:active {
   transform: scale(0.98);
 }
@@ -6274,6 +6769,9 @@ button:active {
 /* Activity Log List */
 .activity-log-list {
   padding: 20px;
+  max-height: calc(100vh - 400px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .log-entry {
@@ -6361,12 +6859,15 @@ button:active {
   .activity-controls {
     flex-direction: column;
     align-items: stretch;
+    padding: 16px;
+    gap: 12px;
   }
 
   .activity-settings-group,
   .activity-actions-group {
     width: 100%;
     flex-direction: column;
+    gap: 10px;
   }
 
   .activity-toggle-wrapper {
@@ -6398,6 +6899,337 @@ button:active {
   .log-meta {
     font-size: 11px;
     gap: 10px;
+  }
+
+  .activity-log-list {
+    padding: 14px;
+    max-height: calc(100vh - 380px);
+  }
+}
+
+/* Activity Log - Small tablets and large phones */
+@media (max-width: 600px) {
+  .activity-controls {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .activity-toggle-label {
+    font-size: 13px;
+  }
+
+  .btn-manual-clean,
+  .btn-refresh-logs {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  .activity-limit-select {
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+
+  .log-entry {
+    padding: 10px;
+  }
+
+  .log-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+  }
+
+  .log-message {
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+
+  .log-meta {
+    font-size: 10.5px;
+    gap: 8px;
+  }
+
+  .activity-log-list {
+    padding: 12px;
+    max-height: calc(100vh - 360px);
+  }
+}
+
+/* Activity Log - Phones */
+@media (max-width: 480px) {
+  .activity-controls {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .activity-toggle-wrapper {
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .activity-toggle-label {
+    font-size: 12px;
+    flex: 1;
+  }
+
+  .activity-toggle-slider {
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+  }
+
+  .activity-toggle-slider::before {
+    width: 18px;
+    height: 18px;
+  }
+
+  .activity-toggle-input:checked + .activity-toggle-slider::before {
+    transform: translateX(20px);
+  }
+
+  .btn-manual-clean,
+  .btn-refresh-logs {
+    padding: 9px 12px;
+    font-size: 12.5px;
+  }
+
+  .btn-manual-clean i,
+  .btn-refresh-logs i {
+    font-size: 12px;
+  }
+
+  .activity-limit-select {
+    padding: 9px 10px;
+    font-size: 12.5px;
+  }
+
+  .activity-log-container {
+    margin-top: 12px;
+  }
+
+  .log-entry {
+    padding: 10px 8px;
+    gap: 10px;
+  }
+
+  .log-icon {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .log-message {
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .log-meta {
+    font-size: 10px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .log-time,
+  .log-user {
+    font-size: 10px;
+  }
+
+  .activity-log-list {
+    padding: 10px;
+    max-height: calc(100vh - 340px);
+  }
+}
+
+/* Activity Log - Small phones */
+@media (max-width: 380px) {
+  .activity-controls {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .activity-toggle-wrapper {
+    gap: 6px;
+  }
+
+  .activity-toggle-label {
+    font-size: 11.5px;
+    line-height: 1.3;
+  }
+
+  .activity-toggle-label i {
+    font-size: 11px;
+  }
+
+  .activity-toggle-slider {
+    width: 40px;
+    height: 22px;
+  }
+
+  .activity-toggle-slider::before {
+    width: 16px;
+    height: 16px;
+  }
+
+  .activity-toggle-input:checked + .activity-toggle-slider::before {
+    transform: translateX(18px);
+  }
+
+  .btn-manual-clean,
+  .btn-refresh-logs {
+    padding: 8px 10px;
+    font-size: 11.5px;
+  }
+
+  .btn-manual-clean i,
+  .btn-refresh-logs i {
+    font-size: 11px;
+  }
+
+  .activity-limit-select {
+    padding: 8px 10px;
+    font-size: 11.5px;
+  }
+
+  .log-entry {
+    padding: 8px 6px;
+    gap: 8px;
+  }
+
+  .log-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 13px;
+  }
+
+  .log-message {
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .log-meta {
+    font-size: 9.5px;
+    gap: 5px;
+  }
+
+  .log-time,
+  .log-user {
+    font-size: 9.5px;
+  }
+
+  .activity-log-loading,
+  .activity-log-empty,
+  .activity-log-error {
+    padding: 30px 15px;
+    font-size: 12px;
+  }
+
+  .activity-log-loading i,
+  .activity-log-empty i,
+  .activity-log-error i {
+    font-size: 28px;
+  }
+
+  .activity-log-list {
+    padding: 8px;
+    max-height: calc(100vh - 320px);
+  }
+}
+
+/* Activity Log - Very small phones (like in screenshot - 322px) */
+@media (max-width: 340px) {
+  .activity-controls {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .activity-toggle-wrapper {
+    gap: 6px;
+  }
+
+  .activity-toggle-label {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+
+  .activity-toggle-slider {
+    width: 38px;
+    height: 20px;
+  }
+
+  .activity-toggle-slider::before {
+    width: 14px;
+    height: 14px;
+  }
+
+  .activity-toggle-input:checked + .activity-toggle-slider::before {
+    transform: translateX(18px);
+  }
+
+  .btn-manual-clean,
+  .btn-refresh-logs {
+    padding: 8px 10px;
+    font-size: 11px;
+    gap: 6px;
+  }
+
+  .btn-manual-clean i,
+  .btn-refresh-logs i {
+    font-size: 10px;
+  }
+
+  .activity-limit-select {
+    padding: 8px 8px;
+    font-size: 11px;
+  }
+
+  .log-entry {
+    padding: 8px 6px;
+    gap: 8px;
+  }
+
+  .log-icon {
+    width: 26px;
+    height: 26px;
+    font-size: 12px;
+  }
+
+  .log-message {
+    font-size: 10.5px;
+    line-height: 1.4;
+  }
+
+  .log-meta {
+    font-size: 9px;
+    gap: 4px;
+  }
+
+  .log-time,
+  .log-user {
+    font-size: 9px;
+  }
+
+  .activity-log-loading,
+  .activity-log-empty,
+  .activity-log-error {
+    padding: 25px 12px;
+    font-size: 11px;
+  }
+
+  .activity-log-loading i,
+  .activity-log-empty i,
+  .activity-log-error i {
+    font-size: 24px;
+  }
+
+  .btn-retry {
+    padding: 7px 12px;
+    font-size: 10.5px;
+  }
+
+  .activity-log-list {
+    padding: 6px;
+    max-height: calc(100vh - 300px);
   }
 }
 
@@ -7880,6 +8712,27 @@ button:active {
     color: #2e8b57;
   }
 
+  .btn-mail-restore,
+  .btn-mail-delete {
+    background: none;
+    border: none;
+    padding: 8px 12px;
+    cursor: pointer;
+    color: #6b7280;
+    border-radius: 4px;
+    transition: all 0.2s;
+  }
+
+  .btn-mail-restore:hover {
+    background: #f3f4f6;
+    color: #3b82f6;
+  }
+
+  .btn-mail-delete:hover {
+    background: #fef2f2;
+    color: #dc2626;
+  }
+
   /* Mail Empty State */
   .mail-empty {
     text-align: center;
@@ -7908,6 +8761,156 @@ button:active {
   /* Compose Modal Styles - REMOVED */
   /* Compose email functionality removed as part of Option 2 implementation */
   /* Use Applicants → Message button to send messages to teacher applicants */
+
+  /* Mail Preview Modal */
+  .mail-preview-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+  }
+
+  .mail-preview-modal-content {
+    background: white;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 85vh;
+    overflow: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+
+  .mail-preview-modal-header {
+    padding: 20px;
+    border-bottom: 1px solid #e5e5e5;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    background: #f8f9fa;
+  }
+
+  .mail-preview-modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    color: #2c3e50;
+    flex: 1;
+    padding-right: 20px;
+    word-wrap: break-word;
+  }
+
+  .mail-preview-modal-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    color: #666;
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  }
+
+  .mail-preview-modal-close:hover {
+    background: #e5e5e5;
+    color: #333;
+  }
+
+  .mail-preview-modal-body {
+    padding: 20px;
+  }
+
+  .mail-preview-meta {
+    margin-bottom: 15px;
+  }
+
+  .mail-preview-meta p {
+    margin: 8px 0;
+    line-height: 1.6;
+    color: #555;
+    font-size: 14px;
+  }
+
+  .mail-preview-meta strong {
+    color: #2c3e50;
+    display: inline-block;
+    min-width: 60px;
+  }
+
+  .mail-preview-body {
+    margin-top: 15px;
+  }
+
+  .mail-preview-body p {
+    margin: 0;
+    line-height: 1.8;
+    color: #333;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+
+  .mail-preview-modal-footer {
+    padding: 15px 20px;
+    border-top: 1px solid #e5e5e5;
+    display: flex;
+    justify-content: flex-end;
+    background: #f8f9fa;
+  }
+
+  .btn-mail-preview-ok {
+    background: #2e8b57;
+    color: white;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .btn-mail-preview-ok:hover {
+    background: #27724a;
+  }
+
+  .btn-mail-preview-ok:active {
+    transform: scale(0.98);
+  }
+
+  /* Mail Preview Modal Responsive */
+  @media (max-width: 600px) {
+    .mail-preview-modal-content {
+      width: 95%;
+      max-height: 90vh;
+    }
+
+    .mail-preview-modal-header,
+    .mail-preview-modal-body,
+    .mail-preview-modal-footer {
+      padding: 15px;
+    }
+
+    .mail-preview-modal-header h3 {
+      font-size: 1.1rem;
+    }
+
+    .mail-preview-meta p {
+      font-size: 13px;
+    }
+
+    .mail-preview-body p {
+      font-size: 14px;
+    }
+  }
 
   /* Mobile Responsive */
   @media (max-width: 768px) {

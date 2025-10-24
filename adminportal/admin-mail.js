@@ -171,16 +171,42 @@ function renderMessages(messages, tab) {
     const dateEl = clone.querySelector('.mail-date');
     dateEl.textContent = formatDate(message.createdAt || message.sentAt || message.archivedAt);
     
-    // Archive button (only for inbox tab)
+    // Action buttons based on tab
     const archiveBtn = clone.querySelector('.btn-mail-archive');
-    if (tab === 'inbox') {
-      archiveBtn.style.display = 'block';
+    const restoreBtn = clone.querySelector('.btn-mail-restore');
+    const deleteBtn = clone.querySelector('.btn-mail-delete');
+    
+    // Show archive button for sent tab only
+    if (tab === 'sent') {
+      archiveBtn.style.display = 'inline-block';
       archiveBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         handleArchiveMessage(message.id);
       });
-    } else {
+      restoreBtn.style.display = 'none';
+      deleteBtn.style.display = 'none';
+    } 
+    // Show restore and delete buttons for archived tab
+    else if (tab === 'archived') {
       archiveBtn.style.display = 'none';
+      restoreBtn.style.display = 'inline-block';
+      deleteBtn.style.display = 'inline-block';
+      
+      restoreBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleRestoreMessage(message.id);
+      });
+      
+      deleteBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        handleDeleteMessage(message.id);
+      });
+    } 
+    // Hide all action buttons for inbox
+    else {
+      archiveBtn.style.display = 'none';
+      restoreBtn.style.display = 'none';
+      deleteBtn.style.display = 'none';
     }
     
     // Click to expand/view details
@@ -209,24 +235,85 @@ function getEmptyMessage(tab) {
   return 'No messages';
 }
 
-// Handle view message (expand inline or modal)
+// Handle view message - show in modal
 function handleViewMessage(message, tab) {
-  // Simple alert for now - you can enhance this with a modal
-  let details = `From: ${message.senderName || 'Unknown'}\n`;
-  details += `Subject: ${message.subject || '(No Subject)'}\n`;
-  details += `Date: ${formatDate(message.createdAt || message.sentAt)}\n\n`;
-  details += `Message:\n${message.body || ''}`;
+  const modal = document.getElementById('mail-preview-modal');
+  const subjectEl = document.getElementById('mail-preview-subject');
+  const fromEl = document.getElementById('mail-preview-from');
+  const toEl = document.getElementById('mail-preview-to');
+  const dateEl = document.getElementById('mail-preview-date');
+  const messageEl = document.getElementById('mail-preview-message');
+  const attachmentDiv = document.getElementById('mail-preview-attachment');
+  const attachmentName = document.getElementById('mail-attachment-name');
   
-  if (tab === 'sent' && message.attachment) {
-    details += `\n\nAttachment: ${message.attachment.filename}`;
+  if (!modal) return;
+  
+  // Set subject
+  subjectEl.textContent = message.subject || '(No Subject)';
+  
+  // Set from/to based on tab
+  if (tab === 'sent') {
+    // For sent messages, show recipients
+    const recipients = message.to || [];
+    const recipientNames = recipients.map(r => r.name || r.email).join(', ');
+    fromEl.textContent = 'You';
+    toEl.textContent = recipientNames || 'Unknown';
+  } else {
+    // For inbox/archived, show sender
+    fromEl.textContent = message.senderName || 'Unknown';
+    toEl.textContent = 'You';
   }
   
-  alert(details);
+  // Set date
+  const fullDate = message.createdAt || message.sentAt || message.archivedAt;
+  if (fullDate) {
+    const date = new Date(fullDate);
+    dateEl.textContent = date.toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  } else {
+    dateEl.textContent = 'Unknown date';
+  }
+  
+  // Set message body
+  messageEl.textContent = message.body || '(No message content)';
+  
+  // Show attachment if exists
+  if (message.attachment && message.attachment.filename) {
+    attachmentName.textContent = message.attachment.filename;
+    attachmentDiv.style.display = 'block';
+  } else {
+    attachmentDiv.style.display = 'none';
+  }
+  
+  // Show modal
+  modal.style.display = 'flex';
 }
+
+// Close mail preview modal
+window.closeMailPreviewModal = function() {
+  const modal = document.getElementById('mail-preview-modal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+}
+
+// Close modal when clicking outside
+document.addEventListener('click', function(e) {
+  const modal = document.getElementById('mail-preview-modal');
+  if (e.target === modal) {
+    closeMailPreviewModal();
+  }
+});
 
 // Handle archive message
 async function handleArchiveMessage(messageId) {
-  if (!confirm('Archive this message? It will be automatically deleted after 60 days.')) {
+  if (!confirm('Archive this message? It will be automatically deleted after 30 days.')) {
     return;
   }
   
@@ -245,6 +332,54 @@ async function handleArchiveMessage(messageId) {
   } catch (error) {
     console.error('[Mail] Error archiving message:', error);
     alert('Failed to archive message: ' + error.message);
+  }
+}
+
+// Handle restore message
+async function handleRestoreMessage(messageId) {
+  if (!confirm('Restore this message back to Sent?')) {
+    return;
+  }
+  
+  try {
+    const response = await apiFetch(`/api/admin/mail/${messageId}/restore`, {
+      method: 'PUT'
+    });
+    
+    if (response.ok) {
+      alert('Message restored successfully');
+      // Reload current tab
+      loadMessages(currentTab);
+    } else {
+      throw new Error(response.error || 'Failed to restore message');
+    }
+  } catch (error) {
+    console.error('[Mail] Error restoring message:', error);
+    alert('Failed to restore message: ' + error.message);
+  }
+}
+
+// Handle delete message permanently
+async function handleDeleteMessage(messageId) {
+  if (!confirm('⚠️ Delete this message permanently? This action cannot be undone!')) {
+    return;
+  }
+  
+  try {
+    const response = await apiFetch(`/api/admin/mail/${messageId}`, {
+      method: 'DELETE'
+    });
+    
+    if (response.ok) {
+      alert('Message deleted permanently');
+      // Reload current tab
+      loadMessages(currentTab);
+    } else {
+      throw new Error(response.error || 'Failed to delete message');
+    }
+  } catch (error) {
+    console.error('[Mail] Error deleting message:', error);
+    alert('Failed to delete message: ' + error.message);
   }
 }
 

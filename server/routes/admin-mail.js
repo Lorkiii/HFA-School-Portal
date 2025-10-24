@@ -129,6 +129,7 @@ export default function createAdminMailRouter(deps = {}) {
   
   // GET /api/admin/mail/archived
   // Fetch archived messages from applicants
+  // Implements lazy deletion - automatically deletes messages older than 30 days
 
   router.get('/archived', requireAdmin, async (req, res) => {
     try {
@@ -138,20 +139,60 @@ export default function createAdminMailRouter(deps = {}) {
         .orderBy('archivedAt', 'desc')
         .get();
       
-      const messages = snapshot.docs.map(doc => {
+      // Calculate 30 days ago threshold
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      const messages = [];
+      const messagesToDelete = [];
+      
+      // Filter messages and identify expired ones
+      snapshot.docs.forEach(doc => {
         const data = doc.data();
-        return {
-          id: doc.id,
-          applicantId: data.applicantId || null,
-          fromUid: data.fromUid || null,
-          senderName: data.senderName || 'Unknown',
-          senderEmail: data.senderEmail || '',
-          subject: data.subject || '(No Subject)',
-          body: data.body || '',
-          createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
-          archivedAt: data.archivedAt?.toDate?.()?.toISOString() || null
-        };
+        const archivedAt = data.archivedAt?.toDate ? data.archivedAt.toDate() : null;
+        
+        // Check if message is older than 30 days
+        if (archivedAt && archivedAt < thirtyDaysAgo) {
+          // Mark for deletion
+          messagesToDelete.push(doc.id);
+        } else {
+          // Include in results
+          messages.push({
+            id: doc.id,
+            applicantId: data.applicantId || null,
+            fromUid: data.fromUid || null,
+            senderName: data.senderName || 'Unknown',
+            senderEmail: data.senderEmail || '',
+            subject: data.subject || '(No Subject)',
+            body: data.body || '',
+            to: data.to || [],
+            attachment: data.attachment || null,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+            archivedAt: data.archivedAt?.toDate?.()?.toISOString() || null
+          });
+        }
       });
+      
+      // Delete expired messages in background (don't wait for completion)
+      if (messagesToDelete.length > 0) {
+        console.log(`[admin-mail] Lazy deletion: removing ${messagesToDelete.length} messages older than 30 days`);
+        
+        // Delete in batches to avoid timeout (Firestore allows max 500 operations per batch)
+        const batchSize = 500;
+        for (let i = 0; i < messagesToDelete.length; i += batchSize) {
+          const batch = db.batch();
+          const batchIds = messagesToDelete.slice(i, i + batchSize);
+          
+          batchIds.forEach(messageId => {
+            batch.delete(db.collection('applicant_messages').doc(messageId));
+          });
+          
+          // Execute batch delete asynchronously (don't block response)
+          batch.commit().catch(err => {
+            console.error('[admin-mail] Error in lazy deletion batch:', err);
+          });
+        }
+      }
       
       return res.json({ ok: true, messages });
     } catch (error) {
@@ -248,6 +289,98 @@ export default function createAdminMailRouter(deps = {}) {
       return res.status(500).json({ 
         ok: false, 
         error: 'Failed to archive message' 
+      });
+    }
+  });
+
+  // ============================================
+  // PUT /api/admin/mail/:messageId/restore
+  // Restore archived message back to sent
+  // ============================================
+  router.put('/:messageId/restore', requireAdmin, async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      
+      if (!messageId) {
+        return res.status(400).json({ ok: false, error: 'Message ID is required' });
+      }
+      
+      const messageRef = db.collection('applicant_messages').doc(messageId);
+      const messageDoc = await messageRef.get();
+      
+      if (!messageDoc.exists) {
+        return res.status(404).json({ ok: false, error: 'Message not found' });
+      }
+      
+      // Restore message - unarchive it
+      await messageRef.update({
+        isArchived: false,
+        archivedAt: admin.firestore.FieldValue.delete() // Remove archived timestamp
+      });
+      
+      return res.json({ 
+        ok: true, 
+        message: 'Message restored successfully' 
+      });
+    } catch (error) {
+      console.error('[admin-mail] Error restoring message:', error);
+      return res.status(500).json({ 
+        ok: false, 
+        error: 'Failed to restore message' 
+      });
+    }
+  });
+
+  // ============================================
+  // DELETE /api/admin/mail/:messageId
+  // Permanently delete a message
+  // ============================================
+  router.delete('/:messageId', requireAdmin, async (req, res) => {
+    try {
+      const { messageId } = req.params;
+      
+      if (!messageId) {
+        return res.status(400).json({ ok: false, error: 'Message ID is required' });
+      }
+      
+      const messageRef = db.collection('applicant_messages').doc(messageId);
+      const messageDoc = await messageRef.get();
+      
+      if (!messageDoc.exists) {
+        return res.status(404).json({ ok: false, error: 'Message not found' });
+      }
+      
+      // Permanently delete the message
+      await messageRef.delete();
+      
+      // Log the deletion activity
+      if (writeActivityLog) {
+        try {
+          await writeActivityLog({
+            actionType: 'mail_deleted',
+            performedBy: req.adminUser?.uid || req.user?.uid || 'admin',
+            performedByEmail: req.adminUser?.email || req.user?.email || 'admin@hfa.edu',
+            targetId: messageId,
+            targetType: 'message',
+            details: {
+              subject: messageDoc.data().subject || '(No Subject)'
+            },
+            timestamp: new Date()
+          });
+        } catch (logError) {
+          console.error('[admin-mail] Failed to log delete activity:', logError);
+        }
+      }
+      
+      return res.json({ 
+        ok: true, 
+        message: 'Message deleted permanently' 
+      });
+    } catch (error) {
+      console.error('[admin-mail] Error deleting message:', error);
+      return res.status(500).json({ 
+        ok: false, 
+        error: 'Failed to delete message' 
       });
     }
   });

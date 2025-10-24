@@ -1915,6 +1915,10 @@
                         <span>Interviews</span>
                     </div>
                     <div class="legend-item">
+                        <span class="legend-color" style="background-color: #f97316;"></span>
+                        <span>Demo Teaching</span>
+                    </div>
+                    <div class="legend-item">
                         <span class="legend-color" style="background-color: #8b5cf6;"></span>
                         <span>JHS Enrollment</span>
                     </div>
@@ -1933,6 +1937,24 @@
             </section>
 
         </section>
+
+        <!-- Calendar Event Details Modal -->
+        <div id="calendar-event-modal" class="calendar-event-modal" style="display: none;">
+            <div class="calendar-event-modal-content">
+                <div class="calendar-event-modal-header">
+                    <h3 id="calendar-event-title"></h3>
+                    <button class="calendar-event-modal-close" onclick="closeCalendarEventModal()">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="calendar-event-modal-body" id="calendar-event-details">
+                    <!-- Event details will be populated here -->
+                </div>
+                <div class="calendar-event-modal-footer">
+                    <button class="btn-calendar-ok" onclick="closeCalendarEventModal()">OK</button>
+                </div>
+            </div>
+        </div>
 
         <section id="profile-settings" style="display: none;">
             <div class="profile-settings-container">
@@ -2074,14 +2096,49 @@
                         <div class="mail-preview"></div>
                     </div>
                     <div class="mail-item-actions">
-                        <button class="btn-mail-archive" title="Archive">
+                        <button class="btn-mail-archive" title="Archive" style="display: none;">
                             <i class="fas fa-archive"></i>
+                        </button>
+                        <button class="btn-mail-restore" title="Restore" style="display: none;">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                        <button class="btn-mail-delete" title="Delete Permanently" style="display: none;">
+                            <i class="fas fa-trash"></i>
                         </button>
                     </div>
                 </div>
             </template>
         </section>
     </main>
+
+    <!-- Mail Preview Modal -->
+    <div id="mail-preview-modal" class="mail-preview-modal" style="display: none;">
+        <div class="mail-preview-modal-content">
+            <div class="mail-preview-modal-header">
+                <h3 id="mail-preview-subject"></h3>
+                <button class="mail-preview-modal-close" onclick="closeMailPreviewModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mail-preview-modal-body">
+                <div class="mail-preview-meta">
+                    <p><strong>From:</strong> <span id="mail-preview-from"></span></p>
+                    <p><strong>To:</strong> <span id="mail-preview-to"></span></p>
+                    <p><strong>Date:</strong> <span id="mail-preview-date"></span></p>
+                    <div id="mail-preview-attachment" style="display: none;">
+                        <p><strong>Attachment:</strong> <span id="mail-attachment-name"></span></p>
+                    </div>
+                </div>
+                <hr style="margin: 15px 0; border: none; border-top: 1px solid #e5e5e5;">
+                <div class="mail-preview-body">
+                    <p id="mail-preview-message"></p>
+                </div>
+            </div>
+            <div class="mail-preview-modal-footer">
+                <button class="btn-mail-preview-ok" onclick="closeMailPreviewModal()">OK</button>
+            </div>
+        </div>
+    </div>
 
 
     <!-- Announcement Modal - TASK 1: Scrollable with header/body/footer -->

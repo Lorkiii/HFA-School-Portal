@@ -1357,46 +1357,6 @@ cron.schedule('0 2 * * *', async () => {
 
 console.log('✅ Cron job scheduled: Archived messages auto-deletion (daily at 2:00 AM, 60+ days old)');
 
-// --- TEST EMAIL ENDPOINT (for debugging Resend) ---
-app.get('/test-email', async (req, res) => {
-  const testEmail = req.query.to || 'test@example.com';
-  
-  try {
-    console.log('🧪 Testing Resend API...');
-    console.log(`📧 From: ${RESEND_FROM_EMAIL}`);
-    console.log(`📧 To: ${testEmail}`);
-    console.log(`🔑 API Key: ${RESEND_API_KEY ? RESEND_API_KEY.substring(0, 8) + '...' : 'NOT SET'}`);
-    
-    // Attempt to send actual test email
-    const result = await resend.emails.send({
-      from: RESEND_FROM_EMAIL,
-      to: testEmail,
-      subject: 'Test Email from AlpHFAbet',
-      html: '<p>✅ If you received this email, Resend is working correctly!</p>'
-    });
-    
-    console.log('✅ Test email sent successfully:', result);
-    
-    res.json({ 
-      success: true, 
-      message: 'Test email sent successfully!',
-      provider: 'Resend',
-      from: RESEND_FROM_EMAIL,
-      to: testEmail,
-      emailId: result.id
-    });
-  } catch (error) {
-    console.error('❌ Email service test failed:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: error.message,
-      code: error.code,
-      statusCode: error.statusCode,
-      apiKeyConfigured: !!RESEND_API_KEY,
-      fromEmail: RESEND_FROM_EMAIL
-    });
-  }
-});
 
 // --- START SERVER ---
 const PORT = process.env.PORT || 3000;
