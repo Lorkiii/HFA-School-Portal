@@ -2024,6 +2024,33 @@ button.post.posting::after {
   border-top: 1px solid #e5e7eb;
   background: #fff;
   flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* View modal close button */
+#view-modal-close {
+  padding: 10px 24px;
+  background: #2e8b57;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
+}
+
+#view-modal-close:hover {
+  background: #246d43;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(46, 139, 87, 0.3);
+}
+
+#view-modal-close:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(46, 139, 87, 0.3);
 }
 
 /* Badges container */
@@ -2179,6 +2206,50 @@ button.post.posting::after {
   
   .view-meta-item {
     font-size: 0.85rem;
+  }
+  
+  /* Close button mobile */
+  #view-modal-close {
+    width: 100%;
+    padding: 10px 20px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Simple Alert & Confirm Modal Styles */
+.alert-icon {
+  text-align: center;
+  font-size: 3.5rem;
+  margin-bottom: 16px;
+  line-height: 1;
+}
+
+.alert-message {
+  color: #4b5563;
+  text-align: center;
+  margin-bottom: 24px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+#alert-modal .announcement-modal-content,
+#confirm-modal .announcement-modal-content {
+  padding: 32px 28px 24px 28px;
+}
+
+/* Alert modal responsive */
+@media (max-width: 480px) {
+  .alert-icon {
+    font-size: 3rem;
+  }
+  
+  .alert-message {
+    font-size: 0.95rem;
+  }
+  
+  #alert-modal .announcement-modal-content,
+  #confirm-modal .announcement-modal-content {
+    padding: 24px 20px 20px 20px;
   }
 }
 

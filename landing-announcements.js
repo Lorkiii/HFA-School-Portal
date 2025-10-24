@@ -179,6 +179,25 @@ function showFullPost(post) {
     // Set formatted date (NO AUTHOR for public view)
     document.getElementById('landing-modal-date').textContent = formatDate(post.createdAt);
     
+    // Show "Last updated" if post was edited (updatedAt exists and is different from createdAt)
+    const updatedContainer = document.getElementById('landing-modal-updated');
+    const updatedDateElement = document.getElementById('landing-modal-updated-date');
+    
+    if (post.updatedAt) {
+        const createdDate = new Date(post.createdAt).getTime();
+        const updatedDate = new Date(post.updatedAt).getTime();
+        
+        // Only show if updated date is different from created date (more than 1 minute difference)
+        if (updatedDate - createdDate > 60000) { // 60000ms = 1 minute
+            updatedDateElement.textContent = formatDate(post.updatedAt);
+            updatedContainer.style.display = 'flex';
+        } else {
+            updatedContainer.style.display = 'none';
+        }
+    } else {
+        updatedContainer.style.display = 'none';
+    }
+    
     // Show modal
     modal.style.display = 'flex';
 }

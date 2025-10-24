@@ -58,11 +58,6 @@ export default function createAdminMessagesRouter(deps = {}) {
         subject: subject,
         html
       };
-
-      console.log(`📤 [admin-messages] Attempting to send email to ${email}`);
-      console.log(`📧 From: ${fromAddress}`);
-      console.log(`📋 Subject: ${subject}`);
-
       try {
         const result = await mailTransporter.sendMail(mailOptions);
         console.log(`✅ [admin-messages] Email sent successfully!`, result);

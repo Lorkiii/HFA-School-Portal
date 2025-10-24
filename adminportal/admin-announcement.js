@@ -12,6 +12,162 @@ import { apiFetch } from '../api-fetch.js';
     }[m])); 
   }
 
+  // ALERT & CONFIRM MODAL UTILITIES
+
+  // Show simple alert modal (replaces browser alert)
+  function showAlert(message, type = 'success') {
+    const modal = document.getElementById('alert-modal');
+    const icon = document.getElementById('alert-icon');
+    const messageEl = document.getElementById('alert-message');
+    
+    // Set icon based on type
+    const icons = {
+      success: '✅',
+      error: '❌',
+      warning: '⚠️',
+      info: 'ℹ️'
+    };
+    icon.textContent = icons[type] || icons.info;
+    
+    // Set message
+    messageEl.textContent = message;
+    
+    // Show modal
+    modal.style.display = 'flex';
+    
+    // Close on OK button
+    const okBtn = document.getElementById('alert-ok-btn');
+    okBtn.onclick = () => {
+      modal.style.display = 'none';
+    };
+    
+    // Close on outside click
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        modal.style.display = 'none';
+      }
+    };
+  }
+
+  // Show confirm modal (replaces browser confirm)
+  function showConfirm(message) {
+    return new Promise((resolve) => {
+      const modal = document.getElementById('confirm-modal');
+      const messageEl = document.getElementById('confirm-message');
+      
+      // Set message
+      messageEl.textContent = message;
+      
+      // Show modal
+      modal.style.display = 'flex';
+      
+      // Handle confirm
+      const confirmBtn = document.getElementById('confirm-ok-btn');
+      confirmBtn.onclick = () => {
+        modal.style.display = 'none';
+        resolve(true);
+      };
+      
+      // Handle cancel
+      const cancelBtn = document.getElementById('confirm-cancel-btn');
+      cancelBtn.onclick = () => {
+        modal.style.display = 'none';
+        resolve(false);
+      };
+      
+      // Close on outside click (counts as cancel)
+      modal.onclick = (e) => {
+        if (e.target === modal) {
+          modal.style.display = 'none';
+          resolve(false);
+        }
+      };
+    });
+  }
+
+  // VIEW MODAL UTILITY
+
+  // Format date helper
+  function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    const options = { year: 'numeric', month: 'short', day: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+  }
+
+  // Show post in view modal (read-only preview)
+  function showViewModal(post) {
+    const modal = document.getElementById('view-modal');
+    
+    // Set title
+    document.getElementById('view-modal-title').textContent = post.title;
+    
+    // Set type badge
+    const typeBadge = document.getElementById('view-type-badge');
+    typeBadge.textContent = post.type === 'announcement' ? '📢 ANNOUNCEMENT' : '📰 NEWS';
+    typeBadge.className = `view-type-badge type-${post.type}`;
+    
+    // Set category badge
+    document.getElementById('view-category-badge').textContent = post.category;
+    
+    // Set image (show/hide based on existence)
+    const imageContainer = document.getElementById('view-image-container');
+    const image = document.getElementById('view-image');
+    if (post.imageUrl) {
+      image.src = post.imageUrl;
+      image.alt = post.title;
+      imageContainer.style.display = 'block';
+    } else {
+      imageContainer.style.display = 'none';
+    }
+    
+    // Set body content
+    document.getElementById('view-body').textContent = post.body;
+    
+    // Set posted date
+    document.getElementById('view-date').textContent = formatDate(post.createdAt);
+    
+    // Show/hide updated date if post was edited
+    const updatedItem = document.getElementById('view-updated-item');
+    if (post.updatedAt) {
+      const createdDate = new Date(post.createdAt).getTime();
+      const updatedDate = new Date(post.updatedAt).getTime();
+      
+      // Only show if actually updated (more than 1 minute difference)
+      if (updatedDate - createdDate > 60000) {
+        document.getElementById('view-updated-date').textContent = formatDate(post.updatedAt);
+        updatedItem.style.display = 'flex';
+      } else {
+        updatedItem.style.display = 'none';
+      }
+    } else {
+      updatedItem.style.display = 'none';
+    }
+    
+    // Set author
+    document.getElementById('view-author').textContent = post.createdByName || 'Unknown';
+    
+    // Set status
+    const status = post.archived ? 'Archived' : 'Active';
+    document.getElementById('view-status').textContent = status;
+    
+    // Show modal
+    modal.style.display = 'flex';
+    
+    // Close modal handler
+    const closeBtn = document.getElementById('view-modal-close');
+    closeBtn.onclick = () => {
+      modal.style.display = 'none';
+    };
+    
+    // Close on outside click
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        modal.style.display = 'none';
+      }
+    };
+  }
+
   // STATE MANAGEMENT
 
   // Cache for all posts (fetched from API)
@@ -33,7 +189,7 @@ import { apiFetch } from '../api-fetch.js';
       return allPosts;
     } catch (error) {
       console.error('Error fetching posts:', error);
-      alert('Failed to load announcements. Please refresh the page.');
+      showAlert('Failed to load announcements. Please refresh the page.', 'error');
       return [];
     }
   }
@@ -374,15 +530,16 @@ import { apiFetch } from '../api-fetch.js';
 
       // Handle archive button
       if (e.target.closest('.ann-archive-btn')) {
-        if (confirm('Are you sure you want to archive this post?')) {
+        const confirmed = await showConfirm('Are you sure you want to archive this post?');
+        if (confirmed) {
           try {
             await archivePost(postId);
-            alert('Post archived successfully');
+            showAlert('Post archived successfully!', 'success');
             await fetchAllPosts(); // Refresh data
             await renderFullSection(); // Re-render
             await renderDashboard(); // Update dashboard too
           } catch (error) {
-            alert('Failed to archive post. Please try again.');
+            showAlert('Failed to archive post. Please try again.', 'error');
           }
         }
       }
@@ -391,12 +548,20 @@ import { apiFetch } from '../api-fetch.js';
       else if (e.target.closest('.ann-restore-btn')) {
         try {
           await restorePost(postId);
-          alert('Post restored successfully');
+          showAlert('Post restored successfully!', 'success');
           await fetchAllPosts(); // Refresh data
           await renderFullSection(); // Re-render
           await renderDashboard(); // Update dashboard too
         } catch (error) {
-          alert('Failed to restore post. Please try again.');
+          showAlert('Failed to restore post. Please try again.', 'error');
+        }
+      }
+      
+      // Handle view button
+      else if (e.target.closest('.ann-view-btn')) {
+        const post = allPosts.find(p => p.id === postId);
+        if (post) {
+          showViewModal(post);
         }
       }
       
@@ -584,14 +749,14 @@ import { apiFetch } from '../api-fetch.js';
       
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        alert('Please select an image file');
+        showAlert('Please select an image file', 'error');
         imageInput.value = '';
         return;
       }
       
       // Validate file size (30MB max)
       if (file.size > 30 * 1024 * 1024) {
-        alert('Image must be less than 30MB');
+        showAlert('Image must be less than 30MB', 'error');
         imageInput.value = '';
         return;
       }
@@ -695,17 +860,17 @@ import { apiFetch } from '../api-fetch.js';
         
         // Validation
         if (!title) { 
-          alert("Please enter a title."); 
+          showAlert("Please enter a title.", "error"); 
           if (titleEl) titleEl.focus();
           return; 
         }
         if (!body) { 
-          alert("Please enter the content."); 
+          showAlert("Please enter the content.", "error"); 
           if (bodyEl) bodyEl.focus();
           return; 
         }
         if (!category) { 
-          alert("Please select a category."); 
+          showAlert("Please select a category.", "error"); 
           if (categoryEl) categoryEl.focus();
           return; 
         }
@@ -726,11 +891,11 @@ import { apiFetch } from '../api-fetch.js';
           if (editingPostId) {
             // UPDATE mode
             await updatePost(editingPostId, postData, selectedImageFile, shouldRemoveImage);
-            alert('Post updated successfully!');
+            showAlert('Post updated successfully!', 'success');
           } else {
             // CREATE mode
             await createPost(postData, selectedImageFile);
-            alert('Post created successfully!');
+            showAlert('Post created successfully!', 'success');
           }
           
           // Close modal and refresh
@@ -740,7 +905,7 @@ import { apiFetch } from '../api-fetch.js';
           await renderFullSection(); // Update full section if present
           
         } catch (error) {
-          alert('Failed to save post: ' + (error.message || 'Please try again'));
+          showAlert('Failed to save post: ' + (error.message || 'Please try again'), 'error');
         } finally {
           // Re-enable button
           saveBtn.disabled = false;

@@ -2200,6 +2200,10 @@
                         <i class="fas fa-calendar-alt"></i>
                         <span>Posted: <strong id="view-date"></strong></span>
                     </div>
+                    <div class="view-meta-item" id="view-updated-item" style="display: none;">
+                        <i class="fas fa-edit"></i>
+                        <span>Last updated: <strong id="view-updated-date"></strong></span>
+                    </div>
                     <div class="view-meta-item">
                         <i class="fas fa-user"></i>
                         <span>By: <strong id="view-author"></strong></span>
@@ -2310,16 +2314,25 @@
         </div>
     </div>
 
-    <!-- Notification Modal (replaces alert) -->
-    <div id="notification-modal" class="announcement-modal" role="dialog" aria-modal="true" aria-hidden="true" style="display: none;">
+    <!-- Simple Alert Modal (replaces all alert() calls) -->
+    <div id="alert-modal" class="announcement-modal" role="dialog" aria-modal="true" aria-hidden="true" style="display: none;">
         <div class="announcement-modal-content enrollment-modal-content" role="document" style="max-width: 400px;">
-            <div id="notification-icon" style="text-align: center; font-size: 3rem; margin-bottom: 16px;">✅</div>
-            <h3 id="notification-title" class="ann-modal-title" style="text-align: center; margin-bottom: 16px;">Success</h3>
-            <p id="notification-message" style="color: #666; text-align: center; margin-bottom: 24px;">Operation completed successfully</p>
-            
-            <!-- Action Button -->
+            <div id="alert-icon" class="alert-icon">✅</div>
+            <p id="alert-message" class="alert-message">Operation completed successfully</p>
             <div class="announcement-modal-actions" style="justify-content: center;">
-                <button class="post" id="notification-ok-btn" type="button" style="min-width: 100px;">OK</button>
+                <button class="post" id="alert-ok-btn" type="button" style="min-width: 100px;">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Simple Confirm Modal (replaces confirm() calls) -->
+    <div id="confirm-modal" class="announcement-modal" role="dialog" aria-modal="true" aria-hidden="true" style="display: none;">
+        <div class="announcement-modal-content enrollment-modal-content" role="document" style="max-width: 400px;">
+            <div class="alert-icon">⚠️</div>
+            <p id="confirm-message" class="alert-message">Are you sure?</p>
+            <div class="announcement-modal-actions" style="justify-content: center; gap: 12px;">
+                <button class="btn-cancel" id="confirm-cancel-btn" type="button">Cancel</button>
+                <button class="post" id="confirm-ok-btn" type="button">Confirm</button>
             </div>
         </div>
     </div>

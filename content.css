@@ -486,6 +486,14 @@ section {
     overflow: hidden;
     transition: all 0.3s ease;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    min-height: 320px;
+}
+
+/* Cards with images need more height */
+.ann-post-card.has-image {
+    min-height: 420px;
 }
 
 .ann-post-card:hover {
@@ -519,6 +527,9 @@ section {
 /* Post Content */
 .ann-post-content {
     padding: 16px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
 }
 
 /* Post Meta (Category + Date) */
@@ -575,6 +586,7 @@ section {
     -webkit-box-orient: vertical;
     overflow: hidden;
     text-overflow: ellipsis;
+    flex: 1;
 }
 
 /* Post Footer */
@@ -584,6 +596,7 @@ section {
     align-items: center;
     padding-top: 12px;
     border-top: 1px solid #f3f4f6;
+    margin-top: auto;
 }
 
 /* Author removed from public landing page */
@@ -686,6 +699,16 @@ section {
         max-height: 600px;
     }
     
+    /* Ensure card has proper height on mobile */
+    .ann-post-card {
+        min-height: 280px;
+    }
+    
+    /* Cards with images on mobile */
+    .ann-post-card.has-image {
+        min-height: 360px;
+    }
+    
     .ann-post-image {
         height: 150px;
     }
@@ -696,12 +719,24 @@ section {
     
     .ann-post-title {
         font-size: 1rem;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
     }
     
     .ann-post-body {
         font-size: 0.85rem;
         -webkit-line-clamp: 2; /* Show less on mobile */
         line-clamp: 2;
+    }
+    
+    /* Ensure Read More button is visible */
+    .ann-post-footer {
+        padding-top: 10px;
+    }
+    
+    .ann-read-more {
+        font-size: 0.85rem;
+        padding: 6px 10px;
     }
     
     .ann-empty-state,
@@ -719,6 +754,42 @@ section {
     /* Further reduce height on extra small screens */
     .ann-posts-list {
         max-height: 500px;
+    }
+    
+    /* Compact card on very small screens */
+    .ann-post-card {
+        min-height: 260px;
+    }
+    
+    /* Cards with images on extra small screens */
+    .ann-post-card.has-image {
+        min-height: 340px;
+    }
+    
+    .ann-post-image {
+        height: 140px;
+    }
+    
+    .ann-post-content {
+        padding: 10px;
+    }
+    
+    .ann-post-title {
+        font-size: 0.95rem;
+    }
+    
+    .ann-post-body {
+        font-size: 0.8rem;
+        margin-bottom: 10px;
+    }
+    
+    .ann-post-footer {
+        padding-top: 8px;
+    }
+    
+    .ann-read-more {
+        font-size: 0.8rem;
+        padding: 5px 8px;
     }
     
     .ann-column-header {
@@ -976,6 +1047,23 @@ section {
 
 .landing-modal-date i { color: #2e8b57; width: 20px; }
 .landing-modal-date strong { color: #2e8b57; font-weight: 600; }
+
+/* Updated Date */
+.landing-modal-updated {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 8px;
+    padding: 10px 16px;
+    background: #fff7ed;
+    border-left: 3px solid #fb923c;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    color: #555;
+}
+
+.landing-modal-updated i { color: #fb923c; width: 20px; }
+.landing-modal-updated strong { color: #ea580c; font-weight: 600; }
 
 /* Footer */
 .landing-modal-footer {
