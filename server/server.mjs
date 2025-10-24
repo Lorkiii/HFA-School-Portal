@@ -135,14 +135,6 @@ const resend = new Resend(RESEND_API_KEY, {
   timeout: 10000, // 10 second timeout
 });
 
-// Verify Resend on startup
-if (RESEND_API_KEY) {
-  console.log('✅ Resend API initialized and ready to send emails');
-  console.log(`📧 Emails will be sent from: ${RESEND_FROM_EMAIL}`);
-  console.log(`🔑 API Key configured: ${RESEND_API_KEY.substring(0, 8)}...`);
-} else {
-  console.error('❌ Resend API key missing. Set RESEND_API_KEY in environment variables.');
-}
 
 // Create nodemailer-compatible wrapper for Resend (for router compatibility)
 const mailTransporter = {

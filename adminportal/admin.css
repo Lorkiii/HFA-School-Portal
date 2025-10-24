@@ -410,3 +410,146 @@ header .schoolname {
     font-size: 1.2rem;
   }
 }
+
+/* ========================================
+   SIMPLE MODAL STYLES (Alert & Confirm)
+   ======================================== */
+
+/* Modal overlay - semi-transparent dark background */
+.simple-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Modal box - white container */
+.simple-modal-box {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  text-align: center;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(20px); 
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0); 
+  }
+}
+
+/* Icon styling */
+.simple-modal-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+  line-height: 1;
+}
+
+/* Message text */
+.simple-modal-message {
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+/* Actions container */
+.simple-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+/* Base button styling */
+.simple-modal-btn {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
+}
+
+.simple-modal-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.simple-modal-btn:active {
+  transform: translateY(0);
+}
+
+/* Primary button (OK, success actions) */
+.simple-modal-btn-primary {
+  background-color: #347605;
+  color: white;
+}
+
+.simple-modal-btn-primary:hover {
+  background-color: #2a5f04;
+}
+
+/* Secondary button (Cancel) */
+.simple-modal-btn-secondary {
+  background-color: #6c757d;
+  color: white;
+}
+
+.simple-modal-btn-secondary:hover {
+  background-color: #5a6268;
+}
+
+/* Danger button (Delete, Confirm dangerous actions) */
+.simple-modal-btn-danger {
+  background-color: #dc3545;
+  color: white;
+}
+
+.simple-modal-btn-danger:hover {
+  background-color: #c82333;
+}
+
+/* Responsive adjustments for small screens */
+@media (max-width: 480px) {
+  .simple-modal-box {
+    width: 95%;
+    padding: 20px;
+  }
+  
+  .simple-modal-icon {
+    font-size: 40px;
+  }
+  
+  .simple-modal-message {
+    font-size: 14px;
+  }
+  
+  .simple-modal-btn {
+    padding: 8px 16px;
+    font-size: 13px;
+    min-width: 80px;
+  }
+}

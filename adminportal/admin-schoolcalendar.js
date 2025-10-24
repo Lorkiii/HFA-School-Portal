@@ -200,8 +200,7 @@ async function fetchInterviews() {
             applicantEmail: data.contactEmail || data.email,
             mode: data.interview.mode,
             location: data.interview.location,
-            notes: data.interview.notes,
-            status: data.status
+            
           }
         });
       }
@@ -265,9 +264,7 @@ async function fetchDemoSchedules() {
             subject: data.demoTeaching.subject,
             mode: data.demoTeaching.mode,
             location: data.demoTeaching.location,
-            notes: data.demoTeaching.notes,
             scheduledBy: data.demoTeaching.scheduledBy,
-            status: data.status
           }
         });
       }

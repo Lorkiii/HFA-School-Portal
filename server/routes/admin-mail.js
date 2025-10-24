@@ -77,7 +77,7 @@ export default function createAdminMailRouter(deps = {}) {
   });
   
   // GET /api/admin/mail/sent
-  // Fetch messages sent by current admin to applicants
+  // Fetch ALL messages sent by current admin from both collections
 
   router.get('/sent', requireAdmin, async (req, res) => {
     try {
@@ -87,13 +87,15 @@ export default function createAdminMailRouter(deps = {}) {
         return res.status(401).json({ ok: false, error: 'Unauthorized' });
       }
       
-      // Query applicant_messages where admin is the sender
-      const snapshot = await db.collection('applicant_messages')
+      const allMessages = [];
+      
+      // 1. Query applicant_messages where admin is the sender (new message system)
+      const applicantMessagesSnapshot = await db.collection('applicant_messages')
         .where('fromUid', '==', currentAdminUid)
         .orderBy('createdAt', 'desc')
         .get();
       
-      const messages = snapshot.docs.map(doc => {
+      applicantMessagesSnapshot.docs.forEach(doc => {
         const data = doc.data();
         
         // Format recipients for frontend display
@@ -103,21 +105,64 @@ export default function createAdminMailRouter(deps = {}) {
           name: email
         }));
         
-        return {
+        allMessages.push({
           id: doc.id,
           applicantId: data.applicantId || null,
           fromUid: data.fromUid,
-          senderName: data.senderName || '',
-          senderEmail: data.senderEmail || '',
+          senderName: data.senderName || data.fromName || '',
+          senderEmail: data.senderEmail || data.fromEmail || '',
           to: to,
           subject: data.subject || '(No Subject)',
           body: data.body || '',
+          attachment: data.attachment || null,
           createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
-          sentAt: data.createdAt?.toDate?.()?.toISOString() || null
-        };
+          sentAt: data.createdAt?.toDate?.()?.toISOString() || null,
+          isArchived: data.isArchived || false
+        });
       });
       
-      return res.json({ ok: true, messages });
+      // 2. Query admin_mail_sent (old compose email system)
+      const adminMailSnapshot = await db.collection('admin_mail_sent')
+        .where('fromUid', '==', currentAdminUid)
+        .orderBy('sentAt', 'desc')
+        .get();
+      
+      adminMailSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        
+        // Format recipients from the 'to' array
+        const recipients = data.to || [];
+        const to = recipients.map(recipient => ({
+          email: recipient.email || '',
+          name: recipient.name || recipient.email || 'Unknown'
+        }));
+        
+        allMessages.push({
+          id: doc.id,
+          fromUid: data.fromUid,
+          senderName: data.fromName || '',
+          senderEmail: data.fromEmail || '',
+          to: to,
+          subject: data.subject || '(No Subject)',
+          body: data.body || '',
+          attachment: data.attachment || null,
+          createdAt: data.sentAt?.toDate?.()?.toISOString() || null,
+          sentAt: data.sentAt?.toDate?.()?.toISOString() || null,
+          isArchived: false // Old system didn't have archive feature
+        });
+      });
+      
+      // Sort all messages by date (newest first)
+      allMessages.sort((a, b) => {
+        const dateA = new Date(a.sentAt || a.createdAt || 0);
+        const dateB = new Date(b.sentAt || b.createdAt || 0);
+        return dateB - dateA;
+      });
+      
+      // Filter out archived messages (only show active sent messages)
+      const activeMessages = allMessages.filter(msg => !msg.isArchived);
+      
+      return res.json({ ok: true, messages: activeMessages });
     } catch (error) {
       console.error('[admin-mail] Error fetching sent messages:', error);
       return res.status(500).json({ 
@@ -128,16 +173,16 @@ export default function createAdminMailRouter(deps = {}) {
   });
   
   // GET /api/admin/mail/archived
-  // Fetch archived messages from applicants
+  // Fetch archived messages from both collections
   // Implements lazy deletion - automatically deletes messages older than 30 days
 
   router.get('/archived', requireAdmin, async (req, res) => {
     try {
-      const snapshot = await db.collection('applicant_messages')
-        .where('recipients', 'array-contains', 'admin')
-        .where('isArchived', '==', true)
-        .orderBy('archivedAt', 'desc')
-        .get();
+      const currentAdminUid = req.adminUser?.uid || req.user?.uid;
+      
+      if (!currentAdminUid) {
+        return res.status(401).json({ ok: false, error: 'Unauthorized' });
+      }
       
       // Calculate 30 days ago threshold
       const thirtyDaysAgo = new Date();
@@ -146,15 +191,64 @@ export default function createAdminMailRouter(deps = {}) {
       const messages = [];
       const messagesToDelete = [];
       
-      // Filter messages and identify expired ones
-      snapshot.docs.forEach(doc => {
+      // 1. Query archived sent messages from applicant_messages (admin as sender)
+      const sentSnapshot = await db.collection('applicant_messages')
+        .where('fromUid', '==', currentAdminUid)
+        .where('isArchived', '==', true)
+        .orderBy('archivedAt', 'desc')
+        .get();
+      
+      sentSnapshot.docs.forEach(doc => {
         const data = doc.data();
         const archivedAt = data.archivedAt?.toDate ? data.archivedAt.toDate() : null;
         
         // Check if message is older than 30 days
         if (archivedAt && archivedAt < thirtyDaysAgo) {
           // Mark for deletion
-          messagesToDelete.push(doc.id);
+          messagesToDelete.push({ id: doc.id, collection: 'applicant_messages' });
+        } else {
+          // Format recipients
+          const recipients = data.recipients || [];
+          const to = recipients.map(email => ({
+            email: email,
+            name: email
+          }));
+          
+          // Include in results
+          messages.push({
+            id: doc.id,
+            applicantId: data.applicantId || null,
+            fromUid: data.fromUid,
+            senderName: data.senderName || data.fromName || 'You',
+            senderEmail: data.senderEmail || data.fromEmail || '',
+            to: to,
+            subject: data.subject || '(No Subject)',
+            body: data.body || '',
+            attachment: data.attachment || null,
+            createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
+            archivedAt: data.archivedAt?.toDate?.()?.toISOString() || null
+          });
+        }
+      });
+      
+      // 2. Query archived inbox messages from applicant_messages (admin as recipient)
+      const inboxSnapshot = await db.collection('applicant_messages')
+        .where('recipients', 'array-contains', 'admin')
+        .where('isArchived', '==', true)
+        .orderBy('archivedAt', 'desc')
+        .get();
+      
+      inboxSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        const archivedAt = data.archivedAt?.toDate ? data.archivedAt.toDate() : null;
+        
+        // Skip if this message is already added (from sent query)
+        if (messages.find(m => m.id === doc.id)) return;
+        
+        // Check if message is older than 30 days
+        if (archivedAt && archivedAt < thirtyDaysAgo) {
+          // Mark for deletion
+          messagesToDelete.push({ id: doc.id, collection: 'applicant_messages' });
         } else {
           // Include in results
           messages.push({
@@ -173,6 +267,13 @@ export default function createAdminMailRouter(deps = {}) {
         }
       });
       
+      // Sort messages by archived date (newest first)
+      messages.sort((a, b) => {
+        const dateA = new Date(a.archivedAt || 0);
+        const dateB = new Date(b.archivedAt || 0);
+        return dateB - dateA;
+      });
+      
       // Delete expired messages in background (don't wait for completion)
       if (messagesToDelete.length > 0) {
         console.log(`[admin-mail] Lazy deletion: removing ${messagesToDelete.length} messages older than 30 days`);
@@ -181,10 +282,10 @@ export default function createAdminMailRouter(deps = {}) {
         const batchSize = 500;
         for (let i = 0; i < messagesToDelete.length; i += batchSize) {
           const batch = db.batch();
-          const batchIds = messagesToDelete.slice(i, i + batchSize);
+          const batchMessages = messagesToDelete.slice(i, i + batchSize);
           
-          batchIds.forEach(messageId => {
-            batch.delete(db.collection('applicant_messages').doc(messageId));
+          batchMessages.forEach(msg => {
+            batch.delete(db.collection(msg.collection).doc(msg.id));
           });
           
           // Execute batch delete asynchronously (don't block response)

@@ -47,6 +47,15 @@ import { apiFetch } from '../api-fetch.js';
         modal.style.display = 'none';
       }
     };
+    
+    // Close on Escape key
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        modal.style.display = 'none';
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
   }
 
   // Show confirm modal (replaces browser confirm)
@@ -61,10 +70,16 @@ import { apiFetch } from '../api-fetch.js';
       // Show modal
       modal.style.display = 'flex';
       
+      // Cleanup function to remove event listeners
+      const cleanup = () => {
+        document.removeEventListener('keydown', handleEscape);
+      };
+      
       // Handle confirm
       const confirmBtn = document.getElementById('confirm-ok-btn');
       confirmBtn.onclick = () => {
         modal.style.display = 'none';
+        cleanup();
         resolve(true);
       };
       
@@ -72,6 +87,7 @@ import { apiFetch } from '../api-fetch.js';
       const cancelBtn = document.getElementById('confirm-cancel-btn');
       cancelBtn.onclick = () => {
         modal.style.display = 'none';
+        cleanup();
         resolve(false);
       };
       
@@ -79,9 +95,20 @@ import { apiFetch } from '../api-fetch.js';
       modal.onclick = (e) => {
         if (e.target === modal) {
           modal.style.display = 'none';
+          cleanup();
           resolve(false);
         }
       };
+      
+      // Close on Escape key (counts as cancel)
+      const handleEscape = (e) => {
+        if (e.key === 'Escape') {
+          modal.style.display = 'none';
+          cleanup();
+          resolve(false);
+        }
+      };
+      document.addEventListener('keydown', handleEscape);
     });
   }
 
@@ -274,6 +301,19 @@ import { apiFetch } from '../api-fetch.js';
       return response;
     } catch (error) {
       console.error('Error restoring post:', error);
+      throw error;
+    }
+  }
+
+  // Permanently delete post
+  async function deletePost(postId) {
+    try {
+      const response = await apiFetch(`/api/announcements/${postId}`, {
+        method: 'DELETE'
+      });
+      return response;
+    } catch (error) {
+      console.error('Error deleting post:', error);
       throw error;
     }
   }
@@ -570,6 +610,27 @@ import { apiFetch } from '../api-fetch.js';
         const post = allPosts.find(p => p.id === postId);
         if (post) {
           openEditModal(post);
+        }
+      }
+      
+      // Handle delete button
+      else if (e.target.closest('.ann-delete-btn')) {
+        const post = allPosts.find(p => p.id === postId);
+        if (post) {
+          const confirmed = await showConfirm(
+            `Are you sure you want to permanently delete "${post.title}"? This action cannot be undone.`
+          );
+          if (confirmed) {
+            try {
+              await deletePost(postId);
+              showAlert('Post permanently deleted!', 'success');
+              await fetchAllPosts(); // Refresh data
+              await renderFullSection(); // Re-render
+              await renderDashboard(); // Update dashboard too
+            } catch (error) {
+              showAlert('Failed to delete post. Please try again.', 'error');
+            }
+          }
         }
       }
     });

@@ -2364,24 +2364,24 @@
     </div>
 
     <!-- Simple Alert Modal (replaces all alert() calls) -->
-    <div id="alert-modal" class="announcement-modal" role="dialog" aria-modal="true" aria-hidden="true" style="display: none;">
-        <div class="announcement-modal-content enrollment-modal-content" role="document" style="max-width: 400px;">
-            <div id="alert-icon" class="alert-icon">✅</div>
-            <p id="alert-message" class="alert-message">Operation completed successfully</p>
-            <div class="announcement-modal-actions" style="justify-content: center;">
-                <button class="post" id="alert-ok-btn" type="button" style="min-width: 100px;">OK</button>
+    <div id="alert-modal" class="simple-modal-overlay" style="display: none;">
+        <div class="simple-modal-box">
+            <div class="simple-modal-icon" id="alert-icon">✅</div>
+            <div class="simple-modal-message" id="alert-message">Operation completed successfully</div>
+            <div class="simple-modal-actions">
+                <button class="simple-modal-btn simple-modal-btn-primary" id="alert-ok-btn">OK</button>
             </div>
         </div>
     </div>
 
-    <!-- Simple Confirm Modal (replaces confirm() calls) -->
-    <div id="confirm-modal" class="announcement-modal" role="dialog" aria-modal="true" aria-hidden="true" style="display: none;">
-        <div class="announcement-modal-content enrollment-modal-content" role="document" style="max-width: 400px;">
-            <div class="alert-icon">⚠️</div>
-            <p id="confirm-message" class="alert-message">Are you sure?</p>
-            <div class="announcement-modal-actions" style="justify-content: center; gap: 12px;">
-                <button class="btn-cancel" id="confirm-cancel-btn" type="button">Cancel</button>
-                <button class="post" id="confirm-ok-btn" type="button">Confirm</button>
+    <!-- Simple Confirm Modal -->
+    <div id="confirm-modal" class="simple-modal-overlay" style="display: none;">
+        <div class="simple-modal-box">
+            <div class="simple-modal-icon">⚠️</div>
+            <div class="simple-modal-message" id="confirm-message">Are you sure?</div>
+            <div class="simple-modal-actions">
+                <button class="simple-modal-btn simple-modal-btn-secondary" id="confirm-cancel-btn">Cancel</button>
+                <button class="simple-modal-btn simple-modal-btn-danger" id="confirm-ok-btn">Confirm</button>
             </div>
         </div>
     </div>
